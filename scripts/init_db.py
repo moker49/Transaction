@@ -10,6 +10,47 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DB_PATH = ROOT / "data" / "transactions.sqlite"
 SCHEMA_PATH = ROOT / "db" / "schema.sql"
 EXPECTED_ACCOUNT_COLUMNS = {"id", "institution_id", "name", "account_type", "currency", "external_account_id", "created_at", "updated_at"}
+EXPECTED_TABLES = {
+    "accounts",
+    "categories",
+    "imported_source",
+    "institutions",
+    "raw_imported_rows",
+    "tags",
+    "transaction_import_rules",
+    "transaction_notes",
+    "transaction_tags",
+    "transactions",
+}
+EXPECTED_TRANSACTION_COLUMNS = {
+    "id",
+    "account_id",
+    "category_id",
+    "posted_date",
+    "transaction_date",
+    "payee",
+    "description",
+    "amount_cents",
+    "currency",
+    "status",
+    "external_transaction_id",
+    "raw_imported_row_id",
+    "created_at",
+    "updated_at",
+}
+EXPECTED_RAW_IMPORTED_ROW_COLUMNS = {
+    "id",
+    "imported_source_id",
+    "raw_account",
+    "raw_date",
+    "raw_type",
+    "raw_category",
+    "raw_description",
+    "raw_amount",
+    "parsed_transaction_id",
+    "created_at",
+    "reviewed",
+}
 
 
 def init_db(db_path: Path = DEFAULT_DB_PATH, schema_path: Path = SCHEMA_PATH) -> Path:
@@ -60,11 +101,26 @@ def get_user_tables(conn: sqlite3.Connection) -> list[str]:
 
 def schema_is_compatible(conn: sqlite3.Connection) -> bool:
     tables = set(get_user_tables(conn))
-    if "institutions" not in tables or "accounts" not in tables:
+    if not EXPECTED_TABLES.issubset(tables):
         return False
 
     account_columns = {row[1] for row in conn.execute("PRAGMA table_info(accounts)").fetchall()}
-    return EXPECTED_ACCOUNT_COLUMNS.issubset(account_columns) and "institution" not in account_columns
+    transaction_columns = {row[1] for row in conn.execute("PRAGMA table_info(transactions)").fetchall()}
+    raw_imported_row_columns = {row[1] for row in conn.execute("PRAGMA table_info(raw_imported_rows)").fetchall()}
+    return (
+        EXPECTED_ACCOUNT_COLUMNS.issubset(account_columns)
+        and EXPECTED_TRANSACTION_COLUMNS.issubset(transaction_columns)
+        and "imported_source_id" not in transaction_columns
+        and "import_source_file_id" not in transaction_columns
+        and "institution" not in account_columns
+        and EXPECTED_RAW_IMPORTED_ROW_COLUMNS.issubset(raw_imported_row_columns)
+        and "imported_source_files" not in tables
+        and "import_id" not in raw_imported_row_columns
+        and "imported_source_file_id" not in raw_imported_row_columns
+        and "raw_json" not in raw_imported_row_columns
+        and "raw_data_json" not in raw_imported_row_columns
+        and "raw_row_text" not in raw_imported_row_columns
+    )
 
 
 def has_user_rows(conn: sqlite3.Connection, tables: Iterable[str]) -> bool:

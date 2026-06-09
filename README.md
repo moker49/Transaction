@@ -61,7 +61,7 @@ python scripts/db_cli.py tables
   "tables": [
     "accounts",
     "categories",
-    "imported_source_files",
+    "imported_source",
     "institutions",
     "raw_imported_rows",
     "tags",
@@ -139,3 +139,14 @@ python scripts/db_cli.py update-transaction-rule 1 --clear-category --clear-tag
 ```
 
 Each rule must keep at least one action: `--set-category-id`, `--set-merchant-clean`, or `--add-tag-id`. `--set-category-id` and `--add-tag-id` must reference existing rows.
+
+## Raw Imported Rows
+
+`raw_imported_rows` stores the actual imported row fields before they are normalized into a transaction:
+
+- `imported_source_id` links the row to `imported_source`.
+- `raw_account`, `raw_date`, `raw_type`, `raw_category`, `raw_description`, and `raw_amount` preserve the source values as text.
+- `parsed_transaction_id` links to the resulting transaction after parsing.
+- `reviewed` marks whether the raw row has been manually reviewed.
+
+At least one raw field must be present. The table intentionally keeps raw values as `TEXT`; parsing into dates, cents, categories, and tags happens later.

@@ -401,13 +401,14 @@ def command_transaction(args: argparse.Namespace) -> None:
                 t.status,
                 c.name AS category,
                 t.external_transaction_id,
-                sf.filename AS source_file,
-                rr.row_number AS source_row
+                rr.id AS raw_imported_row_id,
+                src.id AS imported_source_id,
+                src.filename AS imported_source
             FROM transactions t
             JOIN accounts a ON a.id = t.account_id
             LEFT JOIN categories c ON c.id = t.category_id
-            LEFT JOIN imported_source_files sf ON sf.id = t.import_source_file_id
             LEFT JOIN raw_imported_rows rr ON rr.id = t.raw_imported_row_id
+            LEFT JOIN imported_source src ON src.id = rr.imported_source_id
             WHERE t.id = ?
             """,
             (args.id,),
