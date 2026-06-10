@@ -4,10 +4,15 @@ A local SQLite-backed skeleton for storing transaction history, institutions, ac
 
 ## Files
 
+- `index.html`, `styles.css`, and `app.js` define a browser-only first version of the app.
 - `db/schema.sql` defines the SQLite schema and indexes.
 - `scripts/init_db.py` creates `data/transactions.sqlite` from the schema.
 - `scripts/db_cli.py` provides read-only inspection commands plus database initialization.
 - `data/transactions.sqlite` is generated locally and ignored by Git.
+
+## App
+
+Open `index.html` in a browser to use the first-version static app. It stores app data in browser `localStorage` and supports accounts, tags, import rules, imported sources, and CSV imports into raw imported rows. It does not create normalized transactions yet.
 
 ## Initialize
 

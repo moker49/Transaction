@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Transaction History</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <h1>Transaction History</h1>
+          <p class="subtle">Local first-version workspace</p>
+        </div>
+        <div class="topbar-actions">
+          <button class="icon-button" type="button" id="exportJsonButton" title="Export JSON" aria-label="Export JSON">
+            <span aria-hidden="true">JSON</span>
+          </button>
+          <button class="icon-button danger" type="button" id="clearDataButton" title="Clear local data" aria-label="Clear local data">
+            <span aria-hidden="true">Clear</span>
+          </button>
+        </div>
+      </header>
+
+      <nav class="tabs" aria-label="Main views">
+        <button class="tab is-active" type="button" data-view="overview">Overview</button>
+        <button class="tab" type="button" data-view="accounts">Accounts</button>
+        <button class="tab" type="button" data-view="import">CSV Import</button>
+        <button class="tab" type="button" data-view="raw">Raw Rows</button>
+        <button class="tab" type="button" data-view="rules">Rules & Tags</button>
+      </nav>
+
+      <main>
+        <section class="view is-active" id="overviewView">
+          <div class="metric-grid">
+            <div class="metric">
+              <span class="metric-label">Accounts</span>
+              <strong id="accountCount">0</strong>
+            </div>
+            <div class="metric">
+              <span class="metric-label">Imports</span>
+              <strong id="importCount">0</strong>
+            </div>
+            <div class="metric">
+              <span class="metric-label">Raw rows</span>
+              <strong id="rawRowCount">0</strong>
+            </div>
+            <div class="metric">
+              <span class="metric-label">Open review</span>
+              <strong id="openReviewCount">0</strong>
+            </div>
+          </div>
+
+          <div class="content-grid two-column">
+            <section class="panel">
+              <div class="panel-heading">
+                <h2>Recent Imports</h2>
+              </div>
+              <div id="recentImports" class="list empty-target"></div>
+            </section>
+            <section class="panel">
+              <div class="panel-heading">
+                <h2>Raw Row Snapshot</h2>
+              </div>
+              <div class="table-wrap compact">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Description</th>
+                      <th>Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody id="snapshotRows"></tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="accountsView">
+          <div class="content-grid two-column">
+            <section class="panel">
+              <div class="panel-heading">
+                <h2>Add Account</h2>
+              </div>
+              <form id="accountForm" class="form-grid">
+                <label>
+                  <span>Name</span>
+                  <input name="name" type="text" required autocomplete="off">
+                </label>
+                <label>
+                  <span>Institution</span>
+                  <input name="institution" type="text" autocomplete="off">
+                </label>
+                <label>
+                  <span>Type</span>
+                  <select name="accountType">
+                    <option value="">Unspecified</option>
+                    <option value="checking">Checking</option>
+                    <option value="savings">Savings</option>
+                    <option value="credit">Credit</option>
+                    <option value="cash">Cash</option>
+                    <option value="investment">Investment</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Currency</span>
+                  <input name="currency" type="text" value="USD" maxlength="3" required>
+                </label>
+                <button type="submit" class="primary">Add Account</button>
+              </form>
+            </section>
+
+            <section class="panel">
+              <div class="panel-heading">
+                <h2>Accounts</h2>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Institution</th>
+                      <th>Type</th>
+                      <th>Rows</th>
+                    </tr>
+                  </thead>
+                  <tbody id="accountsTable"></tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="importView">
+          <div class="content-grid two-column">
+            <section class="panel">
+              <div class="panel-heading">
+                <h2>CSV Import</h2>
+              </div>
+              <form id="importForm" class="form-grid">
+                <label>
+                  <span>Account</span>
+                  <select name="accountId" id="importAccountSelect" required></select>
+                </label>
+                <label>
+                  <span>CSV file</span>
+                  <input name="csvFile" type="file" accept=".csv,text/csv" required>
+                </label>
+                <label>
+                  <span>Source type</span>
+                  <input name="sourceType" type="text" value="csv" required>
+                </label>
+                <button type="submit" class="primary">Import CSV</button>
+              </form>
+              <div id="importMessage" class="message" role="status" aria-live="polite"></div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-heading">
+                <h2>Imported Sources</h2>
+              </div>
+              <div id="importList" class="list empty-target"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="rawView">
+          <section class="panel">
+            <div class="panel-heading with-controls">
+              <h2>Raw Imported Rows</h2>
+              <div class="controls">
+                <input id="rawSearch" type="search" placeholder="Search rows" aria-label="Search raw rows">
+                <select id="rawAccountFilter" aria-label="Filter by account"></select>
+                <select id="rawReviewedFilter" aria-label="Filter by review state">
+                  <option value="all">All rows</option>
+                  <option value="open">Open review</option>
+                  <option value="reviewed">Reviewed</option>
+                </select>
+              </div>
+            </div>
+            <div class="table-wrap raw-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Reviewed</th>
+                    <th>Account</th>
+                    <th>Date</th>
+                    <th>Type</th>
+                    <th>Category</th>
+                    <th>Description</th>
+                    <th>Amount</th>
+                  </tr>
+                </thead>
+                <tbody id="rawRowsTable"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <section class="view" id="rulesView">
+          <div class="content-grid two-column">
+            <section class="panel">
+              <div class="panel-heading">
+                <h2>Tags</h2>
+              </div>
+              <form id="tagForm" class="inline-form">
+                <input name="name" type="text" placeholder="Tag name" required autocomplete="off">
+                <button type="submit" class="primary">Add</button>
+              </form>
+              <div id="tagList" class="chip-list empty-target"></div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-heading">
+                <h2>Import Rules</h2>
+              </div>
+              <form id="ruleForm" class="form-grid">
+                <label>
+                  <span>Name</span>
+                  <input name="name" type="text" required autocomplete="off">
+                </label>
+                <label>
+                  <span>Match field</span>
+                  <select name="matchField">
+                    <option value="description_raw">Description</option>
+                    <option value="merchant_raw">Merchant</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Match type</span>
+                  <select name="matchType">
+                    <option value="contains">Contains</option>
+                    <option value="equals">Equals</option>
+                    <option value="starts_with">Starts with</option>
+                    <option value="regex">Regex</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Match value</span>
+                  <input name="matchValue" type="text" required autocomplete="off">
+                </label>
+                <label>
+                  <span>Clean merchant</span>
+                  <input name="setMerchantClean" type="text" autocomplete="off">
+                </label>
+                <label>
+                  <span>Tag</span>
+                  <select name="addTagId" id="ruleTagSelect"></select>
+                </label>
+                <label>
+                  <span>Priority</span>
+                  <input name="priority" type="number" min="0" value="100">
+                </label>
+                <button type="submit" class="primary">Add Rule</button>
+              </form>
+              <div id="ruleList" class="list empty-target"></div>
+            </section>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <template id="emptyTemplate">
+      <div class="empty">No rows yet.</div>
+    </template>
+
+    <script src="app.js"></script>
+  </body>
+</html>
