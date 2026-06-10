@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 from typing import Iterable
 
@@ -67,9 +68,10 @@ def init_db(db_path: Path = DEFAULT_DB_PATH, schema_path: Path = SCHEMA_PATH) ->
     rebuild_empty_incompatible_db(db_path)
 
     schema = schema_path.read_text(encoding="utf-8")
-    with sqlite3.connect(db_path) as conn:
+    with closing(sqlite3.connect(db_path)) as conn:
         conn.execute("PRAGMA foreign_keys = ON")
         conn.executescript(schema)
+        conn.commit()
 
     return db_path
 

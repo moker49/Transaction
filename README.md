@@ -4,7 +4,8 @@ A local SQLite-backed skeleton for storing transaction history, institutions, ac
 
 ## Files
 
-- `index.html`, `styles.css`, and `app.js` define a browser-only first version of the app.
+- `server.py` provides a Flask API and serves the browser app.
+- `index.html`, `styles.css`, and `app.js` define the browser UI.
 - `db/schema.sql` defines the SQLite schema and indexes.
 - `scripts/init_db.py` creates `data/transactions.sqlite` from the schema.
 - `scripts/db_cli.py` provides read-only inspection commands plus database initialization.
@@ -12,7 +13,24 @@ A local SQLite-backed skeleton for storing transaction history, institutions, ac
 
 ## App
 
-Open `index.html` in a browser to use the first-version static app. It stores app data in browser `localStorage` and supports accounts, tags, import rules, imported sources, and CSV imports into raw imported rows. It does not create normalized transactions yet.
+Run the Flask server, then open the local URL it prints:
+
+```powershell
+pip install -r requirements.txt
+python server.py
+```
+
+The app stores data in `data/transactions.sqlite` through the Flask API and supports accounts, tags, import rules, imported sources, and CSV imports into raw imported rows. It does not create normalized transactions yet.
+
+The main endpoints are:
+
+- `GET /api/state`
+- `POST /api/accounts`
+- `POST /api/tags`
+- `POST /api/rules`
+- `POST /api/imports/csv`
+- `PATCH /api/raw-rows/<id>`
+- `DELETE /api/state`
 
 ## Initialize
 

@@ -1,5 +1,5 @@
 (function () {
-  const STORAGE_KEY = "transactionHistory.v1";
+  const API_BASE = window.location.protocol === "file:" ? "http://127.0.0.1:5050" : "";
 
   const defaultState = {
     accounts: [],
@@ -7,16 +7,9 @@
     rules: [],
     imports: [],
     rawRows: [],
-    nextIds: {
-      account: 1,
-      tag: 1,
-      rule: 1,
-      import: 1,
-      rawRow: 1,
-    },
   };
 
-  let state = loadState();
+  let state = structuredClone(defaultState);
 
   const elements = {
     tabs: document.querySelectorAll(".tab"),
@@ -49,30 +42,40 @@
   elements.exportJsonButton.addEventListener("click", exportJson);
   elements.clearDataButton.addEventListener("click", clearLocalData);
 
-  render();
+  loadInitialState();
 
-  function loadState() {
+  async function loadInitialState() {
     try {
-      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-      if (!saved || typeof saved !== "object") {
-        return structuredClone(defaultState);
-      }
-
-      return {
-        ...structuredClone(defaultState),
-        ...saved,
-        nextIds: {
-          ...defaultState.nextIds,
-          ...(saved.nextIds || {}),
-        },
-      };
-    } catch {
-      return structuredClone(defaultState);
+      state = normalizeState(await apiRequest("/api/state"));
+      render();
+    } catch (error) {
+      setMessage(error.message || "Could not load server data.", true);
+      render();
     }
   }
 
-  function saveState() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  async function apiRequest(path, options = {}) {
+    const response = await fetch(`${API_BASE}${path}`, {
+      headers: options.body instanceof FormData ? undefined : { "Content-Type": "application/json" },
+      ...options,
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || `Request failed with ${response.status}`);
+    }
+    return payload;
+  }
+
+  function normalizeState(payload) {
+    return {
+      ...structuredClone(defaultState),
+      ...(payload || {}),
+    };
+  }
+
+  function applyStateFromPayload(payload) {
+    state = normalizeState(payload.state || payload);
+    render();
   }
 
   function activateView(viewName) {
@@ -80,9 +83,10 @@
     elements.views.forEach((view) => view.classList.toggle("is-active", view.id === `${viewName}View`));
   }
 
-  function addAccount(event) {
+  async function addAccount(event) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const currency = clean(form.get("currency")).toUpperCase();
 
     if (!/^[A-Z]{3}$/.test(currency)) {
@@ -90,19 +94,22 @@
       return;
     }
 
-    state.accounts.push({
-      id: nextId("account"),
-      name: clean(form.get("name")),
-      institution: clean(form.get("institution")),
-      account_type: clean(form.get("accountType")),
-      currency,
-      created_at: nowIso(),
-      updated_at: nowIso(),
-    });
-
-    event.currentTarget.reset();
-    event.currentTarget.elements.currency.value = "USD";
-    saveAndRender();
+    try {
+      const payload = await apiRequest("/api/accounts", {
+        method: "POST",
+        body: JSON.stringify({
+          name: clean(form.get("name")),
+          institution: clean(form.get("institution")) || null,
+          account_type: clean(form.get("accountType")) || null,
+          currency,
+        }),
+      });
+      formElement.reset();
+      formElement.elements.currency.value = "USD";
+      applyStateFromPayload(payload);
+    } catch (error) {
+      alert(error.message || "Could not add account.");
+    }
   }
 
   async function importCsv(event) {
@@ -121,91 +128,51 @@
     }
 
     try {
-      const text = await file.text();
-      const hash = await sha256(text);
-      const existing = state.imports.find((item) => item.sha256 === hash);
-
-      if (existing && existing.account_id !== accountId) {
-        setMessage("This file hash is already assigned to another account.", true);
-        return;
-      }
-
-      if (existing) {
-        setMessage("File already imported for this account.");
-        return;
-      }
-
-      const parsed = parseCsv(text);
-      const fieldnames = parsed.headers.map((header) => header.trim()).filter(Boolean);
-      const rawRows = parsed.rows.map(normalizeCsvRow).filter((row) => {
-        return Object.values(row).some((value) => value !== null && value !== "");
+      const upload = new FormData();
+      upload.append("accountId", String(accountId));
+      upload.append("sourceType", sourceType);
+      upload.append("csvFile", file);
+      const payload = await apiRequest("/api/imports/csv", {
+        method: "POST",
+        body: upload,
       });
-      const importId = nextId("import");
-      const importedAt = nowIso();
-
-      state.imports.push({
-        id: importId,
-        account_id: accountId,
-        filename: file.name,
-        source_type: sourceType,
-        sha256: hash,
-        imported_at: importedAt,
-        row_count: rawRows.length,
-        metadata: {
-          columns: fieldnames,
-          layout: detectCsvLayout(fieldnames),
-        },
-      });
-
-      rawRows.forEach((row) => {
-        state.rawRows.push({
-          id: nextId("rawRow"),
-          imported_source_id: importId,
-          account_id: accountId,
-          raw_date: row.raw_date,
-          raw_type: row.raw_type,
-          raw_category: row.raw_category,
-          raw_description: row.raw_description,
-          raw_amount: row.raw_amount,
-          parsed_transaction_id: null,
-          created_at: importedAt,
-          reviewed: false,
-        });
-      });
-
       formElement.reset();
       formElement.elements.sourceType.value = "csv";
-      saveAndRender();
-      setMessage(`Imported ${rawRows.length} raw rows from ${file.name}.`);
+      applyStateFromPayload(payload);
+      if (payload.status === "already_imported") {
+        setMessage("File already imported for this account.");
+      } else {
+        setMessage(`Imported ${payload.inserted_raw_row_count} raw rows from ${file.name}.`);
+      }
     } catch (error) {
       setMessage(error.message || "CSV import failed.", true);
     }
   }
 
-  function addTag(event) {
+  async function addTag(event) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const name = clean(form.get("name"));
     if (!name) {
       return;
     }
-    if (state.tags.some((tag) => tag.name.toLowerCase() === name.toLowerCase())) {
-      alert("Tag already exists.");
-      return;
+    try {
+      const payload = await apiRequest("/api/tags", {
+        method: "POST",
+        body: JSON.stringify({ name }),
+      });
+      formElement.reset();
+      applyStateFromPayload(payload);
+    } catch (error) {
+      alert(error.message || "Could not add tag.");
     }
-
-    state.tags.push({
-      id: nextId("tag"),
-      name,
-      created_at: nowIso(),
-    });
-    event.currentTarget.reset();
-    saveAndRender();
   }
 
-  function addRule(event) {
+  async function addRule(event) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const setMerchantClean = clean(form.get("setMerchantClean"));
     const addTagId = Number(form.get("addTagId")) || null;
 
@@ -214,23 +181,25 @@
       return;
     }
 
-    state.rules.push({
-      id: nextId("rule"),
-      name: clean(form.get("name")),
-      match_field: clean(form.get("matchField")),
-      match_type: clean(form.get("matchType")),
-      match_value: clean(form.get("matchValue")),
-      set_merchant_clean: setMerchantClean || null,
-      add_tag_id: addTagId,
-      priority: Number(form.get("priority")) || 100,
-      is_active: true,
-      created_at: nowIso(),
-      updated_at: nowIso(),
-    });
-
-    event.currentTarget.reset();
-    event.currentTarget.elements.priority.value = "100";
-    saveAndRender();
+    try {
+      const payload = await apiRequest("/api/rules", {
+        method: "POST",
+        body: JSON.stringify({
+          name: clean(form.get("name")),
+          match_field: clean(form.get("matchField")),
+          match_type: clean(form.get("matchType")),
+          match_value: clean(form.get("matchValue")),
+          set_merchant_clean: setMerchantClean || null,
+          add_tag_id: addTagId,
+          priority: Number(form.get("priority")) || 100,
+        }),
+      });
+      formElement.reset();
+      formElement.elements.priority.value = "100";
+      applyStateFromPayload(payload);
+    } catch (error) {
+      alert(error.message || "Could not add rule.");
+    }
   }
 
   function render() {
@@ -404,9 +373,19 @@
       checkbox.type = "checkbox";
       checkbox.checked = rawRow.reviewed;
       checkbox.setAttribute("aria-label", `Reviewed row ${rawRow.id}`);
-      checkbox.addEventListener("change", () => {
+      checkbox.addEventListener("change", async () => {
         rawRow.reviewed = checkbox.checked;
-        saveAndRender();
+        render();
+        try {
+          const payload = await apiRequest(`/api/raw-rows/${rawRow.id}`, {
+            method: "PATCH",
+            body: JSON.stringify({ reviewed: checkbox.checked }),
+          });
+          applyStateFromPayload(payload);
+        } catch (error) {
+          alert(error.message || "Could not update row.");
+          await loadInitialState();
+        }
       });
 
       tr.append(
@@ -555,33 +534,21 @@
     URL.revokeObjectURL(url);
   }
 
-  function clearLocalData() {
-    if (!confirm("Clear local app data?")) {
+  async function clearLocalData() {
+    if (!confirm("Clear server app data?")) {
       return;
     }
-    state = structuredClone(defaultState);
-    localStorage.removeItem(STORAGE_KEY);
-    setMessage("");
-    render();
-  }
-
-  function saveAndRender() {
-    saveState();
-    render();
-  }
-
-  function nextId(type) {
-    const id = state.nextIds[type];
-    state.nextIds[type] += 1;
-    return id;
+    try {
+      const payload = await apiRequest("/api/state", { method: "DELETE" });
+      setMessage("");
+      applyStateFromPayload(payload);
+    } catch (error) {
+      alert(error.message || "Could not clear data.");
+    }
   }
 
   function clean(value) {
     return String(value ?? "").trim();
-  }
-
-  function nowIso() {
-    return new Date().toISOString();
   }
 
   function accountLabel(account) {
