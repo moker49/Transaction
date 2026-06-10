@@ -38,10 +38,19 @@ EXPECTED_TRANSACTION_COLUMNS = {
     "created_at",
     "updated_at",
 }
+EXPECTED_IMPORTED_SOURCE_COLUMNS = {
+    "id",
+    "account_id",
+    "filename",
+    "source_type",
+    "sha256",
+    "imported_at",
+    "row_count",
+    "metadata_json",
+}
 EXPECTED_RAW_IMPORTED_ROW_COLUMNS = {
     "id",
     "imported_source_id",
-    "raw_account",
     "raw_date",
     "raw_type",
     "raw_category",
@@ -81,10 +90,9 @@ def rebuild_empty_incompatible_db(db_path: Path) -> None:
                 f"Existing database at {db_path} does not match db/schema.sql and contains data. "
                 "Create a migration before running init."
             )
+        drop_user_tables(conn, existing_tables)
     finally:
         conn.close()
-
-    db_path.unlink()
 
 
 def get_user_tables(conn: sqlite3.Connection) -> list[str]:
@@ -99,6 +107,17 @@ def get_user_tables(conn: sqlite3.Connection) -> list[str]:
     return [row[0] for row in rows]
 
 
+def drop_user_tables(conn: sqlite3.Connection, tables: Iterable[str]) -> None:
+    conn.execute("PRAGMA foreign_keys = OFF")
+    try:
+        for table in tables:
+            quoted_table = '"' + table.replace('"', '""') + '"'
+            conn.execute(f"DROP TABLE IF EXISTS {quoted_table}")
+        conn.commit()
+    finally:
+        conn.execute("PRAGMA foreign_keys = ON")
+
+
 def schema_is_compatible(conn: sqlite3.Connection) -> bool:
     tables = set(get_user_tables(conn))
     if not EXPECTED_TABLES.issubset(tables):
@@ -106,14 +125,17 @@ def schema_is_compatible(conn: sqlite3.Connection) -> bool:
 
     account_columns = {row[1] for row in conn.execute("PRAGMA table_info(accounts)").fetchall()}
     transaction_columns = {row[1] for row in conn.execute("PRAGMA table_info(transactions)").fetchall()}
+    imported_source_columns = {row[1] for row in conn.execute("PRAGMA table_info(imported_source)").fetchall()}
     raw_imported_row_columns = {row[1] for row in conn.execute("PRAGMA table_info(raw_imported_rows)").fetchall()}
     return (
         EXPECTED_ACCOUNT_COLUMNS.issubset(account_columns)
         and EXPECTED_TRANSACTION_COLUMNS.issubset(transaction_columns)
+        and EXPECTED_IMPORTED_SOURCE_COLUMNS.issubset(imported_source_columns)
         and "imported_source_id" not in transaction_columns
         and "import_source_file_id" not in transaction_columns
         and "institution" not in account_columns
         and EXPECTED_RAW_IMPORTED_ROW_COLUMNS.issubset(raw_imported_row_columns)
+        and "raw_account" not in raw_imported_row_columns
         and "imported_source_files" not in tables
         and "import_id" not in raw_imported_row_columns
         and "imported_source_file_id" not in raw_imported_row_columns

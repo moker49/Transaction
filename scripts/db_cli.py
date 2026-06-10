@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import csv
+import hashlib
 import json
 import re
 import sqlite3
@@ -177,6 +179,30 @@ def fetch_account(conn: sqlite3.Connection, account_id: int) -> sqlite3.Row:
     return row
 
 
+def fetch_imported_source(conn: sqlite3.Connection, imported_source_id: int) -> sqlite3.Row:
+    row = conn.execute(
+        """
+        SELECT
+            src.id,
+            src.account_id,
+            a.name AS account,
+            src.filename,
+            src.source_type,
+            src.sha256,
+            src.imported_at,
+            src.row_count,
+            src.metadata_json
+        FROM imported_source src
+        JOIN accounts a ON a.id = src.account_id
+        WHERE src.id = ?
+        """,
+        (imported_source_id,),
+    ).fetchone()
+    if row is None:
+        raise CliError(f"Imported source not found: {imported_source_id}")
+    return row
+
+
 def fetch_tag_by_name(conn: sqlite3.Connection, name: str) -> sqlite3.Row | None:
     return conn.execute(
         """
@@ -275,6 +301,85 @@ def get_or_create_institution(conn: sqlite3.Connection, name: str | None) -> int
 
     cursor = conn.execute("INSERT INTO institutions (name) VALUES (?)", (name,))
     return int(cursor.lastrowid)
+
+
+def clean_csv_value(value: str | None) -> str | None:
+    if value is None:
+        return None
+    stripped = value.strip()
+    return stripped or None
+
+
+def first_csv_value(row: dict[str, str | None], *names: str) -> str | None:
+    for name in names:
+        if name in row:
+            value = clean_csv_value(row[name])
+            if value is not None:
+                return value
+    return None
+
+
+def signed_amount_from_debit_credit(row: dict[str, str | None]) -> str | None:
+    debit = first_csv_value(row, "Debit")
+    credit = first_csv_value(row, "Credit")
+    if debit is not None and credit is not None:
+        return f"debit={debit}; credit={credit}"
+    if debit is not None:
+        return debit if debit.startswith("-") else f"-{debit}"
+    return credit
+
+
+def detect_csv_layout(fieldnames: list[str]) -> str:
+    fields = set(fieldnames)
+    if {"Transaction Date", "Posted Date", "Description", "Category", "Debit", "Credit"}.issubset(fields):
+        return "capital_one_credit"
+    if {"Details", "Posting Date", "Description", "Amount", "Type", "Balance"}.issubset(fields):
+        return "chase_checking"
+    if {"Date", "Description", "Type", "Amount", "Current balance", "Status"}.issubset(fields):
+        return "sofi_bank"
+    return "generic_csv"
+
+
+def normalize_csv_row(row: dict[str, str | None]) -> dict[str, str | None]:
+    raw_amount = first_csv_value(row, "Amount")
+    if raw_amount is None and ("Debit" in row or "Credit" in row):
+        raw_amount = signed_amount_from_debit_credit(row)
+
+    return {
+        "raw_date": first_csv_value(row, "Posted Date", "Posting Date", "Date", "Transaction Date"),
+        "raw_type": first_csv_value(row, "Type", "Details", "Status"),
+        "raw_category": first_csv_value(row, "Category"),
+        "raw_description": first_csv_value(row, "Description", "Memo", "Name", "Payee"),
+        "raw_amount": raw_amount,
+    }
+
+
+def read_csv_import_rows(csv_path: Path) -> tuple[list[str], list[dict[str, str | None]]]:
+    if not csv_path.exists():
+        raise CliError(f"CSV file not found: {csv_path}")
+    if not csv_path.is_file():
+        raise CliError(f"CSV path is not a file: {csv_path}")
+
+    try:
+        with csv_path.open("r", encoding="utf-8-sig", newline="") as csv_file:
+            reader = csv.DictReader(csv_file)
+            if reader.fieldnames is None:
+                raise CliError("CSV file does not contain a header row.")
+            fieldnames = [field.strip() for field in reader.fieldnames if field is not None]
+            rows = []
+            for source_row in reader:
+                normalized_source_row = {
+                    key.strip() if key is not None else "": value for key, value in source_row.items()
+                }
+                raw_row = normalize_csv_row(normalized_source_row)
+                if any(value is not None for value in raw_row.values()):
+                    rows.append(raw_row)
+    except UnicodeDecodeError as exc:
+        raise CliError("CSV file must be UTF-8 or UTF-8 with BOM.") from exc
+    except csv.Error as exc:
+        raise CliError(f"Could not parse CSV: {exc}") from exc
+
+    return fieldnames, rows
 
 
 def ensure_readonly_sql(sql: str) -> None:
@@ -441,6 +546,101 @@ def command_transaction(args: argparse.Namespace) -> None:
             "transaction": dict(transaction),
             "tags": [row["name"] for row in tags],
             "notes": rows_to_dicts(notes),
+        }
+    )
+
+
+def command_import_csv(args: argparse.Namespace) -> None:
+    csv_path = args.csv_path.expanduser()
+    source_type = optional_nonempty(args.source_type, "source_type") or "csv"
+    fieldnames, raw_rows = read_csv_import_rows(csv_path)
+    file_hash = hashlib.sha256(csv_path.read_bytes()).hexdigest()
+    metadata = {
+        "columns": fieldnames,
+        "layout": detect_csv_layout(fieldnames),
+    }
+
+    with connect(args.db) as conn:
+        account = fetch_account(conn, args.account_id)
+        existing = conn.execute(
+            """
+            SELECT id, account_id
+            FROM imported_source
+            WHERE sha256 = ?
+            """,
+            (file_hash,),
+        ).fetchone()
+        if existing is not None:
+            if int(existing["account_id"]) != args.account_id:
+                raise CliError(
+                    "CSV file has already been imported for a different account "
+                    f"({existing['account_id']})."
+                )
+            source = fetch_imported_source(conn, int(existing["id"]))
+            print_json(
+                {
+                    "status": "already_imported",
+                    "account": dict(account),
+                    "imported_source": dict(source),
+                    "inserted_raw_row_count": 0,
+                }
+            )
+            return
+
+        cursor = conn.execute(
+            """
+            INSERT INTO imported_source (
+                account_id,
+                filename,
+                source_type,
+                sha256,
+                row_count,
+                metadata_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                args.account_id,
+                csv_path.name,
+                source_type,
+                file_hash,
+                len(raw_rows),
+                json.dumps(metadata, sort_keys=True),
+            ),
+        )
+        imported_source_id = int(cursor.lastrowid)
+        conn.executemany(
+            """
+            INSERT INTO raw_imported_rows (
+                imported_source_id,
+                raw_date,
+                raw_type,
+                raw_category,
+                raw_description,
+                raw_amount
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    imported_source_id,
+                    row["raw_date"],
+                    row["raw_type"],
+                    row["raw_category"],
+                    row["raw_description"],
+                    row["raw_amount"],
+                )
+                for row in raw_rows
+            ],
+        )
+        source = fetch_imported_source(conn, imported_source_id)
+
+    print_json(
+        {
+            "status": "imported",
+            "account": dict(account),
+            "imported_source": dict(source),
+            "inserted_raw_row_count": len(raw_rows),
         }
     )
 
@@ -710,6 +910,7 @@ def build_parser() -> argparse.ArgumentParser:
             "  python scripts/db_cli.py recent --limit 20\n"
             "  python scripts/db_cli.py --db data/transactions.sqlite accounts\n"
             "  python scripts/db_cli.py add-account --name Checking --institution \"Example Bank\"\n"
+            "  python scripts/db_cli.py import-csv path/to/file.csv --account-id 1\n"
             "  python scripts/db_cli.py add-tag --name reimbursable\n"
             "  python scripts/db_cli.py add-note --transaction-id 1 --note \"Reviewed\"\n"
             "  python scripts/db_cli.py add-transaction-rule --name Coffee --match-field merchant_raw --match-type contains --match-value Starbucks --set-merchant-clean Starbucks"
@@ -749,6 +950,15 @@ def build_parser() -> argparse.ArgumentParser:
     transaction_parser = subparsers.add_parser("transaction", help="Show one transaction with tags and notes as JSON.")
     transaction_parser.add_argument("id", type=positive_int)
     transaction_parser.set_defaults(func=command_transaction)
+
+    import_csv_parser = subparsers.add_parser(
+        "import-csv",
+        help="Import CSV rows into imported_source and raw_imported_rows.",
+    )
+    import_csv_parser.add_argument("csv_path", type=Path)
+    import_csv_parser.add_argument("--account-id", type=positive_int, required=True)
+    import_csv_parser.add_argument("--source-type", default="csv")
+    import_csv_parser.set_defaults(func=command_import_csv)
 
     add_account_parser = subparsers.add_parser("add-account", help="Add an account and print the account as JSON.")
     add_account_parser.add_argument("--name", required=True)

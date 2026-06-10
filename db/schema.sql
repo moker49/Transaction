@@ -89,6 +89,7 @@ CREATE TABLE IF NOT EXISTS transaction_notes (
 
 CREATE TABLE IF NOT EXISTS imported_source (
     id INTEGER PRIMARY KEY,
+    account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
     filename TEXT NOT NULL,
     source_type TEXT,
     sha256 TEXT NOT NULL,
@@ -101,7 +102,6 @@ CREATE TABLE IF NOT EXISTS imported_source (
 CREATE TABLE IF NOT EXISTS raw_imported_rows (
     id INTEGER PRIMARY KEY,
     imported_source_id INTEGER NOT NULL REFERENCES imported_source(id) ON DELETE CASCADE,
-    raw_account TEXT,
     raw_date TEXT,
     raw_type TEXT,
     raw_category TEXT,
@@ -112,8 +112,7 @@ CREATE TABLE IF NOT EXISTS raw_imported_rows (
     reviewed BOOLEAN NOT NULL DEFAULT 0,
     CHECK (reviewed IN (0, 1)),
     CHECK (
-        raw_account IS NOT NULL
-        OR raw_date IS NOT NULL
+        raw_date IS NOT NULL
         OR raw_type IS NOT NULL
         OR raw_category IS NOT NULL
         OR raw_description IS NOT NULL
@@ -133,6 +132,7 @@ CREATE INDEX IF NOT EXISTS idx_transaction_import_rules_set_category_id ON trans
 CREATE INDEX IF NOT EXISTS idx_transaction_import_rules_add_tag_id ON transaction_import_rules(add_tag_id);
 CREATE INDEX IF NOT EXISTS idx_transaction_tags_tag_id ON transaction_tags(tag_id);
 CREATE INDEX IF NOT EXISTS idx_transaction_notes_transaction_id ON transaction_notes(transaction_id);
+CREATE INDEX IF NOT EXISTS idx_imported_source_account_id ON imported_source(account_id);
 CREATE INDEX IF NOT EXISTS idx_raw_imported_rows_imported_source_id ON raw_imported_rows(imported_source_id);
 CREATE INDEX IF NOT EXISTS idx_raw_imported_rows_reviewed ON raw_imported_rows(reviewed);
 CREATE INDEX IF NOT EXISTS idx_raw_imported_rows_raw_date ON raw_imported_rows(raw_date);

@@ -34,6 +34,7 @@ python scripts/db_cli.py query-readonly "SELECT name FROM sqlite_master WHERE ty
 python scripts/db_cli.py recent --limit 20
 python scripts/db_cli.py accounts
 python scripts/db_cli.py transaction 1
+python scripts/db_cli.py import-csv "C:\path\to\statement.csv" --account-id 1
 python scripts/db_cli.py add-account --name Checking --institution "Example Bank"
 python scripts/db_cli.py rename-account 1 --name "Primary Checking"
 python scripts/db_cli.py add-note --transaction-id 1 --note "Reviewed"
@@ -145,8 +146,17 @@ Each rule must keep at least one action: `--set-category-id`, `--set-merchant-cl
 `raw_imported_rows` stores the actual imported row fields before they are normalized into a transaction:
 
 - `imported_source_id` links the row to `imported_source`.
-- `raw_account`, `raw_date`, `raw_type`, `raw_category`, `raw_description`, and `raw_amount` preserve the source values as text.
+- `imported_source.account_id` records the account supplied at upload/import time.
+- `raw_date`, `raw_type`, `raw_category`, `raw_description`, and `raw_amount` preserve the source values as text.
 - `parsed_transaction_id` links to the resulting transaction after parsing.
 - `reviewed` marks whether the raw row has been manually reviewed.
 
 At least one raw field must be present. The table intentionally keeps raw values as `TEXT`; parsing into dates, cents, categories, and tags happens later.
+
+CSV imports require an account:
+
+```powershell
+python scripts/db_cli.py import-csv "C:\path\to\statement.csv" --account-id 1
+```
+
+The importer currently recognizes the observed Capital One credit, Chase checking, and SoFi banking CSV layouts, with a generic fallback for common date, description, type, category, and amount columns. Re-importing the same file hash for the same account is idempotent; importing the same file hash for a different account is rejected.
