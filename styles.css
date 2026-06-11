@@ -452,6 +452,11 @@ td {
   text-transform: uppercase;
 }
 
+.status-new {
+  color: var(--text);
+  background: var(--surface-muted);
+}
+
 .status-imported {
   color: var(--accent-dark);
   background: var(--success-bg);
@@ -476,6 +481,10 @@ td {
 
 .log-warning strong {
   color: var(--warning);
+}
+
+.raw-note-input {
+  min-width: 180px;
 }
 
 .amount {

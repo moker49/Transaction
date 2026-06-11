@@ -30,10 +30,12 @@
 
       <nav class="tabs" aria-label="Main views">
         <button class="tab is-active" type="button" data-view="overview">Overview</button>
+        <button class="tab" type="button" data-view="transactions">Transactions</button>
         <button class="tab" type="button" data-view="accounts">Accounts</button>
         <button class="tab" type="button" data-view="import">CSV Import</button>
         <button class="tab" type="button" data-view="raw">Raw Rows</button>
         <button class="tab" type="button" data-view="rules">Rules & Tags</button>
+        <button class="tab" type="button" data-view="logs">Logs</button>
       </nav>
 
       <main>
@@ -52,8 +54,8 @@
               <strong id="rawRowCount">0</strong>
             </div>
             <div class="metric">
-              <span class="metric-label">Pending import</span>
-              <strong id="pendingImportCount">0</strong>
+              <span class="metric-label">New rows</span>
+              <strong id="newImportCount">0</strong>
             </div>
           </div>
 
@@ -84,6 +86,30 @@
           </div>
         </section>
 
+        <section class="view" id="transactionsView">
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>Transactions</h2>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Account</th>
+                    <th>Description</th>
+                    <th>Category</th>
+                    <th>Type</th>
+                    <th>Amount</th>
+                    <th>Notes</th>
+                  </tr>
+                </thead>
+                <tbody id="transactionsTable"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
         <section class="view" id="accountsView">
           <div class="content-grid two-column">
             <section class="panel">
@@ -102,7 +128,6 @@
                 <label>
                   <span>Type</span>
                   <select name="accountType">
-                    <option value="">Unspecified</option>
                     <option value="checking">Checking</option>
                     <option value="savings">Savings</option>
                     <option value="credit">Credit</option>
@@ -181,11 +206,12 @@
                 <select id="rawAccountFilter" aria-label="Filter by account"></select>
                 <select id="rawStatusFilter" aria-label="Filter by import status">
                   <option value="all">All rows</option>
-                  <option value="pending">Pending</option>
+                  <option value="new">New</option>
                   <option value="imported">Imported</option>
                   <option value="duplicate">Duplicate</option>
                   <option value="error">Error</option>
                 </select>
+                <button type="button" class="icon-button" id="selectVisibleRowsButton">Select visible</button>
                 <button type="button" class="primary" id="importSelectedRowsButton">Import selected</button>
               </div>
             </div>
@@ -201,6 +227,7 @@
                     <th>Category</th>
                     <th>Description</th>
                     <th>Amount</th>
+                    <th>Notes</th>
                   </tr>
                 </thead>
                 <tbody id="rawRowsTable"></tbody>
@@ -213,6 +240,17 @@
           <div class="content-grid two-column">
             <section class="panel">
               <div class="panel-heading">
+                <h2>Categories</h2>
+              </div>
+              <form id="categoryForm" class="inline-form">
+                <input name="name" type="text" placeholder="Category name" required autocomplete="off">
+                <button type="submit" class="primary">Add</button>
+              </form>
+              <div id="categoryList" class="chip-list empty-target"></div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-heading">
                 <h2>Tags</h2>
               </div>
               <form id="tagForm" class="inline-form">
@@ -220,13 +258,6 @@
                 <button type="submit" class="primary">Add</button>
               </form>
               <div id="tagList" class="chip-list empty-target"></div>
-            </section>
-
-            <section class="panel">
-              <div class="panel-heading">
-                <h2>Logs & Errors</h2>
-              </div>
-              <div id="logList" class="list empty-target"></div>
             </section>
 
             <section class="panel">
@@ -264,6 +295,10 @@
                   <input name="setCleanDescription" type="text" autocomplete="off">
                 </label>
                 <label>
+                  <span>Clean Category</span>
+                  <select name="setCategoryId" id="ruleCategorySelect"></select>
+                </label>
+                <label>
                   <span>Tag</span>
                   <select name="addTagId" id="ruleTagSelect"></select>
                 </label>
@@ -276,6 +311,15 @@
               <div id="ruleList" class="list empty-target"></div>
             </section>
           </div>
+        </section>
+
+        <section class="view" id="logsView">
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>Logs & Errors</h2>
+            </div>
+            <div id="logList" class="list empty-target"></div>
+          </section>
         </section>
       </main>
     </div>

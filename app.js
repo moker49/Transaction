@@ -3,21 +3,26 @@
 
   const defaultState = {
     accounts: [],
+    categories: [],
     tags: [],
     rules: [],
     imports: [],
+    transactions: [],
     rawRows: [],
     logs: [],
   };
 
   let state = structuredClone(defaultState);
   const selectedRawRowIds = new Set();
+  const rawRowNotes = new Map();
+  let visibleRawRows = [];
 
   const elements = {
     tabs: document.querySelectorAll(".tab"),
     views: document.querySelectorAll(".view"),
     accountForm: document.querySelector("#accountForm"),
     importForm: document.querySelector("#importForm"),
+    categoryForm: document.querySelector("#categoryForm"),
     tagForm: document.querySelector("#tagForm"),
     ruleForm: document.querySelector("#ruleForm"),
     importMessage: document.querySelector("#importMessage"),
@@ -25,7 +30,9 @@
     rawAccountFilter: document.querySelector("#rawAccountFilter"),
     rawStatusFilter: document.querySelector("#rawStatusFilter"),
     rawSearch: document.querySelector("#rawSearch"),
+    selectVisibleRowsButton: document.querySelector("#selectVisibleRowsButton"),
     importSelectedRowsButton: document.querySelector("#importSelectedRowsButton"),
+    ruleCategorySelect: document.querySelector("#ruleCategorySelect"),
     ruleTagSelect: document.querySelector("#ruleTagSelect"),
     themeToggle: document.querySelector("#themeToggle"),
   };
@@ -36,11 +43,13 @@
 
   elements.accountForm.addEventListener("submit", addAccount);
   elements.importForm.addEventListener("submit", importCsv);
+  elements.categoryForm.addEventListener("submit", addCategory);
   elements.tagForm.addEventListener("submit", addTag);
   elements.ruleForm.addEventListener("submit", addRule);
   elements.rawAccountFilter.addEventListener("change", renderRawRows);
   elements.rawStatusFilter.addEventListener("change", renderRawRows);
   elements.rawSearch.addEventListener("input", renderRawRows);
+  elements.selectVisibleRowsButton.addEventListener("click", selectVisibleRawRows);
   elements.importSelectedRowsButton.addEventListener("click", importSelectedRawRows);
   elements.themeToggle.addEventListener("change", updateTheme);
 
@@ -94,6 +103,11 @@
     [...selectedRawRowIds].forEach((rowId) => {
       if (!visibleIds.has(rowId)) {
         selectedRawRowIds.delete(rowId);
+      }
+    });
+    [...rawRowNotes.keys()].forEach((rowId) => {
+      if (!visibleIds.has(rowId)) {
+        rawRowNotes.delete(rowId);
       }
     });
     render();
@@ -190,15 +204,36 @@
     }
   }
 
+  async function addCategory(event) {
+    event.preventDefault();
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    const name = clean(form.get("name"));
+    if (!name) {
+      return;
+    }
+    try {
+      const payload = await apiRequest("/api/categories", {
+        method: "POST",
+        body: JSON.stringify({ name }),
+      });
+      formElement.reset();
+      applyStateFromPayload(payload);
+    } catch (error) {
+      alert(error.message || "Could not add category.");
+    }
+  }
+
   async function addRule(event) {
     event.preventDefault();
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
     const setCleanDescription = clean(form.get("setCleanDescription"));
+    const setCategoryId = Number(form.get("setCategoryId")) || null;
     const addTagId = Number(form.get("addTagId")) || null;
 
-    if (!setCleanDescription && !addTagId) {
-      alert("Set a clean description or tag.");
+    if (!setCategoryId && !setCleanDescription && !addTagId) {
+      alert("Set a clean category, clean description, or tag.");
       return;
     }
 
@@ -210,6 +245,7 @@
           match_field: clean(form.get("matchField")),
           match_type: clean(form.get("matchType")),
           match_value: clean(form.get("matchValue")),
+          set_category_id: setCategoryId,
           set_clean_description: setCleanDescription || null,
           add_tag_id: addTagId,
           priority: Number(form.get("priority")) || 100,
@@ -226,9 +262,11 @@
   function render() {
     renderMetrics();
     renderAccounts();
+    renderTransactions();
     renderAccountSelects();
     renderImports();
     renderSnapshotRows();
+    renderCategories();
     renderTags();
     renderRules();
     renderLogs();
@@ -239,7 +277,7 @@
     setText("#accountCount", state.accounts.length);
     setText("#importCount", state.imports.length);
     setText("#rawRowCount", state.rawRows.length);
-    setText("#pendingImportCount", state.rawRows.filter((row) => row.import_status === "pending").length);
+    setText("#newImportCount", state.rawRows.filter((row) => row.import_status === "new").length);
   }
 
   function renderAccounts() {
@@ -257,6 +295,27 @@
         account.institution || "-",
         account.account_type || "-",
         String(rowCount),
+      ]));
+    });
+  }
+
+  function renderTransactions() {
+    const tbody = document.querySelector("#transactionsTable");
+    clear(tbody);
+    if (!state.transactions.length) {
+      tbody.appendChild(emptyTableRow(7));
+      return;
+    }
+
+    state.transactions.forEach((transaction) => {
+      tbody.appendChild(tableRow([
+        transaction.posted_date || "-",
+        transaction.account || "-",
+        transaction.clean_description || "-",
+        transaction.category || "-",
+        transaction.transaction_type || "-",
+        transaction.amount || formatCents(transaction.amount_cents),
+        transaction.notes || "-",
       ]));
     });
   }
@@ -331,6 +390,24 @@
     );
   }
 
+  function renderCategories() {
+    const categoryList = document.querySelector("#categoryList");
+    clear(categoryList);
+    if (!state.categories.length) {
+      appendEmpty(categoryList);
+    } else {
+      state.categories.forEach((category) => categoryList.appendChild(el("span", category.name, "chip")));
+    }
+
+    fillSelect(
+      elements.ruleCategorySelect,
+      [
+        { value: "", label: "No category" },
+        ...state.categories.map((category) => ({ value: String(category.id), label: category.name })),
+      ],
+    );
+  }
+
   function renderRules() {
     const ruleList = document.querySelector("#ruleList");
     clear(ruleList);
@@ -344,12 +421,13 @@
       .sort((a, b) => a.priority - b.priority || a.id - b.id)
       .forEach((rule) => {
         const tag = state.tags.find((candidate) => candidate.id === rule.add_tag_id);
+        const category = state.categories.find((candidate) => candidate.id === rule.set_category_id);
         const node = document.createElement("div");
         node.className = "list-item";
         node.append(
           el("strong", `${rule.name} (${rule.priority})`),
           el("span", `${rule.match_field} ${rule.match_type} "${rule.match_value}"`, "list-meta"),
-          el("span", ruleActions(rule, tag), "list-meta"),
+          el("span", ruleActions(rule, category, tag), "list-meta"),
         );
         ruleList.appendChild(node);
       });
@@ -401,10 +479,11 @@
         .toLowerCase()
         .includes(search);
     });
-
+    visibleRawRows = rows;
     if (!rows.length) {
-      tbody.appendChild(emptyTableRow(8));
+      tbody.appendChild(emptyTableRow(9));
       updateImportSelectedButton();
+      updateSelectVisibleButton();
       return;
     }
 
@@ -415,7 +494,7 @@
       checkbox.className = "row-checkbox";
       checkbox.type = "checkbox";
       checkbox.checked = selectedRawRowIds.has(rawRow.id);
-      checkbox.disabled = rawRow.import_status === "imported";
+      checkbox.disabled = rawRow.import_status !== "new";
       checkbox.setAttribute("aria-label", `Select row ${rawRow.id}`);
       checkbox.addEventListener("change", () => {
         if (checkbox.checked) {
@@ -424,6 +503,22 @@
           selectedRawRowIds.delete(rawRow.id);
         }
         updateImportSelectedButton();
+        updateSelectVisibleButton();
+      });
+      const noteInput = document.createElement("input");
+      noteInput.type = "text";
+      noteInput.className = "raw-note-input";
+      noteInput.value = rawRowNotes.get(rawRow.id) || "";
+      noteInput.disabled = rawRow.import_status !== "new";
+      noteInput.placeholder = rawRow.import_status === "new" ? "Transaction note" : "";
+      noteInput.setAttribute("aria-label", `Note for row ${rawRow.id}`);
+      noteInput.addEventListener("input", () => {
+        const note = clean(noteInput.value);
+        if (note) {
+          rawRowNotes.set(rawRow.id, note);
+        } else {
+          rawRowNotes.delete(rawRow.id);
+        }
       });
 
       tr.append(
@@ -435,25 +530,38 @@
         cell(rawRow.raw_category || "-"),
         cell(rawRow.raw_description || "-"),
         cell(rawRow.raw_amount || "-", "amount"),
+        cell(noteInput),
       );
       tbody.appendChild(tr);
     });
     updateImportSelectedButton();
+    updateSelectVisibleButton();
   }
 
   async function importSelectedRawRows() {
-    const rowIds = [...selectedRawRowIds];
+    const rowIds = [...selectedRawRowIds].filter((rowId) => {
+      const rawRow = state.rawRows.find((candidate) => candidate.id === rowId);
+      return rawRow && rawRow.import_status === "new";
+    });
     if (!rowIds.length) {
       return;
     }
+    const notes = rowIds.reduce((record, rowId) => {
+      const note = clean(rawRowNotes.get(rowId));
+      if (note) {
+        record[rowId] = note;
+      }
+      return record;
+    }, {});
 
     elements.importSelectedRowsButton.disabled = true;
     elements.importSelectedRowsButton.textContent = "Importing...";
     try {
       const payload = await apiRequest("/api/raw-rows/import", {
         method: "POST",
-        body: JSON.stringify({ raw_row_ids: rowIds }),
+        body: JSON.stringify({ raw_row_ids: rowIds, raw_row_notes: notes }),
       });
+      rowIds.forEach((rowId) => rawRowNotes.delete(rowId));
       selectedRawRowIds.clear();
       applyStateFromPayload(payload);
       const counts = payload.import_result.counts;
@@ -468,14 +576,40 @@
     }
   }
 
+  function selectVisibleRawRows() {
+    const selectableIds = visibleRawRows
+      .filter((row) => row.import_status === "new")
+      .map((row) => row.id);
+    const allSelected = selectableIds.length > 0 && selectableIds.every((rowId) => selectedRawRowIds.has(rowId));
+    if (allSelected) {
+      selectableIds.forEach((rowId) => selectedRawRowIds.delete(rowId));
+    } else {
+      selectableIds.forEach((rowId) => selectedRawRowIds.add(rowId));
+    }
+    renderRawRows();
+  }
+
   function updateImportSelectedButton() {
-    elements.importSelectedRowsButton.disabled = selectedRawRowIds.size === 0;
+    const importableCount = [...selectedRawRowIds].filter((rowId) => {
+      const rawRow = state.rawRows.find((candidate) => candidate.id === rowId);
+      return rawRow && rawRow.import_status === "new";
+    }).length;
+    elements.importSelectedRowsButton.disabled = importableCount === 0;
     elements.importSelectedRowsButton.textContent =
-      selectedRawRowIds.size === 0 ? "Import selected" : `Import selected (${selectedRawRowIds.size})`;
+      importableCount === 0 ? "Import selected" : `Import selected (${importableCount})`;
+  }
+
+  function updateSelectVisibleButton() {
+    const selectableIds = visibleRawRows
+      .filter((row) => row.import_status === "new")
+      .map((row) => row.id);
+    const allSelected = selectableIds.length > 0 && selectableIds.every((rowId) => selectedRawRowIds.has(rowId));
+    elements.selectVisibleRowsButton.disabled = selectableIds.length === 0;
+    elements.selectVisibleRowsButton.textContent = allSelected ? "Clear visible" : "Select visible";
   }
 
   function statusBadge(rawRow) {
-    const status = rawRow.import_status || "pending";
+    const status = rawRow.import_status || "new";
     const badge = document.createElement("span");
     badge.className = `status-badge status-${status}`;
     badge.textContent = status;
@@ -616,8 +750,21 @@
     return account.institution ? `${account.name} - ${account.institution}` : account.name;
   }
 
-  function ruleActions(rule, tag) {
+  function formatCents(value) {
+    const cents = Number(value);
+    if (!Number.isFinite(cents)) {
+      return "-";
+    }
+    return (cents / 100).toFixed(2);
+  }
+
+  function ruleActions(rule, category, tag) {
     const actions = [];
+    if (category) {
+      actions.push(`category: ${category.name}`);
+    } else if (rule.set_category) {
+      actions.push(`category: ${rule.set_category}`);
+    }
     if (rule.set_clean_description) {
       actions.push(`description: ${rule.set_clean_description}`);
     }

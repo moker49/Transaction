@@ -30,7 +30,6 @@ EXPECTED_TRANSACTION_COLUMNS = {
     "category_id",
     "posted_date",
     "transaction_date",
-    "description",
     "clean_description",
     "amount_cents",
     "currency",
@@ -130,15 +129,26 @@ def schema_is_compatible(conn: sqlite3.Connection) -> bool:
     transaction_columns = {row[1] for row in conn.execute("PRAGMA table_info(transactions)").fetchall()}
     imported_source_columns = {row[1] for row in conn.execute("PRAGMA table_info(imported_source)").fetchall()}
     raw_imported_row_columns = {row[1] for row in conn.execute("PRAGMA table_info(raw_imported_rows)").fetchall()}
+    raw_imported_rows_sql = conn.execute(
+        """
+        SELECT sql
+        FROM sqlite_master
+        WHERE type = 'table' AND name = 'raw_imported_rows'
+        """
+    ).fetchone()
+    raw_imported_rows_ddl = raw_imported_rows_sql[0] if raw_imported_rows_sql else ""
     return (
         EXPECTED_ACCOUNT_COLUMNS.issubset(account_columns)
         and EXPECTED_TRANSACTION_COLUMNS.issubset(transaction_columns)
         and "payee" not in transaction_columns
+        and "description" not in transaction_columns
         and EXPECTED_IMPORTED_SOURCE_COLUMNS.issubset(imported_source_columns)
         and "imported_source_id" not in transaction_columns
         and "import_source_file_id" not in transaction_columns
         and "institution" not in account_columns
         and EXPECTED_RAW_IMPORTED_ROW_COLUMNS.issubset(raw_imported_row_columns)
+        and "DEFAULT 'new'" in raw_imported_rows_ddl
+        and "'pending'" not in raw_imported_rows_ddl
         and "reviewed" not in raw_imported_row_columns
         and "raw_account" not in raw_imported_row_columns
         and "imported_source_files" not in tables

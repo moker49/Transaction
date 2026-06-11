@@ -559,16 +559,32 @@ def fetch_raw_rows_for_import(conn: sqlite3.Connection, row_ids: list[int]) -> l
     ).fetchall()
 
 
-def import_raw_rows(conn: sqlite3.Connection, row_ids: Iterable[int]) -> dict[str, Any]:
+def import_raw_rows(
+    conn: sqlite3.Connection,
+    row_ids: Iterable[int],
+    raw_row_notes: dict[int, str] | None = None,
+) -> dict[str, Any]:
     normalized_ids = sorted({int(row_id) for row_id in row_ids})
     if not normalized_ids:
         raise CliError("At least one raw row id is required.")
+    normalized_notes = {
+        int(row_id): note
+        for row_id, note in (raw_row_notes or {}).items()
+        if normalize_text(note) is not None
+    }
 
     raw_rows = fetch_raw_rows_for_import(conn, normalized_ids)
     found_ids = {int(row["id"]) for row in raw_rows}
     missing_ids = [row_id for row_id in normalized_ids if row_id not in found_ids]
     if missing_ids:
         raise CliError(f"Raw row not found: {', '.join(str(row_id) for row_id in missing_ids)}")
+    unavailable_rows = [
+        f"{row['id']} ({row['import_status']})"
+        for row in raw_rows
+        if row["import_status"] != "new"
+    ]
+    if unavailable_rows:
+        raise CliError(f"Only new raw rows can be imported: {', '.join(unavailable_rows)}")
 
     results = []
     counts = {"imported": 0, "duplicate": 0, "error": 0}
@@ -628,7 +644,6 @@ def import_raw_rows(conn: sqlite3.Connection, row_ids: Iterable[int]) -> dict[st
                     category_id,
                     posted_date,
                     transaction_date,
-                    description,
                     clean_description,
                     amount_cents,
                     currency,
@@ -636,14 +651,13 @@ def import_raw_rows(conn: sqlite3.Connection, row_ids: Iterable[int]) -> dict[st
                     raw_imported_row_id,
                     transaction_hash
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     raw_row["account_id"],
                     rule_result["category_id"],
                     posted_date,
                     posted_date,
-                    description,
                     clean_description,
                     amount_cents,
                     raw_row["currency"],
@@ -653,6 +667,15 @@ def import_raw_rows(conn: sqlite3.Connection, row_ids: Iterable[int]) -> dict[st
                 ),
             )
             transaction_id = int(cursor.lastrowid)
+            note = normalize_text(normalized_notes.get(int(raw_row["id"])))
+            if note is not None:
+                conn.execute(
+                    """
+                    INSERT INTO transaction_notes (transaction_id, note)
+                    VALUES (?, ?)
+                    """,
+                    (transaction_id, note),
+                )
             for tag_id in rule_result["tag_ids"]:
                 conn.execute(
                     """
@@ -775,7 +798,6 @@ def command_recent(args: argparse.Namespace) -> None:
                 t.id,
                 t.posted_date,
                 a.name AS account,
-                t.description,
                 t.clean_description,
                 t.amount_cents,
                 printf('%.2f', t.amount_cents / 100.0) AS amount,
@@ -822,7 +844,6 @@ def command_transaction(args: argparse.Namespace) -> None:
                 t.posted_date,
                 t.transaction_date,
                 a.name AS account,
-                t.description,
                 t.clean_description,
                 t.amount_cents,
                 printf('%.2f', t.amount_cents / 100.0) AS amount,

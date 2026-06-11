@@ -34,7 +34,6 @@ CREATE TABLE IF NOT EXISTS transactions (
     category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
     posted_date TEXT NOT NULL,
     transaction_date TEXT,
-    description TEXT,
     clean_description TEXT,
     amount_cents INTEGER NOT NULL,
     currency TEXT NOT NULL DEFAULT 'USD',
@@ -111,12 +110,12 @@ CREATE TABLE IF NOT EXISTS raw_imported_rows (
     raw_description TEXT,
     raw_amount TEXT,
     parsed_transaction_id INTEGER REFERENCES transactions(id) ON DELETE SET NULL,
-    import_status TEXT NOT NULL DEFAULT 'pending',
+    import_status TEXT NOT NULL DEFAULT 'new',
     import_error TEXT,
     raw_row_hash TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CHECK (import_status IN ('pending', 'imported', 'duplicate', 'error')),
+    CHECK (import_status IN ('new', 'imported', 'duplicate', 'error')),
     CHECK (
         raw_date IS NOT NULL
         OR raw_type IS NOT NULL

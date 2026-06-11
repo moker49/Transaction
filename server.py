@@ -33,6 +33,7 @@ from db_cli import (  # noqa: E402
     normalize_currency,
     optional_nonempty,
     read_csv_import_rows,
+    require_category,
     raw_row_hash,
     validate_match_field,
     validate_match_type,
@@ -127,6 +128,27 @@ def create_tag():
     return jsonify({"tag": tag, "state": state}), 201
 
 
+@app.post("/api/categories")
+def create_category():
+    ensure_database()
+    data = request.get_json(silent=True) or {}
+    name = nonempty(str(data.get("name", "")), "name")
+
+    with closing(connect(DEFAULT_DB_PATH)) as conn:
+        existing = conn.execute(
+            "SELECT id FROM categories WHERE name = ?",
+            (name,),
+        ).fetchone()
+        if existing is not None:
+            raise CliError(f"Category already exists: {name}")
+        cursor = conn.execute("INSERT INTO categories (name) VALUES (?)", (name,))
+        category = dict(fetch_category(conn, int(cursor.lastrowid)))
+        state = read_state(conn)
+        conn.commit()
+
+    return jsonify({"category": category, "state": state}), 201
+
+
 @app.post("/api/rules")
 def create_rule():
     ensure_database()
@@ -135,13 +157,16 @@ def create_rule():
     match_field = validate_match_field(str(data.get("match_field", "")))
     match_type = validate_match_type(str(data.get("match_type", "")))
     match_value = nonempty(str(data.get("match_value", "")), "match_value")
+    set_category_id = int(data["set_category_id"]) if data.get("set_category_id") is not None else None
     set_clean_description = optional_nonempty(data.get("set_clean_description"), "set_clean_description")
     add_tag_id = int(data["add_tag_id"]) if data.get("add_tag_id") is not None else None
     priority = int(data.get("priority", 100))
 
-    validate_rule_actions(None, set_clean_description, add_tag_id)
+    validate_rule_actions(set_category_id, set_clean_description, add_tag_id)
 
     with closing(connect(DEFAULT_DB_PATH)) as conn:
+        if set_category_id is not None:
+            require_category(conn, set_category_id)
         if add_tag_id is not None:
             fetch_tag_by_id(conn, add_tag_id)
         cursor = conn.execute(
@@ -151,13 +176,14 @@ def create_rule():
                 match_field,
                 match_type,
                 match_value,
+                set_category_id,
                 set_clean_description,
                 add_tag_id,
                 priority
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (name, match_field, match_type, match_value, set_clean_description, add_tag_id, priority),
+            (name, match_field, match_type, match_value, set_category_id, set_clean_description, add_tag_id, priority),
         )
         rule = dict(fetch_transaction_rule(conn, int(cursor.lastrowid)))
         state = read_state(conn)
@@ -288,9 +314,19 @@ def import_selected_raw_rows():
     raw_row_ids = data.get("raw_row_ids")
     if not isinstance(raw_row_ids, list):
         raise CliError("raw_row_ids must be a list.")
+    raw_row_notes = data.get("raw_row_notes") or {}
+    if not isinstance(raw_row_notes, dict):
+        raise CliError("raw_row_notes must be an object.")
 
     with closing(connect(DEFAULT_DB_PATH)) as conn:
-        result = import_raw_rows(conn, [parse_positive_int(str(row_id), "raw_row_id") for row_id in raw_row_ids])
+        result = import_raw_rows(
+            conn,
+            [parse_positive_int(str(row_id), "raw_row_id") for row_id in raw_row_ids],
+            {
+                parse_positive_int(str(row_id), "raw_row_note id"): str(note)
+                for row_id, note in raw_row_notes.items()
+            },
+        )
         state = read_state(conn)
         conn.commit()
 
@@ -362,6 +398,39 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
             """
         ).fetchall()
     )
+    transactions = rows_to_dicts(
+        conn.execute(
+            """
+            SELECT
+                t.id,
+                t.account_id,
+                a.name AS account,
+                t.category_id,
+                c.name AS category,
+                t.posted_date,
+                t.transaction_date,
+                t.clean_description,
+                t.amount_cents,
+                printf('%.2f', t.amount_cents / 100.0) AS amount,
+                t.currency,
+                t.transaction_type,
+                t.status,
+                t.raw_imported_row_id,
+                COALESCE(group_concat(n.note, char(10)), '') AS notes,
+                t.created_at,
+                t.updated_at
+            FROM transactions t
+            JOIN accounts a ON a.id = t.account_id
+            LEFT JOIN categories c ON c.id = t.category_id
+            LEFT JOIN transaction_notes n ON n.transaction_id = t.id
+            GROUP BY t.id
+            ORDER BY t.posted_date DESC, t.id DESC
+            """
+        ).fetchall()
+    )
+    categories = rows_to_dicts(
+        conn.execute("SELECT id, name, parent_id, created_at FROM categories ORDER BY name, id").fetchall()
+    )
     tags = rows_to_dicts(conn.execute("SELECT id, name, created_at FROM tags ORDER BY name, id").fetchall())
     rules = rows_to_dicts(
         conn.execute(
@@ -408,9 +477,11 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
 
     return {
         "accounts": accounts,
+        "categories": categories,
         "tags": tags,
         "rules": rules,
         "imports": imports,
+        "transactions": transactions,
         "rawRows": raw_rows,
         "logs": logs,
     }
@@ -418,6 +489,20 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
 
 def rows_to_dicts(rows) -> list[dict[str, Any]]:
     return [dict(row) for row in rows]
+
+
+def fetch_category(conn: sqlite3.Connection, category_id: int) -> sqlite3.Row:
+    row = conn.execute(
+        """
+        SELECT id, name, parent_id, created_at
+        FROM categories
+        WHERE id = ?
+        """,
+        (category_id,),
+    ).fetchone()
+    if row is None:
+        raise CliError(f"Category not found: {category_id}")
+    return row
 
 
 def parse_metadata(value: str | None) -> dict[str, Any]:
