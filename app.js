@@ -7,9 +7,11 @@
     rules: [],
     imports: [],
     rawRows: [],
+    logs: [],
   };
 
   let state = structuredClone(defaultState);
+  const selectedRawRowIds = new Set();
 
   const elements = {
     tabs: document.querySelectorAll(".tab"),
@@ -21,8 +23,9 @@
     importMessage: document.querySelector("#importMessage"),
     importAccountSelect: document.querySelector("#importAccountSelect"),
     rawAccountFilter: document.querySelector("#rawAccountFilter"),
-    rawReviewedFilter: document.querySelector("#rawReviewedFilter"),
+    rawStatusFilter: document.querySelector("#rawStatusFilter"),
     rawSearch: document.querySelector("#rawSearch"),
+    importSelectedRowsButton: document.querySelector("#importSelectedRowsButton"),
     ruleTagSelect: document.querySelector("#ruleTagSelect"),
     exportJsonButton: document.querySelector("#exportJsonButton"),
     clearDataButton: document.querySelector("#clearDataButton"),
@@ -37,8 +40,9 @@
   elements.tagForm.addEventListener("submit", addTag);
   elements.ruleForm.addEventListener("submit", addRule);
   elements.rawAccountFilter.addEventListener("change", renderRawRows);
-  elements.rawReviewedFilter.addEventListener("change", renderRawRows);
+  elements.rawStatusFilter.addEventListener("change", renderRawRows);
   elements.rawSearch.addEventListener("input", renderRawRows);
+  elements.importSelectedRowsButton.addEventListener("click", importSelectedRawRows);
   elements.exportJsonButton.addEventListener("click", exportJson);
   elements.clearDataButton.addEventListener("click", clearLocalData);
 
@@ -75,6 +79,12 @@
 
   function applyStateFromPayload(payload) {
     state = normalizeState(payload.state || payload);
+    const visibleIds = new Set(state.rawRows.map((row) => row.id));
+    [...selectedRawRowIds].forEach((rowId) => {
+      if (!visibleIds.has(rowId)) {
+        selectedRawRowIds.delete(rowId);
+      }
+    });
     render();
   }
 
@@ -173,11 +183,11 @@
     event.preventDefault();
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
-    const setMerchantClean = clean(form.get("setMerchantClean"));
+    const setCleanDescription = clean(form.get("setCleanDescription"));
     const addTagId = Number(form.get("addTagId")) || null;
 
-    if (!setMerchantClean && !addTagId) {
-      alert("Set a clean merchant or tag.");
+    if (!setCleanDescription && !addTagId) {
+      alert("Set a clean description or tag.");
       return;
     }
 
@@ -189,7 +199,7 @@
           match_field: clean(form.get("matchField")),
           match_type: clean(form.get("matchType")),
           match_value: clean(form.get("matchValue")),
-          set_merchant_clean: setMerchantClean || null,
+          set_clean_description: setCleanDescription || null,
           add_tag_id: addTagId,
           priority: Number(form.get("priority")) || 100,
         }),
@@ -210,6 +220,7 @@
     renderSnapshotRows();
     renderTags();
     renderRules();
+    renderLogs();
     renderRawRows();
   }
 
@@ -217,7 +228,7 @@
     setText("#accountCount", state.accounts.length);
     setText("#importCount", state.imports.length);
     setText("#rawRowCount", state.rawRows.length);
-    setText("#openReviewCount", state.rawRows.filter((row) => !row.reviewed).length);
+    setText("#pendingImportCount", state.rawRows.filter((row) => row.import_status === "pending").length);
   }
 
   function renderAccounts() {
@@ -333,22 +344,42 @@
       });
   }
 
+  function renderLogs() {
+    const logList = document.querySelector("#logList");
+    clear(logList);
+    if (!state.logs.length) {
+      appendEmpty(logList);
+      return;
+    }
+
+    state.logs.slice(0, 20).forEach((log) => {
+      const node = document.createElement("div");
+      node.className = `list-item log-${log.level}`;
+      node.append(
+        el("strong", `${log.level.toUpperCase()} | ${log.source}`),
+        el("span", log.message, "list-meta"),
+        el("span", formatDateTime(log.created_at), "list-meta"),
+      );
+      if (log.details && Object.keys(log.details).length) {
+        node.append(el("span", JSON.stringify(log.details), "list-meta"));
+      }
+      logList.appendChild(node);
+    });
+  }
+
   function renderRawRows() {
     const tbody = document.querySelector("#rawRowsTable");
     clear(tbody);
 
     const accountFilter = elements.rawAccountFilter.value;
-    const reviewedFilter = elements.rawReviewedFilter.value;
+    const statusFilter = elements.rawStatusFilter.value;
     const search = elements.rawSearch.value.trim().toLowerCase();
 
     const rows = state.rawRows.filter((row) => {
       if (accountFilter !== "all" && String(row.account_id) !== accountFilter) {
         return false;
       }
-      if (reviewedFilter === "open" && row.reviewed) {
-        return false;
-      }
-      if (reviewedFilter === "reviewed" && !row.reviewed) {
+      if (statusFilter !== "all" && row.import_status !== statusFilter) {
         return false;
       }
       if (!search) {
@@ -361,7 +392,8 @@
     });
 
     if (!rows.length) {
-      tbody.appendChild(emptyTableRow(7));
+      tbody.appendChild(emptyTableRow(8));
+      updateImportSelectedButton();
       return;
     }
 
@@ -369,27 +401,23 @@
       const account = state.accounts.find((candidate) => candidate.id === rawRow.account_id);
       const tr = document.createElement("tr");
       const checkbox = document.createElement("input");
-      checkbox.className = "review-checkbox";
+      checkbox.className = "row-checkbox";
       checkbox.type = "checkbox";
-      checkbox.checked = rawRow.reviewed;
-      checkbox.setAttribute("aria-label", `Reviewed row ${rawRow.id}`);
-      checkbox.addEventListener("change", async () => {
-        rawRow.reviewed = checkbox.checked;
-        render();
-        try {
-          const payload = await apiRequest(`/api/raw-rows/${rawRow.id}`, {
-            method: "PATCH",
-            body: JSON.stringify({ reviewed: checkbox.checked }),
-          });
-          applyStateFromPayload(payload);
-        } catch (error) {
-          alert(error.message || "Could not update row.");
-          await loadInitialState();
+      checkbox.checked = selectedRawRowIds.has(rawRow.id);
+      checkbox.disabled = rawRow.import_status === "imported";
+      checkbox.setAttribute("aria-label", `Select row ${rawRow.id}`);
+      checkbox.addEventListener("change", () => {
+        if (checkbox.checked) {
+          selectedRawRowIds.add(rawRow.id);
+        } else {
+          selectedRawRowIds.delete(rawRow.id);
         }
+        updateImportSelectedButton();
       });
 
       tr.append(
         cell(checkbox),
+        cell(statusBadge(rawRow), "status-cell"),
         cell(account ? account.name : "Unknown", "muted-cell"),
         cell(rawRow.raw_date || "-"),
         cell(rawRow.raw_type || "-"),
@@ -399,6 +427,51 @@
       );
       tbody.appendChild(tr);
     });
+    updateImportSelectedButton();
+  }
+
+  async function importSelectedRawRows() {
+    const rowIds = [...selectedRawRowIds];
+    if (!rowIds.length) {
+      return;
+    }
+
+    elements.importSelectedRowsButton.disabled = true;
+    elements.importSelectedRowsButton.textContent = "Importing...";
+    try {
+      const payload = await apiRequest("/api/raw-rows/import", {
+        method: "POST",
+        body: JSON.stringify({ raw_row_ids: rowIds }),
+      });
+      selectedRawRowIds.clear();
+      applyStateFromPayload(payload);
+      const counts = payload.import_result.counts;
+      setMessage(
+        `Imported ${counts.imported}; duplicates ${counts.duplicate}; errors ${counts.error}.`,
+        counts.error > 0,
+      );
+    } catch (error) {
+      alert(error.message || "Could not import selected rows.");
+    } finally {
+      updateImportSelectedButton();
+    }
+  }
+
+  function updateImportSelectedButton() {
+    elements.importSelectedRowsButton.disabled = selectedRawRowIds.size === 0;
+    elements.importSelectedRowsButton.textContent =
+      selectedRawRowIds.size === 0 ? "Import selected" : `Import selected (${selectedRawRowIds.size})`;
+  }
+
+  function statusBadge(rawRow) {
+    const status = rawRow.import_status || "pending";
+    const badge = document.createElement("span");
+    badge.className = `status-badge status-${status}`;
+    badge.textContent = status;
+    if (rawRow.import_error) {
+      badge.title = rawRow.import_error;
+    }
+    return badge;
   }
 
   function parseCsv(text) {
@@ -557,8 +630,8 @@
 
   function ruleActions(rule, tag) {
     const actions = [];
-    if (rule.set_merchant_clean) {
-      actions.push(`merchant: ${rule.set_merchant_clean}`);
+    if (rule.set_clean_description) {
+      actions.push(`description: ${rule.set_clean_description}`);
     }
     if (tag) {
       actions.push(`tag: ${tag.name}`);

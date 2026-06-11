@@ -351,9 +351,52 @@ td {
   text-align: center;
 }
 
-.review-checkbox {
+.row-checkbox {
   width: 18px;
   min-height: 18px;
+}
+
+.status-cell {
+  white-space: nowrap;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.status-imported {
+  color: var(--accent-dark);
+  background: #eef8f6;
+  border-color: #b8ded8;
+}
+
+.status-duplicate {
+  color: #7a5d12;
+  background: #fff8dc;
+  border-color: #eadb91;
+}
+
+.status-error,
+.log-error strong {
+  color: var(--danger);
+}
+
+.status-error {
+  background: var(--danger-bg);
+  border-color: #efc7c2;
+}
+
+.log-warning strong {
+  color: #7a5d12;
 }
 
 .amount {

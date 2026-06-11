@@ -28,10 +28,12 @@ from db_cli import (  # noqa: E402
     fetch_tag_by_name,
     fetch_transaction_rule,
     get_or_create_institution,
+    import_raw_rows,
     nonempty,
     normalize_currency,
     optional_nonempty,
     read_csv_import_rows,
+    raw_row_hash,
     validate_match_field,
     validate_match_type,
     validate_rule_actions,
@@ -133,11 +135,11 @@ def create_rule():
     match_field = validate_match_field(str(data.get("match_field", "")))
     match_type = validate_match_type(str(data.get("match_type", "")))
     match_value = nonempty(str(data.get("match_value", "")), "match_value")
-    set_merchant_clean = optional_nonempty(data.get("set_merchant_clean"), "set_merchant_clean")
+    set_clean_description = optional_nonempty(data.get("set_clean_description"), "set_clean_description")
     add_tag_id = int(data["add_tag_id"]) if data.get("add_tag_id") is not None else None
     priority = int(data.get("priority", 100))
 
-    validate_rule_actions(None, set_merchant_clean, add_tag_id)
+    validate_rule_actions(None, set_clean_description, add_tag_id)
 
     with closing(connect(DEFAULT_DB_PATH)) as conn:
         if add_tag_id is not None:
@@ -149,13 +151,13 @@ def create_rule():
                 match_field,
                 match_type,
                 match_value,
-                set_merchant_clean,
+                set_clean_description,
                 add_tag_id,
                 priority
             )
             VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (name, match_field, match_type, match_value, set_merchant_clean, add_tag_id, priority),
+            (name, match_field, match_type, match_value, set_clean_description, add_tag_id, priority),
         )
         rule = dict(fetch_transaction_rule(conn, int(cursor.lastrowid)))
         state = read_state(conn)
@@ -246,9 +248,10 @@ def import_csv():
                 raw_type,
                 raw_category,
                 raw_description,
-                raw_amount
+                raw_amount,
+                raw_row_hash
             )
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
@@ -258,6 +261,7 @@ def import_csv():
                     row["raw_category"],
                     row["raw_description"],
                     row["raw_amount"],
+                    raw_row_hash(row),
                 )
                 for row in raw_rows
             ],
@@ -277,45 +281,20 @@ def import_csv():
     ), 201
 
 
-@app.patch("/api/raw-rows/<int:row_id>")
-def update_raw_row(row_id: int):
+@app.post("/api/raw-rows/import")
+def import_selected_raw_rows():
     ensure_database()
     data = request.get_json(silent=True) or {}
-    if "reviewed" not in data:
-        raise CliError("reviewed is required.")
+    raw_row_ids = data.get("raw_row_ids")
+    if not isinstance(raw_row_ids, list):
+        raise CliError("raw_row_ids must be a list.")
 
-    reviewed = 1 if bool(data["reviewed"]) else 0
     with closing(connect(DEFAULT_DB_PATH)) as conn:
-        cursor = conn.execute(
-            "UPDATE raw_imported_rows SET reviewed = ? WHERE id = ?",
-            (reviewed, row_id),
-        )
-        if cursor.rowcount == 0:
-            raise CliError(f"Raw row not found: {row_id}")
-        row = conn.execute(
-            """
-            SELECT
-                rr.id,
-                rr.imported_source_id,
-                src.account_id,
-                rr.raw_date,
-                rr.raw_type,
-                rr.raw_category,
-                rr.raw_description,
-                rr.raw_amount,
-                rr.parsed_transaction_id,
-                rr.created_at,
-                rr.reviewed
-            FROM raw_imported_rows rr
-            JOIN imported_source src ON src.id = rr.imported_source_id
-            WHERE rr.id = ?
-            """,
-            (row_id,),
-        ).fetchone()
+        result = import_raw_rows(conn, [parse_positive_int(str(row_id), "raw_row_id") for row_id in raw_row_ids])
         state = read_state(conn)
         conn.commit()
 
-    return jsonify({"raw_row": normalize_bool_fields(dict(row)), "state": state})
+    return jsonify({"import_result": result, "state": state})
 
 
 @app.delete("/api/state")
@@ -323,6 +302,10 @@ def clear_state():
     ensure_database()
     with closing(connect(DEFAULT_DB_PATH)) as conn:
         conn.execute("DELETE FROM transaction_import_rules")
+        conn.execute("DELETE FROM logs")
+        conn.execute("DELETE FROM transaction_notes")
+        conn.execute("DELETE FROM transaction_tags")
+        conn.execute("DELETE FROM transactions")
         conn.execute("DELETE FROM raw_imported_rows")
         conn.execute("DELETE FROM imported_source")
         conn.execute("DELETE FROM tags")
@@ -388,8 +371,11 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
                 rr.raw_description,
                 rr.raw_amount,
                 rr.parsed_transaction_id,
+                rr.import_status,
+                rr.import_error,
+                rr.raw_row_hash,
                 rr.created_at,
-                rr.reviewed
+                rr.updated_at
             FROM raw_imported_rows rr
             JOIN imported_source src ON src.id = rr.imported_source_id
             ORDER BY rr.id
@@ -408,7 +394,7 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
                 r.match_value,
                 r.set_category_id,
                 c.name AS set_category,
-                r.set_merchant_clean,
+                r.set_clean_description,
                 r.add_tag_id,
                 tags.name AS add_tag,
                 r.priority,
@@ -422,13 +408,23 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
             """
         ).fetchall()
     )
+    logs = rows_to_dicts(
+        conn.execute(
+            """
+            SELECT id, level, source, message, details_json, created_at
+            FROM logs
+            ORDER BY created_at DESC, id DESC
+            LIMIT 100
+            """
+        ).fetchall()
+    )
 
     for item in imports:
         item["metadata"] = parse_metadata(item.pop("metadata_json"))
-    for row in raw_rows:
-        row["reviewed"] = bool(row["reviewed"])
     for rule in rules:
         rule["is_active"] = bool(rule["is_active"])
+    for log in logs:
+        log["details"] = parse_metadata(log.pop("details_json"))
 
     return {
         "accounts": accounts,
@@ -436,6 +432,7 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
         "rules": rules,
         "imports": imports,
         "rawRows": raw_rows,
+        "logs": logs,
     }
 
 
@@ -455,11 +452,6 @@ def parse_metadata(value: str | None) -> dict[str, Any]:
     metadata.setdefault("columns", [])
     metadata.setdefault("layout", "generic_csv")
     return metadata
-
-
-def normalize_bool_fields(row: dict[str, Any]) -> dict[str, Any]:
-    row["reviewed"] = bool(row["reviewed"])
-    return row
 
 
 def parse_positive_int(value: str | None, field_name: str) -> int:

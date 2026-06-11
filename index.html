@@ -47,8 +47,8 @@
               <strong id="rawRowCount">0</strong>
             </div>
             <div class="metric">
-              <span class="metric-label">Open review</span>
-              <strong id="openReviewCount">0</strong>
+              <span class="metric-label">Pending import</span>
+              <strong id="pendingImportCount">0</strong>
             </div>
           </div>
 
@@ -174,18 +174,22 @@
               <div class="controls">
                 <input id="rawSearch" type="search" placeholder="Search rows" aria-label="Search raw rows">
                 <select id="rawAccountFilter" aria-label="Filter by account"></select>
-                <select id="rawReviewedFilter" aria-label="Filter by review state">
+                <select id="rawStatusFilter" aria-label="Filter by import status">
                   <option value="all">All rows</option>
-                  <option value="open">Open review</option>
-                  <option value="reviewed">Reviewed</option>
+                  <option value="pending">Pending</option>
+                  <option value="imported">Imported</option>
+                  <option value="duplicate">Duplicate</option>
+                  <option value="error">Error</option>
                 </select>
+                <button type="button" class="primary" id="importSelectedRowsButton">Import selected</button>
               </div>
             </div>
             <div class="table-wrap raw-table">
               <table>
                 <thead>
                   <tr>
-                    <th>Reviewed</th>
+                    <th>Select</th>
+                    <th>Status</th>
                     <th>Account</th>
                     <th>Date</th>
                     <th>Type</th>
@@ -215,6 +219,13 @@
 
             <section class="panel">
               <div class="panel-heading">
+                <h2>Logs & Errors</h2>
+              </div>
+              <div id="logList" class="list empty-target"></div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-heading">
                 <h2>Import Rules</h2>
               </div>
               <form id="ruleForm" class="form-grid">
@@ -225,8 +236,9 @@
                 <label>
                   <span>Match field</span>
                   <select name="matchField">
-                    <option value="description_raw">Description</option>
-                    <option value="merchant_raw">Merchant</option>
+                    <option value="description">Description</option>
+                    <option value="category">Category</option>
+                    <option value="type">Type</option>
                   </select>
                 </label>
                 <label>
@@ -243,8 +255,8 @@
                   <input name="matchValue" type="text" required autocomplete="off">
                 </label>
                 <label>
-                  <span>Clean merchant</span>
-                  <input name="setMerchantClean" type="text" autocomplete="off">
+                  <span>Clean description</span>
+                  <input name="setCleanDescription" type="text" autocomplete="off">
                 </label>
                 <label>
                   <span>Tag</span>

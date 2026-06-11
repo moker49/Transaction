@@ -34,17 +34,20 @@ CREATE TABLE IF NOT EXISTS transactions (
     category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
     posted_date TEXT NOT NULL,
     transaction_date TEXT,
-    payee TEXT,
     description TEXT,
+    clean_description TEXT,
     amount_cents INTEGER NOT NULL,
     currency TEXT NOT NULL DEFAULT 'USD',
+    transaction_type TEXT,
     status TEXT NOT NULL DEFAULT 'posted',
     external_transaction_id TEXT,
     raw_imported_row_id INTEGER REFERENCES raw_imported_rows(id) ON DELETE SET NULL,
+    transaction_hash TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     CHECK (status IN ('pending', 'posted', 'void')),
-    UNIQUE (account_id, external_transaction_id)
+    UNIQUE (account_id, external_transaction_id),
+    UNIQUE (account_id, transaction_hash)
 );
 
 CREATE TABLE IF NOT EXISTS tags (
@@ -60,16 +63,16 @@ CREATE TABLE IF NOT EXISTS transaction_import_rules (
     match_type TEXT NOT NULL,
     match_value TEXT NOT NULL,
     set_category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
-    set_merchant_clean TEXT,
+    set_clean_description TEXT,
     add_tag_id INTEGER REFERENCES tags(id) ON DELETE SET NULL,
     priority INTEGER NOT NULL DEFAULT 100,
     is_active INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-    CHECK (match_field IN ('merchant_raw', 'description_raw')),
+    CHECK (match_field IN ('type', 'category', 'description')),
     CHECK (match_type IN ('contains', 'equals', 'starts_with', 'regex')),
     CHECK (is_active IN (0, 1)),
-    CHECK (set_category_id IS NOT NULL OR set_merchant_clean IS NOT NULL OR add_tag_id IS NOT NULL)
+    CHECK (set_category_id IS NOT NULL OR set_clean_description IS NOT NULL OR add_tag_id IS NOT NULL)
 );
 
 CREATE TABLE IF NOT EXISTS transaction_tags (
@@ -108,9 +111,12 @@ CREATE TABLE IF NOT EXISTS raw_imported_rows (
     raw_description TEXT,
     raw_amount TEXT,
     parsed_transaction_id INTEGER REFERENCES transactions(id) ON DELETE SET NULL,
+    import_status TEXT NOT NULL DEFAULT 'pending',
+    import_error TEXT,
+    raw_row_hash TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    reviewed BOOLEAN NOT NULL DEFAULT 0,
-    CHECK (reviewed IN (0, 1)),
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CHECK (import_status IN ('pending', 'imported', 'duplicate', 'error')),
     CHECK (
         raw_date IS NOT NULL
         OR raw_type IS NOT NULL
@@ -120,12 +126,23 @@ CREATE TABLE IF NOT EXISTS raw_imported_rows (
     )
 );
 
+CREATE TABLE IF NOT EXISTS logs (
+    id INTEGER PRIMARY KEY,
+    level TEXT NOT NULL,
+    source TEXT NOT NULL,
+    message TEXT NOT NULL,
+    details_json TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    CHECK (level IN ('info', 'warning', 'error'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_accounts_institution_id ON accounts(institution_id);
 CREATE INDEX IF NOT EXISTS idx_categories_parent_id ON categories(parent_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_account_date ON transactions(account_id, posted_date DESC);
 CREATE INDEX IF NOT EXISTS idx_transactions_category_date ON transactions(category_id, posted_date DESC);
 CREATE INDEX IF NOT EXISTS idx_transactions_posted_date ON transactions(posted_date DESC);
-CREATE INDEX IF NOT EXISTS idx_transactions_payee ON transactions(payee);
+CREATE INDEX IF NOT EXISTS idx_transactions_clean_description ON transactions(clean_description);
+CREATE INDEX IF NOT EXISTS idx_transactions_hash ON transactions(account_id, transaction_hash);
 CREATE INDEX IF NOT EXISTS idx_transaction_import_rules_active_priority ON transaction_import_rules(is_active, priority, id);
 CREATE INDEX IF NOT EXISTS idx_transaction_import_rules_match ON transaction_import_rules(match_field, match_type);
 CREATE INDEX IF NOT EXISTS idx_transaction_import_rules_set_category_id ON transaction_import_rules(set_category_id);
@@ -134,6 +151,8 @@ CREATE INDEX IF NOT EXISTS idx_transaction_tags_tag_id ON transaction_tags(tag_i
 CREATE INDEX IF NOT EXISTS idx_transaction_notes_transaction_id ON transaction_notes(transaction_id);
 CREATE INDEX IF NOT EXISTS idx_imported_source_account_id ON imported_source(account_id);
 CREATE INDEX IF NOT EXISTS idx_raw_imported_rows_imported_source_id ON raw_imported_rows(imported_source_id);
-CREATE INDEX IF NOT EXISTS idx_raw_imported_rows_reviewed ON raw_imported_rows(reviewed);
+CREATE INDEX IF NOT EXISTS idx_raw_imported_rows_status ON raw_imported_rows(import_status);
 CREATE INDEX IF NOT EXISTS idx_raw_imported_rows_raw_date ON raw_imported_rows(raw_date);
 CREATE INDEX IF NOT EXISTS idx_raw_imported_rows_parsed_transaction_id ON raw_imported_rows(parsed_transaction_id);
+CREATE INDEX IF NOT EXISTS idx_raw_imported_rows_hash ON raw_imported_rows(imported_source_id, raw_row_hash);
+CREATE INDEX IF NOT EXISTS idx_logs_created_at ON logs(created_at DESC);

@@ -7,6 +7,8 @@ import json
 import re
 import sqlite3
 import sys
+from datetime import datetime
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -29,7 +31,7 @@ FORBIDDEN_SQL_WORDS = {
     "reindex",
 }
 VALID_CURRENCY_RE = re.compile(r"^[A-Z]{3}$")
-MATCH_FIELDS = {"merchant_raw", "description_raw"}
+MATCH_FIELDS = {"type", "category", "description"}
 MATCH_TYPES = {"contains", "equals", "starts_with", "regex"}
 
 
@@ -132,9 +134,9 @@ def validate_match_type(value: str) -> str:
     return normalized
 
 
-def validate_rule_actions(set_category_id: int | None, set_merchant_clean: str | None, add_tag_id: int | None) -> None:
-    if set_category_id is None and set_merchant_clean is None and add_tag_id is None:
-        raise CliError("A transaction rule must set a category, set a cleaned merchant, and/or add a tag.")
+def validate_rule_actions(set_category_id: int | None, set_clean_description: str | None, add_tag_id: int | None) -> None:
+    if set_category_id is None and set_clean_description is None and add_tag_id is None:
+        raise CliError("A transaction rule must set a category, set a clean description, and/or add a tag.")
 
 
 def require_category(conn: sqlite3.Connection, category_id: int) -> None:
@@ -272,7 +274,7 @@ def fetch_transaction_rule(conn: sqlite3.Connection, rule_id: int) -> sqlite3.Ro
             r.match_value,
             r.set_category_id,
             c.name AS set_category,
-            r.set_merchant_clean,
+            r.set_clean_description,
             r.add_tag_id,
             tags.name AS add_tag,
             r.priority,
@@ -382,6 +384,328 @@ def read_csv_import_rows(csv_path: Path) -> tuple[list[str], list[dict[str, str 
     return fieldnames, rows
 
 
+def normalized_hash(payload: dict[str, Any]) -> str:
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def raw_row_hash(row: dict[str, str | None]) -> str:
+    return normalized_hash(
+        {
+            "date": normalize_text(row.get("raw_date")),
+            "type": normalize_text(row.get("raw_type")),
+            "category": normalize_text(row.get("raw_category")),
+            "description": normalize_text(row.get("raw_description")),
+            "amount": normalize_text(row.get("raw_amount")),
+        }
+    )
+
+
+def normalize_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = re.sub(r"\s+", " ", value.strip())
+    return normalized or None
+
+
+def normalize_match_text(value: str | None) -> str:
+    return normalize_text(value).lower() if normalize_text(value) else ""
+
+
+def parse_transaction_date(value: str | None) -> str:
+    raw_value = normalize_text(value)
+    if raw_value is None:
+        raise CliError("raw_date is required.")
+
+    formats = ("%Y-%m-%d", "%m/%d/%Y", "%m/%d/%y", "%Y/%m/%d", "%b %d, %Y", "%B %d, %Y")
+    for date_format in formats:
+        try:
+            return datetime.strptime(raw_value, date_format).date().isoformat()
+        except ValueError:
+            pass
+    raise CliError(f"raw_date is not a supported date: {raw_value}")
+
+
+def parse_amount_cents(value: str | None) -> int:
+    raw_value = normalize_text(value)
+    if raw_value is None:
+        raise CliError("raw_amount is required.")
+    if raw_value.startswith("debit="):
+        parts = dict(part.split("=", 1) for part in raw_value.split("; ") if "=" in part)
+        debit = normalize_text(parts.get("debit"))
+        credit = normalize_text(parts.get("credit"))
+        if debit and credit:
+            raise CliError("raw_amount cannot contain both debit and credit values.")
+        raw_value = f"-{debit}" if debit and not debit.startswith("-") else debit or credit
+
+    cleaned = raw_value.replace("$", "").replace(",", "").strip()
+    negative = cleaned.startswith("(") and cleaned.endswith(")")
+    if negative:
+        cleaned = cleaned[1:-1]
+    try:
+        amount = Decimal(cleaned)
+    except InvalidOperation as exc:
+        raise CliError(f"raw_amount is not a supported amount: {raw_value}") from exc
+    if negative:
+        amount = -amount
+    return int((amount * Decimal("100")).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+
+def fetch_active_rules(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    return conn.execute(
+        """
+        SELECT id, match_field, match_type, match_value, set_category_id, set_clean_description, add_tag_id
+        FROM transaction_import_rules
+        WHERE is_active = 1
+        ORDER BY priority, id
+        """
+    ).fetchall()
+
+
+def rule_matches(rule: sqlite3.Row, raw_row: sqlite3.Row) -> bool:
+    field_value = {
+        "type": raw_row["raw_type"],
+        "category": raw_row["raw_category"],
+        "description": raw_row["raw_description"],
+    }.get(rule["match_field"])
+    haystack = normalize_match_text(field_value)
+    needle = normalize_match_text(rule["match_value"])
+
+    if not needle:
+        return False
+    if rule["match_type"] == "contains":
+        return needle in haystack
+    if rule["match_type"] == "equals":
+        return haystack == needle
+    if rule["match_type"] == "starts_with":
+        return haystack.startswith(needle)
+    if rule["match_type"] == "regex":
+        return re.search(rule["match_value"], field_value or "", flags=re.IGNORECASE) is not None
+    return False
+
+
+def apply_import_rules(conn: sqlite3.Connection, raw_row: sqlite3.Row) -> dict[str, Any]:
+    result: dict[str, Any] = {"category_id": None, "clean_description": None, "tag_ids": []}
+    for rule in fetch_active_rules(conn):
+        if not rule_matches(rule, raw_row):
+            continue
+        if rule["set_category_id"] is not None:
+            result["category_id"] = int(rule["set_category_id"])
+        if rule["set_clean_description"] is not None:
+            result["clean_description"] = rule["set_clean_description"]
+        if rule["add_tag_id"] is not None and int(rule["add_tag_id"]) not in result["tag_ids"]:
+            result["tag_ids"].append(int(rule["add_tag_id"]))
+    return result
+
+
+def make_transaction_hash(
+    account_id: int,
+    posted_date: str,
+    amount_cents: int,
+    transaction_type: str | None,
+    description: str | None,
+) -> str:
+    return normalized_hash(
+        {
+            "account_id": account_id,
+            "posted_date": posted_date,
+            "amount_cents": amount_cents,
+            "type": normalize_match_text(transaction_type),
+            "description": normalize_match_text(description),
+        }
+    )
+
+
+def log_event(
+    conn: sqlite3.Connection,
+    level: str,
+    source: str,
+    message: str,
+    details: dict[str, Any] | None = None,
+) -> None:
+    conn.execute(
+        """
+        INSERT INTO logs (level, source, message, details_json)
+        VALUES (?, ?, ?, ?)
+        """,
+        (level, source, message, json.dumps(details, sort_keys=True) if details else None),
+    )
+
+
+def fetch_raw_rows_for_import(conn: sqlite3.Connection, row_ids: list[int]) -> list[sqlite3.Row]:
+    placeholders = ", ".join("?" for _ in row_ids)
+    return conn.execute(
+        f"""
+        SELECT
+            rr.id,
+            rr.imported_source_id,
+            src.account_id,
+            a.currency,
+            rr.raw_date,
+            rr.raw_type,
+            rr.raw_category,
+            rr.raw_description,
+            rr.raw_amount,
+            rr.parsed_transaction_id,
+            rr.import_status,
+            rr.raw_row_hash
+        FROM raw_imported_rows rr
+        JOIN imported_source src ON src.id = rr.imported_source_id
+        JOIN accounts a ON a.id = src.account_id
+        WHERE rr.id IN ({placeholders})
+        ORDER BY rr.id
+        """,
+        row_ids,
+    ).fetchall()
+
+
+def import_raw_rows(conn: sqlite3.Connection, row_ids: Iterable[int]) -> dict[str, Any]:
+    normalized_ids = sorted({int(row_id) for row_id in row_ids})
+    if not normalized_ids:
+        raise CliError("At least one raw row id is required.")
+
+    raw_rows = fetch_raw_rows_for_import(conn, normalized_ids)
+    found_ids = {int(row["id"]) for row in raw_rows}
+    missing_ids = [row_id for row_id in normalized_ids if row_id not in found_ids]
+    if missing_ids:
+        raise CliError(f"Raw row not found: {', '.join(str(row_id) for row_id in missing_ids)}")
+
+    results = []
+    counts = {"imported": 0, "duplicate": 0, "error": 0}
+    for raw_row in raw_rows:
+        try:
+            posted_date = parse_transaction_date(raw_row["raw_date"])
+            amount_cents = parse_amount_cents(raw_row["raw_amount"])
+            description = normalize_text(raw_row["raw_description"])
+            if description is None:
+                raise CliError("raw_description is required.")
+
+            rule_result = apply_import_rules(conn, raw_row)
+            clean_description = normalize_text(rule_result["clean_description"]) or description
+            transaction_type = normalize_text(raw_row["raw_type"])
+            transaction_hash = make_transaction_hash(
+                int(raw_row["account_id"]),
+                posted_date,
+                amount_cents,
+                transaction_type,
+                clean_description,
+            )
+
+            duplicate = conn.execute(
+                """
+                SELECT id
+                FROM transactions
+                WHERE account_id = ? AND transaction_hash = ?
+                """,
+                (raw_row["account_id"], transaction_hash),
+            ).fetchone()
+            if duplicate is not None:
+                conn.execute(
+                    """
+                    UPDATE raw_imported_rows
+                    SET import_status = 'duplicate',
+                        import_error = NULL,
+                        updated_at = datetime('now')
+                    WHERE id = ?
+                    """,
+                    (raw_row["id"],),
+                )
+                log_event(
+                    conn,
+                    "warning",
+                    "raw_import",
+                    "Raw row matched an existing transaction.",
+                    {"raw_row_id": raw_row["id"], "transaction_id": duplicate["id"]},
+                )
+                counts["duplicate"] += 1
+                results.append({"raw_row_id": raw_row["id"], "status": "duplicate", "transaction_id": duplicate["id"]})
+                continue
+
+            cursor = conn.execute(
+                """
+                INSERT INTO transactions (
+                    account_id,
+                    category_id,
+                    posted_date,
+                    transaction_date,
+                    description,
+                    clean_description,
+                    amount_cents,
+                    currency,
+                    transaction_type,
+                    raw_imported_row_id,
+                    transaction_hash
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    raw_row["account_id"],
+                    rule_result["category_id"],
+                    posted_date,
+                    posted_date,
+                    description,
+                    clean_description,
+                    amount_cents,
+                    raw_row["currency"],
+                    transaction_type,
+                    raw_row["id"],
+                    transaction_hash,
+                ),
+            )
+            transaction_id = int(cursor.lastrowid)
+            for tag_id in rule_result["tag_ids"]:
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO transaction_tags (transaction_id, tag_id)
+                    VALUES (?, ?)
+                    """,
+                    (transaction_id, tag_id),
+                )
+            conn.execute(
+                """
+                UPDATE raw_imported_rows
+                SET import_status = 'imported',
+                    import_error = NULL,
+                    parsed_transaction_id = ?,
+                    updated_at = datetime('now')
+                WHERE id = ?
+                """,
+                (transaction_id, raw_row["id"]),
+            )
+            log_event(
+                conn,
+                "info",
+                "raw_import",
+                "Raw row imported into a transaction.",
+                {"raw_row_id": raw_row["id"], "transaction_id": transaction_id},
+            )
+            counts["imported"] += 1
+            results.append({"raw_row_id": raw_row["id"], "status": "imported", "transaction_id": transaction_id})
+        except Exception as exc:
+            error = str(exc)
+            conn.execute(
+                """
+                UPDATE raw_imported_rows
+                SET import_status = 'error',
+                    import_error = ?,
+                    updated_at = datetime('now')
+                WHERE id = ?
+                """,
+                (error, raw_row["id"]),
+            )
+            log_event(
+                conn,
+                "error",
+                "raw_import",
+                "Raw row import failed.",
+                {"raw_row_id": raw_row["id"], "error": error},
+            )
+            counts["error"] += 1
+            results.append({"raw_row_id": raw_row["id"], "status": "error", "error": error})
+
+    return {"requested_raw_row_ids": normalized_ids, "counts": counts, "results": results}
+
+
 def ensure_readonly_sql(sql: str) -> None:
     stripped = sql.strip()
     lowered = stripped.lower()
@@ -451,8 +775,8 @@ def command_recent(args: argparse.Namespace) -> None:
                 t.id,
                 t.posted_date,
                 a.name AS account,
-                t.payee,
                 t.description,
+                t.clean_description,
                 t.amount_cents,
                 printf('%.2f', t.amount_cents / 100.0) AS amount,
                 t.currency,
@@ -498,8 +822,8 @@ def command_transaction(args: argparse.Namespace) -> None:
                 t.posted_date,
                 t.transaction_date,
                 a.name AS account,
-                t.payee,
                 t.description,
+                t.clean_description,
                 t.amount_cents,
                 printf('%.2f', t.amount_cents / 100.0) AS amount,
                 t.currency,
@@ -617,9 +941,10 @@ def command_import_csv(args: argparse.Namespace) -> None:
                 raw_type,
                 raw_category,
                 raw_description,
-                raw_amount
+                raw_amount,
+                raw_row_hash
             )
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
@@ -629,6 +954,7 @@ def command_import_csv(args: argparse.Namespace) -> None:
                     row["raw_category"],
                     row["raw_description"],
                     row["raw_amount"],
+                    raw_row_hash(row),
                 )
                 for row in raw_rows
             ],
@@ -768,10 +1094,10 @@ def command_add_transaction_rule(args: argparse.Namespace) -> None:
     match_field = validate_match_field(args.match_field)
     match_type = validate_match_type(args.match_type)
     match_value = nonempty(args.match_value, "match_value")
-    set_merchant_clean = optional_nonempty(args.set_merchant_clean, "set_merchant_clean")
+    set_clean_description = optional_nonempty(args.set_clean_description, "set_clean_description")
     is_active = 0 if args.inactive else 1
 
-    validate_rule_actions(args.set_category_id, set_merchant_clean, args.add_tag_id)
+    validate_rule_actions(args.set_category_id, set_clean_description, args.add_tag_id)
 
     with connect(args.db) as conn:
         if args.set_category_id is not None:
@@ -787,7 +1113,7 @@ def command_add_transaction_rule(args: argparse.Namespace) -> None:
                 match_type,
                 match_value,
                 set_category_id,
-                set_merchant_clean,
+                set_clean_description,
                 add_tag_id,
                 priority,
                 is_active
@@ -800,7 +1126,7 @@ def command_add_transaction_rule(args: argparse.Namespace) -> None:
                 match_type,
                 match_value,
                 args.set_category_id,
-                set_merchant_clean,
+                set_clean_description,
                 args.add_tag_id,
                 args.priority,
                 is_active,
@@ -811,6 +1137,12 @@ def command_add_transaction_rule(args: argparse.Namespace) -> None:
     print_json({"transaction_rule": dict(rule)})
 
 
+def command_import_raw_rows(args: argparse.Namespace) -> None:
+    with connect(args.db) as conn:
+        payload = import_raw_rows(conn, args.raw_row_ids)
+    print_json(payload)
+
+
 def command_update_transaction_rule(args: argparse.Namespace) -> None:
     updates: list[str] = []
     values: list[Any] = []
@@ -819,7 +1151,7 @@ def command_update_transaction_rule(args: argparse.Namespace) -> None:
         current = fetch_transaction_rule(conn, args.id)
 
         next_set_category_id = current["set_category_id"]
-        next_set_merchant_clean = current["set_merchant_clean"]
+        next_set_clean_description = current["set_clean_description"]
         next_add_tag_id = current["add_tag_id"]
 
         if args.name is not None:
@@ -845,14 +1177,14 @@ def command_update_transaction_rule(args: argparse.Namespace) -> None:
             updates.append("set_category_id = ?")
             values.append(args.set_category_id)
 
-        if args.clear_merchant_clean:
-            next_set_merchant_clean = None
-            updates.append("set_merchant_clean = ?")
+        if args.clear_clean_description:
+            next_set_clean_description = None
+            updates.append("set_clean_description = ?")
             values.append(None)
-        elif args.set_merchant_clean is not None:
-            next_set_merchant_clean = nonempty(args.set_merchant_clean, "set_merchant_clean")
-            updates.append("set_merchant_clean = ?")
-            values.append(next_set_merchant_clean)
+        elif args.set_clean_description is not None:
+            next_set_clean_description = nonempty(args.set_clean_description, "set_clean_description")
+            updates.append("set_clean_description = ?")
+            values.append(next_set_clean_description)
 
         if args.clear_tag:
             next_add_tag_id = None
@@ -877,7 +1209,7 @@ def command_update_transaction_rule(args: argparse.Namespace) -> None:
         if not updates:
             raise CliError("No changes requested.")
 
-        validate_rule_actions(next_set_category_id, next_set_merchant_clean, next_add_tag_id)
+        validate_rule_actions(next_set_category_id, next_set_clean_description, next_add_tag_id)
 
         updates.append("updated_at = datetime('now')")
         values.append(args.id)
@@ -911,9 +1243,10 @@ def build_parser() -> argparse.ArgumentParser:
             "  python scripts/db_cli.py --db data/transactions.sqlite accounts\n"
             "  python scripts/db_cli.py add-account --name Checking --institution \"Example Bank\"\n"
             "  python scripts/db_cli.py import-csv path/to/file.csv --account-id 1\n"
+            "  python scripts/db_cli.py import-raw-rows 1 2 3\n"
             "  python scripts/db_cli.py add-tag --name reimbursable\n"
             "  python scripts/db_cli.py add-note --transaction-id 1 --note \"Reviewed\"\n"
-            "  python scripts/db_cli.py add-transaction-rule --name Coffee --match-field merchant_raw --match-type contains --match-value Starbucks --set-merchant-clean Starbucks"
+            "  python scripts/db_cli.py add-transaction-rule --name Coffee --match-field description --match-type contains --match-value Starbucks --set-clean-description Starbucks"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -959,6 +1292,13 @@ def build_parser() -> argparse.ArgumentParser:
     import_csv_parser.add_argument("--account-id", type=positive_int, required=True)
     import_csv_parser.add_argument("--source-type", default="csv")
     import_csv_parser.set_defaults(func=command_import_csv)
+
+    import_raw_rows_parser = subparsers.add_parser(
+        "import-raw-rows",
+        help="Import selected raw_imported_rows into clean transactions.",
+    )
+    import_raw_rows_parser.add_argument("raw_row_ids", nargs="+", type=positive_int)
+    import_raw_rows_parser.set_defaults(func=command_import_raw_rows)
 
     add_account_parser = subparsers.add_parser("add-account", help="Add an account and print the account as JSON.")
     add_account_parser.add_argument("--name", required=True)
@@ -1007,7 +1347,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_rule_parser.add_argument("--match-type", choices=sorted(MATCH_TYPES), required=True)
     add_rule_parser.add_argument("--match-value", required=True)
     add_rule_parser.add_argument("--set-category-id", type=positive_int)
-    add_rule_parser.add_argument("--set-merchant-clean")
+    add_rule_parser.add_argument("--set-clean-description")
     add_rule_parser.add_argument("--add-tag-id", type=positive_int)
     add_rule_parser.add_argument("--priority", type=nonnegative_int, default=100)
     add_rule_parser.add_argument("--inactive", action="store_true")
@@ -1025,9 +1365,9 @@ def build_parser() -> argparse.ArgumentParser:
     category_group = update_rule_parser.add_mutually_exclusive_group()
     category_group.add_argument("--set-category-id", type=positive_int)
     category_group.add_argument("--clear-category", action="store_true")
-    merchant_group = update_rule_parser.add_mutually_exclusive_group()
-    merchant_group.add_argument("--set-merchant-clean")
-    merchant_group.add_argument("--clear-merchant-clean", action="store_true")
+    description_group = update_rule_parser.add_mutually_exclusive_group()
+    description_group.add_argument("--set-clean-description")
+    description_group.add_argument("--clear-clean-description", action="store_true")
     tag_group = update_rule_parser.add_mutually_exclusive_group()
     tag_group.add_argument("--add-tag-id", type=positive_int)
     tag_group.add_argument("--clear-tag", action="store_true")

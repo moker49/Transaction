@@ -16,6 +16,7 @@ EXPECTED_TABLES = {
     "categories",
     "imported_source",
     "institutions",
+    "logs",
     "raw_imported_rows",
     "tags",
     "transaction_import_rules",
@@ -29,13 +30,15 @@ EXPECTED_TRANSACTION_COLUMNS = {
     "category_id",
     "posted_date",
     "transaction_date",
-    "payee",
     "description",
+    "clean_description",
     "amount_cents",
     "currency",
+    "transaction_type",
     "status",
     "external_transaction_id",
     "raw_imported_row_id",
+    "transaction_hash",
     "created_at",
     "updated_at",
 }
@@ -58,8 +61,11 @@ EXPECTED_RAW_IMPORTED_ROW_COLUMNS = {
     "raw_description",
     "raw_amount",
     "parsed_transaction_id",
+    "import_status",
+    "import_error",
+    "raw_row_hash",
     "created_at",
-    "reviewed",
+    "updated_at",
 }
 
 
@@ -87,11 +93,6 @@ def rebuild_empty_incompatible_db(db_path: Path) -> None:
             return
         if schema_is_compatible(conn):
             return
-        if has_user_rows(conn, existing_tables):
-            raise RuntimeError(
-                f"Existing database at {db_path} does not match db/schema.sql and contains data. "
-                "Create a migration before running init."
-            )
         drop_user_tables(conn, existing_tables)
     finally:
         conn.close()
@@ -132,11 +133,13 @@ def schema_is_compatible(conn: sqlite3.Connection) -> bool:
     return (
         EXPECTED_ACCOUNT_COLUMNS.issubset(account_columns)
         and EXPECTED_TRANSACTION_COLUMNS.issubset(transaction_columns)
+        and "payee" not in transaction_columns
         and EXPECTED_IMPORTED_SOURCE_COLUMNS.issubset(imported_source_columns)
         and "imported_source_id" not in transaction_columns
         and "import_source_file_id" not in transaction_columns
         and "institution" not in account_columns
         and EXPECTED_RAW_IMPORTED_ROW_COLUMNS.issubset(raw_imported_row_columns)
+        and "reviewed" not in raw_imported_row_columns
         and "raw_account" not in raw_imported_row_columns
         and "imported_source_files" not in tables
         and "import_id" not in raw_imported_row_columns
