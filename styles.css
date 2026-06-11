@@ -255,6 +255,10 @@ h2 {
   grid-template-columns: minmax(280px, 0.9fr) minmax(360px, 1.35fr);
 }
 
+#rulesView .panel {
+  grid-column: 1 / -1;
+}
+
 .panel {
   min-width: 0;
   overflow: hidden;
