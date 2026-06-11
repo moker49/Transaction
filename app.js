@@ -16,6 +16,7 @@
   const selectedRawRowIds = new Set();
   const rawRowNotes = new Map();
   let visibleRawRows = [];
+  const importableRawRowStatuses = new Set(["new", "ready"]);
 
   const elements = {
     tabs: document.querySelectorAll(".tab"),
@@ -494,7 +495,7 @@
       checkbox.className = "row-checkbox";
       checkbox.type = "checkbox";
       checkbox.checked = selectedRawRowIds.has(rawRow.id);
-      checkbox.disabled = rawRow.import_status !== "new";
+      checkbox.disabled = !isImportableRawRow(rawRow);
       checkbox.setAttribute("aria-label", `Select row ${rawRow.id}`);
       checkbox.addEventListener("change", () => {
         if (checkbox.checked) {
@@ -509,8 +510,8 @@
       noteInput.type = "text";
       noteInput.className = "raw-note-input";
       noteInput.value = rawRowNotes.get(rawRow.id) || "";
-      noteInput.disabled = rawRow.import_status !== "new";
-      noteInput.placeholder = rawRow.import_status === "new" ? "Transaction note" : "";
+      noteInput.disabled = !isImportableRawRow(rawRow);
+      noteInput.placeholder = isImportableRawRow(rawRow) ? "Transaction note" : "";
       noteInput.setAttribute("aria-label", `Note for row ${rawRow.id}`);
       noteInput.addEventListener("input", () => {
         const note = clean(noteInput.value);
@@ -541,7 +542,7 @@
   async function importSelectedRawRows() {
     const rowIds = [...selectedRawRowIds].filter((rowId) => {
       const rawRow = state.rawRows.find((candidate) => candidate.id === rowId);
-      return rawRow && rawRow.import_status === "new";
+      return rawRow && isImportableRawRow(rawRow);
     });
     if (!rowIds.length) {
       return;
@@ -578,7 +579,7 @@
 
   function selectVisibleRawRows() {
     const selectableIds = visibleRawRows
-      .filter((row) => row.import_status === "new")
+      .filter((row) => isImportableRawRow(row))
       .map((row) => row.id);
     const allSelected = selectableIds.length > 0 && selectableIds.every((rowId) => selectedRawRowIds.has(rowId));
     if (allSelected) {
@@ -592,7 +593,7 @@
   function updateImportSelectedButton() {
     const importableCount = [...selectedRawRowIds].filter((rowId) => {
       const rawRow = state.rawRows.find((candidate) => candidate.id === rowId);
-      return rawRow && rawRow.import_status === "new";
+      return rawRow && isImportableRawRow(rawRow);
     }).length;
     elements.importSelectedRowsButton.disabled = importableCount === 0;
     elements.importSelectedRowsButton.textContent =
@@ -601,7 +602,7 @@
 
   function updateSelectVisibleButton() {
     const selectableIds = visibleRawRows
-      .filter((row) => row.import_status === "new")
+      .filter((row) => isImportableRawRow(row))
       .map((row) => row.id);
     const allSelected = selectableIds.length > 0 && selectableIds.every((rowId) => selectedRawRowIds.has(rowId));
     elements.selectVisibleRowsButton.disabled = selectableIds.length === 0;
@@ -612,11 +613,25 @@
     const status = rawRow.import_status || "new";
     const badge = document.createElement("span");
     badge.className = `status-badge status-${status}`;
-    badge.textContent = status;
+    badge.textContent = statusLabel(status);
     if (rawRow.import_error) {
       badge.title = rawRow.import_error;
     }
     return badge;
+  }
+
+  function isImportableRawRow(rawRow) {
+    return importableRawRowStatuses.has(rawRow.import_status || "new");
+  }
+
+  function statusLabel(status) {
+    return {
+      new: "New",
+      ready: "Ready",
+      imported: "Imported",
+      duplicate: "Duplicate",
+      error: "Error",
+    }[status] || status;
   }
 
   function parseCsv(text) {

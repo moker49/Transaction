@@ -35,6 +35,7 @@ from db_cli import (  # noqa: E402
     read_csv_import_rows,
     require_category,
     raw_row_hash,
+    sync_raw_row_ready_status,
     validate_match_field,
     validate_match_type,
     validate_rule_actions,
@@ -82,8 +83,10 @@ def health():
 @app.get("/api/state")
 def get_state():
     ensure_database()
-    with closing(connect(DEFAULT_DB_PATH, readonly=True)) as conn:
-        return jsonify(read_state(conn))
+    with closing(connect(DEFAULT_DB_PATH)) as conn:
+        state = read_state(conn)
+        conn.commit()
+        return jsonify(state)
 
 
 @app.post("/api/accounts")
@@ -338,6 +341,7 @@ def ensure_database() -> None:
 
 
 def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
+    sync_raw_row_ready_status(conn)
     accounts = rows_to_dicts(
         conn.execute(
             """

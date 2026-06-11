@@ -457,6 +457,12 @@ td {
   background: var(--surface-muted);
 }
 
+.status-ready {
+  color: var(--accent-dark);
+  background: var(--success-bg);
+  border-color: var(--success-border);
+}
+
 .status-imported {
   color: var(--accent-dark);
   background: var(--success-bg);

@@ -33,6 +33,7 @@ FORBIDDEN_SQL_WORDS = {
 VALID_CURRENCY_RE = re.compile(r"^[A-Z]{3}$")
 MATCH_FIELDS = {"type", "category", "description"}
 MATCH_TYPES = {"contains", "equals", "starts_with", "regex"}
+IMPORTABLE_RAW_ROW_STATUSES = {"new", "ready"}
 
 
 class CliError(Exception):
@@ -498,6 +499,32 @@ def apply_import_rules(conn: sqlite3.Connection, raw_row: sqlite3.Row) -> dict[s
     return result
 
 
+def raw_row_has_matching_rule(conn: sqlite3.Connection, raw_row: sqlite3.Row) -> bool:
+    return any(rule_matches(rule, raw_row) for rule in fetch_active_rules(conn))
+
+
+def sync_raw_row_ready_status(conn: sqlite3.Connection) -> None:
+    rows = conn.execute(
+        """
+        SELECT id, raw_type, raw_category, raw_description, import_status
+        FROM raw_imported_rows
+        WHERE import_status IN ('new', 'ready')
+        ORDER BY id
+        """
+    ).fetchall()
+    for row in rows:
+        next_status = "ready" if raw_row_has_matching_rule(conn, row) else "new"
+        conn.execute(
+            """
+            UPDATE raw_imported_rows
+            SET import_status = ?,
+                updated_at = datetime('now')
+            WHERE id = ? AND import_status != ?
+            """,
+            (next_status, row["id"], next_status),
+        )
+
+
 def make_transaction_hash(
     account_id: int,
     posted_date: str,
@@ -573,6 +600,7 @@ def import_raw_rows(
         if normalize_text(note) is not None
     }
 
+    sync_raw_row_ready_status(conn)
     raw_rows = fetch_raw_rows_for_import(conn, normalized_ids)
     found_ids = {int(row["id"]) for row in raw_rows}
     missing_ids = [row_id for row_id in normalized_ids if row_id not in found_ids]
@@ -581,10 +609,10 @@ def import_raw_rows(
     unavailable_rows = [
         f"{row['id']} ({row['import_status']})"
         for row in raw_rows
-        if row["import_status"] != "new"
+        if row["import_status"] not in IMPORTABLE_RAW_ROW_STATUSES
     ]
     if unavailable_rows:
-        raise CliError(f"Only new raw rows can be imported: {', '.join(unavailable_rows)}")
+        raise CliError(f"Only new or ready raw rows can be imported: {', '.join(unavailable_rows)}")
 
     results = []
     counts = {"imported": 0, "duplicate": 0, "error": 0}
@@ -980,6 +1008,7 @@ def command_import_csv(args: argparse.Namespace) -> None:
                 for row in raw_rows
             ],
         )
+        sync_raw_row_ready_status(conn)
         source = fetch_imported_source(conn, imported_source_id)
 
     print_json(

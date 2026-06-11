@@ -148,6 +148,7 @@ def schema_is_compatible(conn: sqlite3.Connection) -> bool:
         and "institution" not in account_columns
         and EXPECTED_RAW_IMPORTED_ROW_COLUMNS.issubset(raw_imported_row_columns)
         and "DEFAULT 'new'" in raw_imported_rows_ddl
+        and "'ready'" in raw_imported_rows_ddl
         and "'pending'" not in raw_imported_rows_ddl
         and "reviewed" not in raw_imported_row_columns
         and "raw_account" not in raw_imported_row_columns

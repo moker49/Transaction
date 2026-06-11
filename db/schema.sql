@@ -115,7 +115,7 @@ CREATE TABLE IF NOT EXISTS raw_imported_rows (
     raw_row_hash TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CHECK (import_status IN ('new', 'imported', 'duplicate', 'error')),
+    CHECK (import_status IN ('new', 'ready', 'imported', 'duplicate', 'error')),
     CHECK (
         raw_date IS NOT NULL
         OR raw_type IS NOT NULL
