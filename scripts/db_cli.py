@@ -152,6 +152,20 @@ def require_tag_id(conn: sqlite3.Connection, tag_id: int) -> None:
         raise CliError(f"Tag not found: {tag_id}")
 
 
+def fetch_category_by_id(conn: sqlite3.Connection, category_id: int) -> sqlite3.Row:
+    row = conn.execute(
+        """
+        SELECT id, name, parent_id, created_at
+        FROM categories
+        WHERE id = ?
+        """,
+        (category_id,),
+    ).fetchone()
+    if row is None:
+        raise CliError(f"Category not found: {category_id}")
+    return row
+
+
 def require_transaction(conn: sqlite3.Connection, transaction_id: int) -> None:
     row = conn.execute("SELECT 1 FROM transactions WHERE id = ?", (transaction_id,)).fetchone()
     if row is None:
@@ -229,6 +243,43 @@ def fetch_tag_by_id(conn: sqlite3.Connection, tag_id: int) -> sqlite3.Row:
     if row is None:
         raise CliError(f"Tag not found: {tag_id}")
     return row
+
+
+def require_account_unused(conn: sqlite3.Connection, account_id: int) -> None:
+    fetch_account(conn, account_id)
+    transaction_count = conn.execute(
+        "SELECT COUNT(*) AS count FROM transactions WHERE account_id = ?",
+        (account_id,),
+    ).fetchone()["count"]
+    import_count = conn.execute(
+        "SELECT COUNT(*) AS count FROM imported_source WHERE account_id = ?",
+        (account_id,),
+    ).fetchone()["count"]
+    if transaction_count or import_count:
+        raise CliError("Account is being used and cannot be deleted.")
+
+
+def require_category_unused(conn: sqlite3.Connection, category_id: int) -> None:
+    require_category(conn, category_id)
+    checks = [
+        ("transactions", "SELECT COUNT(*) AS count FROM transactions WHERE category_id = ?"),
+        ("rules", "SELECT COUNT(*) AS count FROM transaction_import_rules WHERE set_category_id = ?"),
+        ("child categories", "SELECT COUNT(*) AS count FROM categories WHERE parent_id = ?"),
+    ]
+    used_by = [label for label, sql in checks if conn.execute(sql, (category_id,)).fetchone()["count"]]
+    if used_by:
+        raise CliError(f"Category is being used by {', '.join(used_by)} and cannot be deleted.")
+
+
+def require_tag_unused(conn: sqlite3.Connection, tag_id: int) -> None:
+    require_tag_id(conn, tag_id)
+    checks = [
+        ("transactions", "SELECT COUNT(*) AS count FROM transaction_tags WHERE tag_id = ?"),
+        ("rules", "SELECT COUNT(*) AS count FROM transaction_import_rules WHERE add_tag_id = ?"),
+    ]
+    used_by = [label for label, sql in checks if conn.execute(sql, (tag_id,)).fetchone()["count"]]
+    if used_by:
+        raise CliError(f"Tag is being used by {', '.join(used_by)} and cannot be deleted.")
 
 
 def fetch_note(conn: sqlite3.Connection, note_id: int) -> sqlite3.Row:
@@ -1054,6 +1105,57 @@ def command_rename_account(args: argparse.Namespace) -> None:
     print_json({"account": dict(account)})
 
 
+def command_update_account(args: argparse.Namespace) -> None:
+    updates: list[str] = []
+    values: list[Any] = []
+
+    with connect(args.db) as conn:
+        fetch_account(conn, args.id)
+        if args.name is not None:
+            updates.append("name = ?")
+            values.append(nonempty(args.name, "name"))
+        if args.institution is not None:
+            updates.append("institution_id = ?")
+            values.append(get_or_create_institution(conn, optional_nonempty(args.institution, "institution")))
+        if args.account_type is not None:
+            updates.append("account_type = ?")
+            values.append(optional_nonempty(args.account_type, "account_type"))
+        if args.currency is not None:
+            updates.append("currency = ?")
+            values.append(normalize_currency(args.currency))
+        if args.external_account_id is not None:
+            updates.append("external_account_id = ?")
+            values.append(optional_nonempty(args.external_account_id, "external_account_id"))
+        if not updates:
+            raise CliError("No changes requested.")
+
+        updates.append("updated_at = datetime('now')")
+        values.append(args.id)
+        try:
+            conn.execute(
+                f"""
+                UPDATE accounts
+                SET {', '.join(updates)}
+                WHERE id = ?
+                """,
+                values,
+            )
+        except sqlite3.IntegrityError as exc:
+            raise CliError(f"Could not update account: {exc}") from exc
+        account = fetch_account(conn, args.id)
+
+    print_json({"account": dict(account)})
+
+
+def command_delete_account(args: argparse.Namespace) -> None:
+    with connect(args.db) as conn:
+        account = fetch_account(conn, args.id)
+        require_account_unused(conn, args.id)
+        conn.execute("DELETE FROM accounts WHERE id = ?", (args.id,))
+
+    print_json({"status": "deleted", "account": dict(account)})
+
+
 def command_add_note(args: argparse.Namespace) -> None:
     note = nonempty(args.note, "note")
 
@@ -1082,6 +1184,62 @@ def command_add_tag(args: argparse.Namespace) -> None:
         tag = fetch_tag_by_id(conn, int(cursor.lastrowid))
 
     print_json({"tag": dict(tag)})
+
+
+def command_rename_tag(args: argparse.Namespace) -> None:
+    name = nonempty(args.name, "name")
+    with connect(args.db) as conn:
+        fetch_tag_by_id(conn, args.id)
+        try:
+            conn.execute("UPDATE tags SET name = ? WHERE id = ?", (name, args.id))
+        except sqlite3.IntegrityError as exc:
+            raise CliError(f"Could not rename tag: {exc}") from exc
+        tag = fetch_tag_by_id(conn, args.id)
+
+    print_json({"tag": dict(tag)})
+
+
+def command_delete_tag(args: argparse.Namespace) -> None:
+    with connect(args.db) as conn:
+        tag = fetch_tag_by_id(conn, args.id)
+        require_tag_unused(conn, args.id)
+        conn.execute("DELETE FROM tags WHERE id = ?", (args.id,))
+
+    print_json({"status": "deleted", "tag": dict(tag)})
+
+
+def command_add_category(args: argparse.Namespace) -> None:
+    name = nonempty(args.name, "name")
+    with connect(args.db) as conn:
+        try:
+            cursor = conn.execute("INSERT INTO categories (name) VALUES (?)", (name,))
+        except sqlite3.IntegrityError as exc:
+            raise CliError(f"Could not add category: {exc}") from exc
+        category = fetch_category_by_id(conn, int(cursor.lastrowid))
+
+    print_json({"category": dict(category)})
+
+
+def command_rename_category(args: argparse.Namespace) -> None:
+    name = nonempty(args.name, "name")
+    with connect(args.db) as conn:
+        fetch_category_by_id(conn, args.id)
+        try:
+            conn.execute("UPDATE categories SET name = ? WHERE id = ?", (name, args.id))
+        except sqlite3.IntegrityError as exc:
+            raise CliError(f"Could not rename category: {exc}") from exc
+        category = fetch_category_by_id(conn, args.id)
+
+    print_json({"category": dict(category)})
+
+
+def command_delete_category(args: argparse.Namespace) -> None:
+    with connect(args.db) as conn:
+        category = fetch_category_by_id(conn, args.id)
+        require_category_unused(conn, args.id)
+        conn.execute("DELETE FROM categories WHERE id = ?", (args.id,))
+
+    print_json({"status": "deleted", "category": dict(category)})
 
 
 def command_tag_transaction(args: argparse.Namespace) -> None:
@@ -1264,6 +1422,14 @@ def command_update_transaction_rule(args: argparse.Namespace) -> None:
     print_json({"transaction_rule": dict(rule)})
 
 
+def command_delete_transaction_rule(args: argparse.Namespace) -> None:
+    with connect(args.db) as conn:
+        rule = fetch_transaction_rule(conn, args.id)
+        conn.execute("DELETE FROM transaction_import_rules WHERE id = ?", (args.id,))
+
+    print_json({"status": "deleted", "transaction_rule": dict(rule)})
+
+
 def quote_identifier(identifier: str) -> str:
     return '"' + identifier.replace('"', '""') + '"'
 
@@ -1351,6 +1517,19 @@ def build_parser() -> argparse.ArgumentParser:
     rename_account_parser.add_argument("--name", required=True)
     rename_account_parser.set_defaults(func=command_rename_account)
 
+    update_account_parser = subparsers.add_parser("update-account", help="Update an account and print it as JSON.")
+    update_account_parser.add_argument("id", type=positive_int)
+    update_account_parser.add_argument("--name")
+    update_account_parser.add_argument("--institution")
+    update_account_parser.add_argument("--account-type")
+    update_account_parser.add_argument("--currency")
+    update_account_parser.add_argument("--external-account-id")
+    update_account_parser.set_defaults(func=command_update_account)
+
+    delete_account_parser = subparsers.add_parser("delete-account", help="Delete an unused account.")
+    delete_account_parser.add_argument("id", type=positive_int)
+    delete_account_parser.set_defaults(func=command_delete_account)
+
     add_note_parser = subparsers.add_parser("add-note", help="Add a note to a transaction and print the note as JSON.")
     add_note_parser.add_argument("--transaction-id", type=positive_int, required=True)
     add_note_parser.add_argument("--note", required=True)
@@ -1359,6 +1538,28 @@ def build_parser() -> argparse.ArgumentParser:
     add_tag_parser = subparsers.add_parser("add-tag", help="Add a tag and print it as JSON.")
     add_tag_parser.add_argument("--name", required=True)
     add_tag_parser.set_defaults(func=command_add_tag)
+
+    rename_tag_parser = subparsers.add_parser("rename-tag", help="Rename a tag and print it as JSON.")
+    rename_tag_parser.add_argument("id", type=positive_int)
+    rename_tag_parser.add_argument("--name", required=True)
+    rename_tag_parser.set_defaults(func=command_rename_tag)
+
+    delete_tag_parser = subparsers.add_parser("delete-tag", help="Delete an unused tag.")
+    delete_tag_parser.add_argument("id", type=positive_int)
+    delete_tag_parser.set_defaults(func=command_delete_tag)
+
+    add_category_parser = subparsers.add_parser("add-category", help="Add a category and print it as JSON.")
+    add_category_parser.add_argument("--name", required=True)
+    add_category_parser.set_defaults(func=command_add_category)
+
+    rename_category_parser = subparsers.add_parser("rename-category", help="Rename a category and print it as JSON.")
+    rename_category_parser.add_argument("id", type=positive_int)
+    rename_category_parser.add_argument("--name", required=True)
+    rename_category_parser.set_defaults(func=command_rename_category)
+
+    delete_category_parser = subparsers.add_parser("delete-category", help="Delete an unused category.")
+    delete_category_parser.add_argument("id", type=positive_int)
+    delete_category_parser.set_defaults(func=command_delete_category)
 
     tag_transaction_parser = subparsers.add_parser(
         "tag-transaction",
@@ -1414,6 +1615,10 @@ def build_parser() -> argparse.ArgumentParser:
     active_group.add_argument("--active", action="store_true")
     active_group.add_argument("--inactive", action="store_true")
     update_rule_parser.set_defaults(func=command_update_transaction_rule)
+
+    delete_rule_parser = subparsers.add_parser("delete-transaction-rule", help="Delete a transaction import rule.")
+    delete_rule_parser.add_argument("id", type=positive_int)
+    delete_rule_parser.set_defaults(func=command_delete_transaction_rule)
 
     return parser
 

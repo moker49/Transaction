@@ -115,11 +115,18 @@ h2 {
   gap: 8px;
 }
 
+.icon-button,
 .primary {
   min-height: 38px;
   border-radius: 7px;
   padding: 0 14px;
   font-weight: 700;
+}
+
+.icon-button {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
 }
 
 .theme-toggle {
@@ -144,7 +151,7 @@ h2 {
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--surface);
-  padding: 0 11px;
+  padding: 0 6.5px;
 }
 
 .theme-thumb {
@@ -165,9 +172,13 @@ h2 {
 .theme-icon {
   position: relative;
   z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
   color: var(--muted);
-  font-size: 0.78rem;
-  font-weight: 800;
+  font-size: 18px;
   line-height: 1;
 }
 
@@ -408,6 +419,7 @@ td {
 .chip {
   display: inline-flex;
   align-items: center;
+  gap: 6px;
   min-height: 30px;
   padding: 0 10px;
   border-radius: 999px;
@@ -415,6 +427,75 @@ td {
   border: 1px solid var(--border);
   font-size: 0.86rem;
   font-weight: 700;
+}
+
+.manageable-chip {
+  padding-right: 4px;
+}
+
+.action-row {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.material-symbols-outlined {
+  font-family: "Material Symbols Outlined";
+  font-weight: normal;
+  font-style: normal;
+  font-size: 20px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  direction: ltr;
+  -webkit-font-feature-settings: "liga";
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "liga";
+}
+
+.icon-only {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  background: none;
+  color: var(--text);
+}
+
+.icon-only.danger {
+  color: var(--danger);
+  border-color: var(--danger-border);
+}
+
+.modal {
+  width: min(560px, calc(100vw - 28px));
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+
+.modal::backdrop {
+  background: rgba(0, 0, 0, 0.56);
+}
+
+.modal-panel {
+  display: grid;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0 18px 18px;
 }
 
 .message {

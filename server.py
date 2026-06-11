@@ -35,6 +35,9 @@ from db_cli import (  # noqa: E402
     optional_nonempty,
     read_csv_import_rows,
     require_category,
+    require_account_unused,
+    require_category_unused,
+    require_tag_unused,
     raw_row_hash,
     sync_raw_row_ready_status,
     validate_match_field,
@@ -115,6 +118,53 @@ def create_account():
     return jsonify({"account": account, "state": state}), 201
 
 
+@app.patch("/api/accounts/<int:account_id>")
+def update_account(account_id: int):
+    ensure_database()
+    data = request.get_json(silent=True) or {}
+    updates: list[str] = []
+    values: list[Any] = []
+
+    with closing(connect(DEFAULT_DB_PATH)) as conn:
+        fetch_account(conn, account_id)
+        if "name" in data:
+            updates.append("name = ?")
+            values.append(nonempty(str(data.get("name", "")), "name"))
+        if "institution" in data:
+            updates.append("institution_id = ?")
+            values.append(get_or_create_institution(conn, optional_nonempty(data.get("institution"), "institution")))
+        if "account_type" in data:
+            updates.append("account_type = ?")
+            values.append(optional_nonempty(data.get("account_type"), "account_type"))
+        if "currency" in data:
+            updates.append("currency = ?")
+            values.append(normalize_currency(str(data.get("currency", ""))))
+        if not updates:
+            raise CliError("No changes requested.")
+
+        updates.append("updated_at = datetime('now')")
+        values.append(account_id)
+        conn.execute(f"UPDATE accounts SET {', '.join(updates)} WHERE id = ?", values)
+        account = dict(fetch_account(conn, account_id))
+        state = read_state(conn)
+        conn.commit()
+
+    return jsonify({"account": account, "state": state})
+
+
+@app.delete("/api/accounts/<int:account_id>")
+def delete_account(account_id: int):
+    ensure_database()
+    with closing(connect(DEFAULT_DB_PATH)) as conn:
+        account = dict(fetch_account(conn, account_id))
+        require_account_unused(conn, account_id)
+        conn.execute("DELETE FROM accounts WHERE id = ?", (account_id,))
+        state = read_state(conn)
+        conn.commit()
+
+    return jsonify({"status": "deleted", "account": account, "state": state})
+
+
 @app.post("/api/tags")
 def create_tag():
     ensure_database()
@@ -130,6 +180,35 @@ def create_tag():
         conn.commit()
 
     return jsonify({"tag": tag, "state": state}), 201
+
+
+@app.patch("/api/tags/<int:tag_id>")
+def update_tag(tag_id: int):
+    ensure_database()
+    data = request.get_json(silent=True) or {}
+    name = nonempty(str(data.get("name", "")), "name")
+
+    with closing(connect(DEFAULT_DB_PATH)) as conn:
+        fetch_tag_by_id(conn, tag_id)
+        conn.execute("UPDATE tags SET name = ? WHERE id = ?", (name, tag_id))
+        tag = dict(fetch_tag_by_id(conn, tag_id))
+        state = read_state(conn)
+        conn.commit()
+
+    return jsonify({"tag": tag, "state": state})
+
+
+@app.delete("/api/tags/<int:tag_id>")
+def delete_tag(tag_id: int):
+    ensure_database()
+    with closing(connect(DEFAULT_DB_PATH)) as conn:
+        tag = dict(fetch_tag_by_id(conn, tag_id))
+        require_tag_unused(conn, tag_id)
+        conn.execute("DELETE FROM tags WHERE id = ?", (tag_id,))
+        state = read_state(conn)
+        conn.commit()
+
+    return jsonify({"status": "deleted", "tag": tag, "state": state})
 
 
 @app.post("/api/categories")
@@ -151,6 +230,35 @@ def create_category():
         conn.commit()
 
     return jsonify({"category": category, "state": state}), 201
+
+
+@app.patch("/api/categories/<int:category_id>")
+def update_category(category_id: int):
+    ensure_database()
+    data = request.get_json(silent=True) or {}
+    name = nonempty(str(data.get("name", "")), "name")
+
+    with closing(connect(DEFAULT_DB_PATH)) as conn:
+        fetch_category(conn, category_id)
+        conn.execute("UPDATE categories SET name = ? WHERE id = ?", (name, category_id))
+        category = dict(fetch_category(conn, category_id))
+        state = read_state(conn)
+        conn.commit()
+
+    return jsonify({"category": category, "state": state})
+
+
+@app.delete("/api/categories/<int:category_id>")
+def delete_category(category_id: int):
+    ensure_database()
+    with closing(connect(DEFAULT_DB_PATH)) as conn:
+        category = dict(fetch_category(conn, category_id))
+        require_category_unused(conn, category_id)
+        conn.execute("DELETE FROM categories WHERE id = ?", (category_id,))
+        state = read_state(conn)
+        conn.commit()
+
+    return jsonify({"status": "deleted", "category": category, "state": state})
 
 
 @app.post("/api/rules")
@@ -194,6 +302,18 @@ def create_rule():
         conn.commit()
 
     return jsonify({"transaction_rule": rule, "state": state}), 201
+
+
+@app.delete("/api/rules/<int:rule_id>")
+def delete_rule(rule_id: int):
+    ensure_database()
+    with closing(connect(DEFAULT_DB_PATH)) as conn:
+        rule = dict(fetch_transaction_rule(conn, rule_id))
+        conn.execute("DELETE FROM transaction_import_rules WHERE id = ?", (rule_id,))
+        state = read_state(conn)
+        conn.commit()
+
+    return jsonify({"status": "deleted", "transaction_rule": rule, "state": state})
 
 
 @app.post("/api/imports/csv")

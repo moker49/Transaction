@@ -16,6 +16,7 @@
   const selectedRawRowIds = new Set();
   const rawRowNotes = new Map();
   let visibleRawRows = [];
+  let editingAccountId = null;
   const importableRawRowStatuses = new Set(["new", "ready"]);
 
   const elements = {
@@ -36,6 +37,10 @@
     ruleCategorySelect: document.querySelector("#ruleCategorySelect"),
     ruleTagSelect: document.querySelector("#ruleTagSelect"),
     themeToggle: document.querySelector("#themeToggle"),
+    accountEditDialog: document.querySelector("#accountEditDialog"),
+    accountEditForm: document.querySelector("#accountEditForm"),
+    accountEditCancelButton: document.querySelector("#accountEditCancelButton"),
+    accountEditDismissButton: document.querySelector("#accountEditDismissButton"),
   };
 
   elements.tabs.forEach((tab) => {
@@ -53,6 +58,12 @@
   elements.selectVisibleRowsButton.addEventListener("click", selectVisibleRawRows);
   elements.importSelectedRowsButton.addEventListener("click", importSelectedRawRows);
   elements.themeToggle.addEventListener("change", updateTheme);
+  elements.accountEditForm.addEventListener("submit", saveAccountEdit);
+  elements.accountEditCancelButton.addEventListener("click", closeAccountEditDialog);
+  elements.accountEditDismissButton.addEventListener("click", closeAccountEditDialog);
+  elements.accountEditDialog.addEventListener("close", () => {
+    editingAccountId = null;
+  });
 
   initializeTheme();
   loadInitialState();
@@ -260,6 +271,128 @@
     }
   }
 
+  async function editAccount(account) {
+    editingAccountId = account.id;
+    const form = elements.accountEditForm;
+    form.elements.name.value = account.name || "";
+    form.elements.institution.value = account.institution || "";
+    form.elements.accountType.value = account.account_type || "checking";
+    form.elements.currency.value = account.currency || "USD";
+    elements.accountEditDialog.showModal();
+  }
+
+  function closeAccountEditDialog() {
+    elements.accountEditDialog.close();
+  }
+
+  async function saveAccountEdit(event) {
+    event.preventDefault();
+    if (editingAccountId === null) {
+      return;
+    }
+    const form = new FormData(elements.accountEditForm);
+    const currency = clean(form.get("currency")).toUpperCase();
+    if (!/^[A-Z]{3}$/.test(currency)) {
+      alert("Currency must be a three-letter code.");
+      return;
+    }
+    try {
+      const payload = await apiRequest(`/api/accounts/${editingAccountId}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          name: clean(form.get("name")),
+          institution: clean(form.get("institution")) || null,
+          account_type: clean(form.get("accountType")) || null,
+          currency,
+        }),
+      });
+      closeAccountEditDialog();
+      applyStateFromPayload(payload);
+    } catch (error) {
+      alert(error.message || "Could not update account.");
+    }
+  }
+
+  async function deleteAccount(account) {
+    if (!confirm(`Delete account "${account.name}"?`)) {
+      return;
+    }
+    try {
+      const payload = await apiRequest(`/api/accounts/${account.id}`, { method: "DELETE" });
+      applyStateFromPayload(payload);
+    } catch (error) {
+      alert(error.message || "Could not delete account.");
+    }
+  }
+
+  async function editCategory(category) {
+    const name = prompt("Category name", category.name);
+    if (name === null) {
+      return;
+    }
+    try {
+      const payload = await apiRequest(`/api/categories/${category.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ name: clean(name) }),
+      });
+      applyStateFromPayload(payload);
+    } catch (error) {
+      alert(error.message || "Could not update category.");
+    }
+  }
+
+  async function deleteCategory(category) {
+    if (!confirm(`Delete category "${category.name}"?`)) {
+      return;
+    }
+    try {
+      const payload = await apiRequest(`/api/categories/${category.id}`, { method: "DELETE" });
+      applyStateFromPayload(payload);
+    } catch (error) {
+      alert(error.message || "Could not delete category.");
+    }
+  }
+
+  async function editTag(tag) {
+    const name = prompt("Tag name", tag.name);
+    if (name === null) {
+      return;
+    }
+    try {
+      const payload = await apiRequest(`/api/tags/${tag.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ name: clean(name) }),
+      });
+      applyStateFromPayload(payload);
+    } catch (error) {
+      alert(error.message || "Could not update tag.");
+    }
+  }
+
+  async function deleteTag(tag) {
+    if (!confirm(`Delete tag "${tag.name}"?`)) {
+      return;
+    }
+    try {
+      const payload = await apiRequest(`/api/tags/${tag.id}`, { method: "DELETE" });
+      applyStateFromPayload(payload);
+    } catch (error) {
+      alert(error.message || "Could not delete tag.");
+    }
+  }
+
+  async function deleteRule(rule) {
+    if (!confirm(`Delete rule "${rule.name}"?`)) {
+      return;
+    }
+    try {
+      const payload = await apiRequest(`/api/rules/${rule.id}`, { method: "DELETE" });
+      applyStateFromPayload(payload);
+    } catch (error) {
+      alert(error.message || "Could not delete rule.");
+    }
+  }
+
   function render() {
     renderMetrics();
     renderAccounts();
@@ -285,17 +418,22 @@
     const tbody = document.querySelector("#accountsTable");
     clear(tbody);
     if (!state.accounts.length) {
-      tbody.appendChild(emptyTableRow(4));
+      tbody.appendChild(emptyTableRow(5));
       return;
     }
 
     state.accounts.forEach((account) => {
       const rowCount = state.rawRows.filter((row) => row.account_id === account.id).length;
+      const actions = actionButtons([
+        ["edit", "Edit account", () => editAccount(account)],
+        ["close", "Delete account", () => deleteAccount(account)],
+      ]);
       tbody.appendChild(tableRow([
         account.name,
         account.institution || "-",
         account.account_type || "-",
         String(rowCount),
+        actions,
       ]));
     });
   }
@@ -381,7 +519,7 @@
     if (!state.tags.length) {
       appendEmpty(tagList);
     } else {
-      state.tags.forEach((tag) => tagList.appendChild(el("span", tag.name, "chip")));
+      state.tags.forEach((tag) => tagList.appendChild(manageableChip(tag.name, () => editTag(tag), () => deleteTag(tag))));
     }
 
     fillSelect(
@@ -396,7 +534,9 @@
     if (!state.categories.length) {
       appendEmpty(categoryList);
     } else {
-      state.categories.forEach((category) => categoryList.appendChild(el("span", category.name, "chip")));
+      state.categories.forEach((category) => {
+        categoryList.appendChild(manageableChip(category.name, () => editCategory(category), () => deleteCategory(category)));
+      });
     }
 
     fillSelect(
@@ -428,6 +568,7 @@
           el("strong", `${rule.name} (${rule.priority})`),
           el("span", `${rule.match_field} ${rule.match_type} "${rule.match_value}"`, "list-meta"),
           el("span", ruleActions(rule, category, tag), "list-meta"),
+          actionButtons([["delete", "Delete rule", () => deleteRule(rule)]]),
         );
         ruleList.appendChild(node);
       });
@@ -892,6 +1033,39 @@
       td.textContent = content;
     }
     return td;
+  }
+
+  function actionButtons(actions) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "action-row";
+    actions.forEach(([icon, label, handler]) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = icon === "close" ? "icon-only danger" : "icon-only";
+      button.title = label;
+      button.setAttribute("aria-label", label);
+      const symbol = document.createElement("span");
+      symbol.className = "material-symbols-outlined";
+      symbol.setAttribute("aria-hidden", "true");
+      symbol.textContent = icon;
+      button.appendChild(symbol);
+      button.addEventListener("click", handler);
+      wrapper.appendChild(button);
+    });
+    return wrapper;
+  }
+
+  function manageableChip(label, onEdit, onDelete) {
+    const wrapper = document.createElement("span");
+    wrapper.className = "chip manageable-chip";
+    wrapper.append(
+      el("span", label),
+      actionButtons([
+        ["edit", `Edit ${label}`, onEdit],
+        ["close", `Delete ${label}`, onDelete],
+      ]),
+    );
+    return wrapper;
   }
 
   function el(tag, text, className) {
