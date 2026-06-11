@@ -171,7 +171,7 @@ Each rule must keep at least one action: `--set-category-id`, `--set-clean-descr
 - `imported_source.account_id` records the account supplied at upload/import time.
 - `raw_date`, `raw_category`, `raw_description`, and `raw_amount` preserve the source values as text.
 - `parsed_transaction_id` links to the resulting transaction after parsing.
-- `import_status` tracks whether the raw row is new, ready, imported, duplicate, or errored.
+- `import_status` tracks whether the raw row is new, imported, duplicate, or errored. New rows can be matched or unmatched depending on whether active import rules apply.
 
 At least one raw field must be present. The table intentionally keeps raw values as `TEXT`; parsing into dates, cents, categories, and tags happens later.
 

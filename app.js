@@ -278,7 +278,7 @@
     setText("#accountCount", state.accounts.length);
     setText("#importCount", state.imports.length);
     setText("#rawRowCount", state.rawRows.length);
-    setText("#newImportCount", state.rawRows.filter((row) => row.import_status === "new").length);
+    setText("#newImportCount", state.rawRows.filter((row) => isImportableRawRow(row)).length);
   }
 
   function renderAccounts() {
@@ -468,7 +468,7 @@
       if (accountFilter !== "all" && String(row.account_id) !== accountFilter) {
         return false;
       }
-      if (statusFilter !== "all" && row.import_status !== statusFilter) {
+      if (!rawRowMatchesStatusFilter(row, statusFilter)) {
         return false;
       }
       if (!search) {
@@ -490,6 +490,7 @@
     rows.slice().reverse().forEach((rawRow) => {
       const account = state.accounts.find((candidate) => candidate.id === rawRow.account_id);
       const tr = document.createElement("tr");
+      tr.classList.toggle("is-matched-row", isMatchedRawRow(rawRow));
       const checkbox = document.createElement("input");
       checkbox.className = "row-checkbox";
       checkbox.type = "checkbox";
@@ -610,7 +611,7 @@
   function statusBadge(rawRow) {
     const status = rawRow.import_status || "new";
     const badge = document.createElement("span");
-    badge.className = `status-badge status-${status}`;
+    badge.className = `status-badge ${statusClass(status)}`;
     badge.textContent = statusLabel(status);
     if (rawRow.import_error) {
       badge.title = rawRow.import_error;
@@ -632,10 +633,37 @@
     return importableRawRowStatuses.has(rawRow.import_status || "new");
   }
 
+  function isMatchedRawRow(rawRow) {
+    return rawRow.import_status === "ready";
+  }
+
+  function rawRowMatchesStatusFilter(rawRow, filter) {
+    if (filter === "all") {
+      return true;
+    }
+    if (filter === "new") {
+      return isImportableRawRow(rawRow);
+    }
+    if (filter === "matched") {
+      return isMatchedRawRow(rawRow);
+    }
+    if (filter === "unmatched") {
+      return rawRow.import_status === "new";
+    }
+    return rawRow.import_status === filter;
+  }
+
+  function statusClass(status) {
+    if (status === "ready") {
+      return "status-new";
+    }
+    return `status-${status}`;
+  }
+
   function statusLabel(status) {
     return {
       new: "New",
-      ready: "Ready",
+      ready: "New",
       imported: "Imported",
       duplicate: "Duplicate",
       error: "Error",

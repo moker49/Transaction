@@ -606,7 +606,7 @@ def import_raw_rows(
         if row["import_status"] not in IMPORTABLE_RAW_ROW_STATUSES
     ]
     if unavailable_rows:
-        raise CliError(f"Only new or ready raw rows can be imported: {', '.join(unavailable_rows)}")
+        raise CliError(f"Only new raw rows can be imported: {', '.join(unavailable_rows)}")
 
     results = []
     counts = {"imported": 0, "duplicate": 0, "error": 0}

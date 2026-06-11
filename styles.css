@@ -17,6 +17,7 @@
   --warning-bg: #2d2613;
   --warning-border: #6b5824;
   --success-bg: #132a26;
+  --success-bg-2: hsl(170, 38%, 22%);
   --success-border: #2f736a;
   --focus: rgba(43, 187, 173, 0.28);
   --shadow: 0 14px 35px rgba(0, 0, 0, 0.24);
@@ -41,6 +42,7 @@
   --warning-bg: #fff8dc;
   --warning-border: #eadb91;
   --success-bg: #eef8f6;
+  --success-bg-2: hsl(168, 35%, 80%);
   --success-border: #b8ded8;
   --focus: rgba(15, 118, 110, 0.22);
   --shadow: 0 14px 35px rgba(21, 34, 31, 0.08);
@@ -457,12 +459,6 @@ td {
   background: var(--surface-muted);
 }
 
-.status-ready {
-  color: var(--accent-dark);
-  background: var(--success-bg);
-  border-color: var(--success-border);
-}
-
 .status-imported {
   color: var(--accent-dark);
   background: var(--success-bg);
@@ -487,6 +483,10 @@ td {
 
 .log-warning strong {
   color: var(--warning);
+}
+
+tr.is-matched-row td {
+  background: color-mix(in srgb, var(--success-bg-2) 34%, transparent);
 }
 
 .raw-note-input {
