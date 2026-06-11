@@ -61,14 +61,12 @@ test("normalizes Capital One credit CSV rows into raw imported rows", () => {
   assert.deepEqual(rawRows, [
     {
       raw_date: "2026-06-02",
-      raw_type: null,
       raw_category: "Food & Drink",
       raw_description: "STARBUCKS STORE",
       raw_amount: "-5.75",
     },
     {
       raw_date: "2026-06-04",
-      raw_type: null,
       raw_category: "Shopping",
       raw_description: "REFUND",
       raw_amount: "2.50",
@@ -89,7 +87,6 @@ test("parses quoted CSV values and generic amount columns", () => {
   assert.deepEqual(rawRows, [
     {
       raw_date: "2026-06-05",
-      raw_type: "Sale",
       raw_category: null,
       raw_description: "Coffee, downtown",
       raw_amount: "-4.20",

@@ -63,7 +63,7 @@ python scripts/db_cli.py add-note --transaction-id 1 --note "Reviewed"
 python scripts/db_cli.py add-tag --name reimbursable
 python scripts/db_cli.py tag-transaction --transaction-id 1 --tag reimbursable
 python scripts/db_cli.py untag-transaction --transaction-id 1 --tag reimbursable
-python scripts/db_cli.py add-transaction-rule --name Coffee --match-field merchant_raw --match-type contains --match-value Starbucks --set-merchant-clean Starbucks
+python scripts/db_cli.py add-transaction-rule --name Coffee --match-field description --match-type contains --match-value Starbucks --set-clean-description Starbucks
 python scripts/db_cli.py update-transaction-rule 1 --priority 10 --inactive
 ```
 
@@ -145,7 +145,7 @@ The CLI intentionally does not include broad destructive commands or delete comm
 
 ## Import Rules
 
-`transaction_import_rules` stores reusable rules for cleaning and categorizing imported rows. Rules match `merchant_raw` or `description_raw` with `contains`, `equals`, `starts_with`, or `regex`, then can set a category, set a cleaned merchant name, and/or add a tag.
+`transaction_import_rules` stores reusable rules for cleaning and categorizing imported rows. Rules match `category` or `description` with `contains`, `equals`, `starts_with`, or `regex`, then can set a category, set a clean description, and/or add a tag.
 
 ```powershell
 python scripts/db_cli.py describe transaction_import_rules
@@ -155,13 +155,13 @@ python scripts/db_cli.py query-readonly "SELECT * FROM transaction_import_rules 
 Add or update rules through the CLI so input validation is repeatable:
 
 ```powershell
-python scripts/db_cli.py add-transaction-rule --name Coffee --match-field merchant_raw --match-type contains --match-value Starbucks --set-merchant-clean Starbucks --priority 25
+python scripts/db_cli.py add-transaction-rule --name Coffee --match-field description --match-type contains --match-value Starbucks --set-clean-description Starbucks --priority 25
 python scripts/db_cli.py update-transaction-rule 1 --match-type starts_with --priority 10 --active
 python scripts/db_cli.py update-transaction-rule 1 --set-category-id 2 --add-tag-id 3
 python scripts/db_cli.py update-transaction-rule 1 --clear-category --clear-tag
 ```
 
-Each rule must keep at least one action: `--set-category-id`, `--set-merchant-clean`, or `--add-tag-id`. `--set-category-id` and `--add-tag-id` must reference existing rows.
+Each rule must keep at least one action: `--set-category-id`, `--set-clean-description`, or `--add-tag-id`. `--set-category-id` and `--add-tag-id` must reference existing rows.
 
 ## Raw Imported Rows
 
@@ -169,9 +169,9 @@ Each rule must keep at least one action: `--set-category-id`, `--set-merchant-cl
 
 - `imported_source_id` links the row to `imported_source`.
 - `imported_source.account_id` records the account supplied at upload/import time.
-- `raw_date`, `raw_type`, `raw_category`, `raw_description`, and `raw_amount` preserve the source values as text.
+- `raw_date`, `raw_category`, `raw_description`, and `raw_amount` preserve the source values as text.
 - `parsed_transaction_id` links to the resulting transaction after parsing.
-- `reviewed` marks whether the raw row has been manually reviewed.
+- `import_status` tracks whether the raw row is new, ready, imported, duplicate, or errored.
 
 At least one raw field must be present. The table intentionally keeps raw values as `TEXT`; parsing into dates, cents, categories, and tags happens later.
 
@@ -181,4 +181,4 @@ CSV imports require an account:
 python scripts/db_cli.py import-csv "C:\path\to\statement.csv" --account-id 1
 ```
 
-The importer currently recognizes the observed Capital One credit, Chase checking, and SoFi banking CSV layouts, with a generic fallback for common date, description, type, category, and amount columns. Re-importing the same file hash for the same account is idempotent; importing the same file hash for a different account is rejected.
+The importer currently recognizes the observed Capital One credit, Chase checking, and SoFi banking CSV layouts, with a generic fallback for common date, description, category, and amount columns. CSV type columns are ignored. Re-importing the same file hash for the same account is idempotent; importing the same file hash for a different account is rejected.

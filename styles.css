@@ -493,6 +493,17 @@ td {
   min-width: 180px;
 }
 
+.raw-value {
+  display: grid;
+  gap: 3px;
+}
+
+.rule-preview {
+  color: var(--accent-dark);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
 .amount {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;

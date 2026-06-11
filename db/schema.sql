@@ -37,7 +37,6 @@ CREATE TABLE IF NOT EXISTS transactions (
     clean_description TEXT,
     amount_cents INTEGER NOT NULL,
     currency TEXT NOT NULL DEFAULT 'USD',
-    transaction_type TEXT,
     status TEXT NOT NULL DEFAULT 'posted',
     external_transaction_id TEXT,
     raw_imported_row_id INTEGER REFERENCES raw_imported_rows(id) ON DELETE SET NULL,
@@ -68,7 +67,7 @@ CREATE TABLE IF NOT EXISTS transaction_import_rules (
     is_active INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-    CHECK (match_field IN ('type', 'category', 'description')),
+    CHECK (match_field IN ('category', 'description')),
     CHECK (match_type IN ('contains', 'equals', 'starts_with', 'regex')),
     CHECK (is_active IN (0, 1)),
     CHECK (set_category_id IS NOT NULL OR set_clean_description IS NOT NULL OR add_tag_id IS NOT NULL)
@@ -105,7 +104,6 @@ CREATE TABLE IF NOT EXISTS raw_imported_rows (
     id INTEGER PRIMARY KEY,
     imported_source_id INTEGER NOT NULL REFERENCES imported_source(id) ON DELETE CASCADE,
     raw_date TEXT,
-    raw_type TEXT,
     raw_category TEXT,
     raw_description TEXT,
     raw_amount TEXT,
@@ -118,7 +116,6 @@ CREATE TABLE IF NOT EXISTS raw_imported_rows (
     CHECK (import_status IN ('new', 'ready', 'imported', 'duplicate', 'error')),
     CHECK (
         raw_date IS NOT NULL
-        OR raw_type IS NOT NULL
         OR raw_category IS NOT NULL
         OR raw_description IS NOT NULL
         OR raw_amount IS NOT NULL

@@ -31,7 +31,7 @@ FORBIDDEN_SQL_WORDS = {
     "reindex",
 }
 VALID_CURRENCY_RE = re.compile(r"^[A-Z]{3}$")
-MATCH_FIELDS = {"type", "category", "description"}
+MATCH_FIELDS = {"category", "description"}
 MATCH_TYPES = {"contains", "equals", "starts_with", "regex"}
 IMPORTABLE_RAW_ROW_STATUSES = {"new", "ready"}
 
@@ -350,7 +350,6 @@ def normalize_csv_row(row: dict[str, str | None]) -> dict[str, str | None]:
 
     return {
         "raw_date": first_csv_value(row, "Posted Date", "Posting Date", "Date", "Transaction Date"),
-        "raw_type": first_csv_value(row, "Type", "Details", "Status"),
         "raw_category": first_csv_value(row, "Category"),
         "raw_description": first_csv_value(row, "Description", "Memo", "Name", "Payee"),
         "raw_amount": raw_amount,
@@ -394,7 +393,6 @@ def raw_row_hash(row: dict[str, str | None]) -> str:
     return normalized_hash(
         {
             "date": normalize_text(row.get("raw_date")),
-            "type": normalize_text(row.get("raw_type")),
             "category": normalize_text(row.get("raw_category")),
             "description": normalize_text(row.get("raw_description")),
             "amount": normalize_text(row.get("raw_amount")),
@@ -465,7 +463,6 @@ def fetch_active_rules(conn: sqlite3.Connection) -> list[sqlite3.Row]:
 
 def rule_matches(rule: sqlite3.Row, raw_row: sqlite3.Row) -> bool:
     field_value = {
-        "type": raw_row["raw_type"],
         "category": raw_row["raw_category"],
         "description": raw_row["raw_description"],
     }.get(rule["match_field"])
@@ -506,7 +503,7 @@ def raw_row_has_matching_rule(conn: sqlite3.Connection, raw_row: sqlite3.Row) ->
 def sync_raw_row_ready_status(conn: sqlite3.Connection) -> None:
     rows = conn.execute(
         """
-        SELECT id, raw_type, raw_category, raw_description, import_status
+        SELECT id, raw_category, raw_description, import_status
         FROM raw_imported_rows
         WHERE import_status IN ('new', 'ready')
         ORDER BY id
@@ -529,7 +526,6 @@ def make_transaction_hash(
     account_id: int,
     posted_date: str,
     amount_cents: int,
-    transaction_type: str | None,
     description: str | None,
 ) -> str:
     return normalized_hash(
@@ -537,7 +533,6 @@ def make_transaction_hash(
             "account_id": account_id,
             "posted_date": posted_date,
             "amount_cents": amount_cents,
-            "type": normalize_match_text(transaction_type),
             "description": normalize_match_text(description),
         }
     )
@@ -569,7 +564,6 @@ def fetch_raw_rows_for_import(conn: sqlite3.Connection, row_ids: list[int]) -> l
             src.account_id,
             a.currency,
             rr.raw_date,
-            rr.raw_type,
             rr.raw_category,
             rr.raw_description,
             rr.raw_amount,
@@ -626,12 +620,10 @@ def import_raw_rows(
 
             rule_result = apply_import_rules(conn, raw_row)
             clean_description = normalize_text(rule_result["clean_description"]) or description
-            transaction_type = normalize_text(raw_row["raw_type"])
             transaction_hash = make_transaction_hash(
                 int(raw_row["account_id"]),
                 posted_date,
                 amount_cents,
-                transaction_type,
                 clean_description,
             )
 
@@ -675,11 +667,10 @@ def import_raw_rows(
                     clean_description,
                     amount_cents,
                     currency,
-                    transaction_type,
                     raw_imported_row_id,
                     transaction_hash
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     raw_row["account_id"],
@@ -689,7 +680,6 @@ def import_raw_rows(
                     clean_description,
                     amount_cents,
                     raw_row["currency"],
-                    transaction_type,
                     raw_row["id"],
                     transaction_hash,
                 ),
@@ -987,19 +977,17 @@ def command_import_csv(args: argparse.Namespace) -> None:
             INSERT INTO raw_imported_rows (
                 imported_source_id,
                 raw_date,
-                raw_type,
                 raw_category,
                 raw_description,
                 raw_amount,
                 raw_row_hash
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
             [
                 (
                     imported_source_id,
                     row["raw_date"],
-                    row["raw_type"],
                     row["raw_category"],
                     row["raw_description"],
                     row["raw_amount"],

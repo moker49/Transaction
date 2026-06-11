@@ -304,7 +304,7 @@
     const tbody = document.querySelector("#transactionsTable");
     clear(tbody);
     if (!state.transactions.length) {
-      tbody.appendChild(emptyTableRow(7));
+      tbody.appendChild(emptyTableRow(6));
       return;
     }
 
@@ -314,7 +314,6 @@
         transaction.account || "-",
         transaction.clean_description || "-",
         transaction.category || "-",
-        transaction.transaction_type || "-",
         transaction.amount || formatCents(transaction.amount_cents),
         transaction.notes || "-",
       ]));
@@ -475,14 +474,14 @@
       if (!search) {
         return true;
       }
-      return [row.raw_date, row.raw_type, row.raw_category, row.raw_description, row.raw_amount]
+      return [row.raw_date, row.raw_category, row.raw_description, row.raw_amount]
         .join(" ")
         .toLowerCase()
         .includes(search);
     });
     visibleRawRows = rows;
     if (!rows.length) {
-      tbody.appendChild(emptyTableRow(9));
+      tbody.appendChild(emptyTableRow(8));
       updateImportSelectedButton();
       updateSelectVisibleButton();
       return;
@@ -527,9 +526,8 @@
         cell(statusBadge(rawRow), "status-cell"),
         cell(account ? account.name : "Unknown", "muted-cell"),
         cell(rawRow.raw_date || "-"),
-        cell(rawRow.raw_type || "-"),
-        cell(rawRow.raw_category || "-"),
-        cell(rawRow.raw_description || "-"),
+        cell(rawValueWithPreview(rawRow.raw_category, rawRow.preview_category)),
+        cell(rawValueWithPreview(rawRow.raw_description, rawRow.preview_clean_description)),
         cell(rawRow.raw_amount || "-", "amount"),
         cell(noteInput),
       );
@@ -620,6 +618,16 @@
     return badge;
   }
 
+  function rawValueWithPreview(rawValue, previewValue) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "raw-value";
+    wrapper.appendChild(el("span", rawValue || "-"));
+    if (previewValue) {
+      wrapper.appendChild(el("span", previewValue, "rule-preview"));
+    }
+    return wrapper;
+  }
+
   function isImportableRawRow(rawRow) {
     return importableRawRowStatuses.has(rawRow.import_status || "new");
   }
@@ -695,7 +703,6 @@
 
     return {
       raw_date: firstCsvValue(row, "Posted Date", "Posting Date", "Date", "Transaction Date"),
-      raw_type: firstCsvValue(row, "Type", "Details", "Status"),
       raw_category: firstCsvValue(row, "Category"),
       raw_description: firstCsvValue(row, "Description", "Memo", "Name", "Payee"),
       raw_amount: rawAmount,

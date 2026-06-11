@@ -33,7 +33,6 @@ EXPECTED_TRANSACTION_COLUMNS = {
     "clean_description",
     "amount_cents",
     "currency",
-    "transaction_type",
     "status",
     "external_transaction_id",
     "raw_imported_row_id",
@@ -55,7 +54,6 @@ EXPECTED_RAW_IMPORTED_ROW_COLUMNS = {
     "id",
     "imported_source_id",
     "raw_date",
-    "raw_type",
     "raw_category",
     "raw_description",
     "raw_amount",
@@ -142,11 +140,13 @@ def schema_is_compatible(conn: sqlite3.Connection) -> bool:
         and EXPECTED_TRANSACTION_COLUMNS.issubset(transaction_columns)
         and "payee" not in transaction_columns
         and "description" not in transaction_columns
+        and "transaction_type" not in transaction_columns
         and EXPECTED_IMPORTED_SOURCE_COLUMNS.issubset(imported_source_columns)
         and "imported_source_id" not in transaction_columns
         and "import_source_file_id" not in transaction_columns
         and "institution" not in account_columns
         and EXPECTED_RAW_IMPORTED_ROW_COLUMNS.issubset(raw_imported_row_columns)
+        and "raw_type" not in raw_imported_row_columns
         and "DEFAULT 'new'" in raw_imported_rows_ddl
         and "'ready'" in raw_imported_rows_ddl
         and "'pending'" not in raw_imported_rows_ddl

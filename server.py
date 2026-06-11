@@ -20,6 +20,7 @@ if str(SCRIPTS) not in sys.path:
 from db_cli import (  # noqa: E402
     CliError,
     DEFAULT_DB_PATH,
+    apply_import_rules,
     connect,
     detect_csv_layout,
     fetch_account,
@@ -274,19 +275,17 @@ def import_csv():
             INSERT INTO raw_imported_rows (
                 imported_source_id,
                 raw_date,
-                raw_type,
                 raw_category,
                 raw_description,
                 raw_amount,
                 raw_row_hash
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
             [
                 (
                     imported_source_id,
                     row["raw_date"],
-                    row["raw_type"],
                     row["raw_category"],
                     row["raw_description"],
                     row["raw_amount"],
@@ -386,7 +385,6 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
                 rr.imported_source_id,
                 src.account_id,
                 rr.raw_date,
-                rr.raw_type,
                 rr.raw_category,
                 rr.raw_description,
                 rr.raw_amount,
@@ -417,7 +415,6 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
                 t.amount_cents,
                 printf('%.2f', t.amount_cents / 100.0) AS amount,
                 t.currency,
-                t.transaction_type,
                 t.status,
                 t.raw_imported_row_id,
                 COALESCE(group_concat(n.note, char(10)), '') AS notes,
@@ -474,6 +471,12 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
 
     for item in imports:
         item["metadata"] = parse_metadata(item.pop("metadata_json"))
+    categories_by_id = {category["id"]: category["name"] for category in categories}
+    for row in raw_rows:
+        preview = apply_import_rules(conn, row) if row["import_status"] == "ready" else {}
+        preview_category_id = preview.get("category_id")
+        row["preview_category"] = categories_by_id.get(preview_category_id) if preview_category_id is not None else None
+        row["preview_clean_description"] = preview.get("clean_description")
     for rule in rules:
         rule["is_active"] = bool(rule["is_active"])
     for log in logs:
