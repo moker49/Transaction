@@ -30,7 +30,6 @@ The main endpoints are:
 - `POST /api/rules`
 - `POST /api/imports/csv`
 - `PATCH /api/raw-rows/<id>`
-- `DELETE /api/state`
 
 ## Initialize
 

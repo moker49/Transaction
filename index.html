@@ -4,6 +4,9 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Transaction History</title>
+    <script>
+      document.documentElement.dataset.theme = localStorage.getItem("transaction-theme") || "dark";
+    </script>
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
@@ -14,12 +17,14 @@
           <p class="subtle">Local first-version workspace</p>
         </div>
         <div class="topbar-actions">
-          <button class="icon-button" type="button" id="exportJsonButton" title="Export JSON" aria-label="Export JSON">
-            <span aria-hidden="true">JSON</span>
-          </button>
-          <button class="icon-button danger" type="button" id="clearDataButton" title="Clear local data" aria-label="Clear local data">
-            <span aria-hidden="true">Clear</span>
-          </button>
+          <label class="theme-toggle" title="Toggle theme">
+            <input type="checkbox" id="themeToggle" checked aria-label="Use dark theme">
+            <span class="theme-track" aria-hidden="true">
+              <span class="theme-thumb"></span>
+              <span class="theme-icon theme-icon-light">L</span>
+              <span class="theme-icon theme-icon-dark">D</span>
+            </span>
+          </label>
         </div>
       </header>
 

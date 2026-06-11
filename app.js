@@ -27,8 +27,7 @@
     rawSearch: document.querySelector("#rawSearch"),
     importSelectedRowsButton: document.querySelector("#importSelectedRowsButton"),
     ruleTagSelect: document.querySelector("#ruleTagSelect"),
-    exportJsonButton: document.querySelector("#exportJsonButton"),
-    clearDataButton: document.querySelector("#clearDataButton"),
+    themeToggle: document.querySelector("#themeToggle"),
   };
 
   elements.tabs.forEach((tab) => {
@@ -43,10 +42,22 @@
   elements.rawStatusFilter.addEventListener("change", renderRawRows);
   elements.rawSearch.addEventListener("input", renderRawRows);
   elements.importSelectedRowsButton.addEventListener("click", importSelectedRawRows);
-  elements.exportJsonButton.addEventListener("click", exportJson);
-  elements.clearDataButton.addEventListener("click", clearLocalData);
+  elements.themeToggle.addEventListener("change", updateTheme);
 
+  initializeTheme();
   loadInitialState();
+
+  function initializeTheme() {
+    const theme = localStorage.getItem("transaction-theme") || "dark";
+    document.documentElement.dataset.theme = theme;
+    elements.themeToggle.checked = theme === "dark";
+  }
+
+  function updateTheme() {
+    const theme = elements.themeToggle.checked ? "dark" : "light";
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem("transaction-theme", theme);
+  }
 
   async function loadInitialState() {
     try {
@@ -595,29 +606,6 @@
     return Array.from(new Uint8Array(digest))
       .map((byte) => byte.toString(16).padStart(2, "0"))
       .join("");
-  }
-
-  function exportJson() {
-    const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "transaction-history-v1.json";
-    link.click();
-    URL.revokeObjectURL(url);
-  }
-
-  async function clearLocalData() {
-    if (!confirm("Clear server app data?")) {
-      return;
-    }
-    try {
-      const payload = await apiRequest("/api/state", { method: "DELETE" });
-      setMessage("");
-      applyStateFromPayload(payload);
-    } catch (error) {
-      alert(error.message || "Could not clear data.");
-    }
   }
 
   function clean(value) {

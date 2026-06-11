@@ -297,26 +297,6 @@ def import_selected_raw_rows():
     return jsonify({"import_result": result, "state": state})
 
 
-@app.delete("/api/state")
-def clear_state():
-    ensure_database()
-    with closing(connect(DEFAULT_DB_PATH)) as conn:
-        conn.execute("DELETE FROM transaction_import_rules")
-        conn.execute("DELETE FROM logs")
-        conn.execute("DELETE FROM transaction_notes")
-        conn.execute("DELETE FROM transaction_tags")
-        conn.execute("DELETE FROM transactions")
-        conn.execute("DELETE FROM raw_imported_rows")
-        conn.execute("DELETE FROM imported_source")
-        conn.execute("DELETE FROM tags")
-        conn.execute("DELETE FROM accounts")
-        conn.execute("DELETE FROM institutions")
-        state = read_state(conn)
-        conn.commit()
-
-    return jsonify({"state": state})
-
-
 def ensure_database() -> None:
     init_db(DEFAULT_DB_PATH)
 
