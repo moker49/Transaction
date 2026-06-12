@@ -117,7 +117,8 @@ h2 {
 }
 
 .icon-button,
-.primary {
+.primary,
+.danger-button {
   min-height: 38px;
   border-radius: 7px;
   padding: 0 14px;
@@ -133,6 +134,8 @@ h2 {
 .theme-toggle {
   display: inline-flex;
   align-items: center;
+  position: relative;
+  flex: 0 0 auto;
   cursor: pointer;
 }
 
@@ -195,6 +198,19 @@ h2 {
 
 .primary:hover {
   background: var(--accent-dark);
+}
+
+.danger-button {
+  flex: 0 0 auto;
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-border);
+  color: var(--danger);
+  font-weight: 800;
+}
+
+.danger-button:disabled {
+  cursor: progress;
+  opacity: 0.68;
 }
 
 .primary-nav {
@@ -321,6 +337,13 @@ h2 {
   border-bottom: 1px solid var(--border);
 }
 
+.panel-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 18px 18px;
+}
+
 .panel-heading.with-controls {
   align-items: flex-start;
 }
@@ -334,6 +357,10 @@ h2 {
 
 .form-grid .primary {
   align-self: end;
+}
+
+.form-grid.single-column {
+  grid-template-columns: 1fr;
 }
 
 .inline-form {
@@ -377,6 +404,20 @@ input[type="file"]::file-selector-button {
   color: var(--text);
   font: inherit;
   line-height: 26px;
+}
+
+.theme-toggle {
+  display: inline-flex;
+}
+
+.theme-toggle input {
+  width: 1px;
+  height: 1px;
+  min-height: 1px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
 input:focus,
@@ -484,6 +525,22 @@ td {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  min-width: 0;
+}
+
+.setting-row > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.setting-note {
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.danger-row {
+  align-items: flex-start;
 }
 
 .chip {
@@ -566,6 +623,45 @@ td {
   justify-content: flex-end;
   gap: 8px;
   padding: 0 18px 18px;
+}
+
+.modal-message {
+  min-height: 24px;
+  padding: 0 18px 12px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.modal-message.error {
+  color: var(--danger);
+}
+
+.confirm-message {
+  margin: 0;
+  padding: 18px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.app-message {
+  display: none;
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.app-message.is-visible {
+  display: block;
+}
+
+.app-message.error {
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+  color: var(--danger);
 }
 
 .message {
@@ -747,6 +843,23 @@ tr.is-matched-row td {
     margin-left: -10px;
     padding: 0 10px;
     background: var(--bg);
+  }
+
+  .settings-list {
+    padding: 12px;
+  }
+
+  .setting-row {
+    min-height: 56px;
+  }
+
+  .danger-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .danger-button {
+    width: 100%;
   }
 
   .controls input,

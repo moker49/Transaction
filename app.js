@@ -17,32 +17,63 @@
   const rawRowNotes = new Map();
   let visibleRawRows = [];
   let editingAccountId = null;
+  let editingRuleId = null;
+  let accountDialogMode = "add";
+  let ruleDialogMode = "add";
+  let confirmResolver = null;
+  let textInputResolver = null;
   const importableRawRowStatuses = new Set(["new", "ready"]);
 
   const elements = {
     navItems: document.querySelectorAll(".nav-item"),
     tabs: document.querySelectorAll(".tab"),
     views: document.querySelectorAll(".view"),
+    appMessage: document.querySelector("#appMessage"),
+    accountAddButton: document.querySelector("#accountAddButton"),
     accountForm: document.querySelector("#accountForm"),
     importForm: document.querySelector("#importForm"),
     categoryForm: document.querySelector("#categoryForm"),
     tagForm: document.querySelector("#tagForm"),
     ruleForm: document.querySelector("#ruleForm"),
     importMessage: document.querySelector("#importMessage"),
+    devMessage: document.querySelector("#devMessage"),
     importAccountSelect: document.querySelector("#importAccountSelect"),
     rawAccountFilter: document.querySelector("#rawAccountFilter"),
     rawStatusFilter: document.querySelector("#rawStatusFilter"),
     rawSearch: document.querySelector("#rawSearch"),
     selectVisibleRowsButton: document.querySelector("#selectVisibleRowsButton"),
     importSelectedRowsButton: document.querySelector("#importSelectedRowsButton"),
+    regenerateDatabaseButton: document.querySelector("#regenerateDatabaseButton"),
+    ruleAddButton: document.querySelector("#ruleAddButton"),
+    ruleDialog: document.querySelector("#ruleDialog"),
     ruleCategorySelect: document.querySelector("#ruleCategorySelect"),
     ruleTagSelect: document.querySelector("#ruleTagSelect"),
+    ruleCancelButton: document.querySelector("#ruleCancelButton"),
+    ruleDismissButton: document.querySelector("#ruleDismissButton"),
+    ruleDialogTitle: document.querySelector("#ruleDialogTitle"),
+    ruleMessage: document.querySelector("#ruleMessage"),
+    ruleSubmitButton: document.querySelector("#ruleSubmitButton"),
     themeToggle: document.querySelector("#themeToggle"),
     settingsThemeToggle: document.querySelector("#settingsThemeToggle"),
-    accountEditDialog: document.querySelector("#accountEditDialog"),
-    accountEditForm: document.querySelector("#accountEditForm"),
-    accountEditCancelButton: document.querySelector("#accountEditCancelButton"),
-    accountEditDismissButton: document.querySelector("#accountEditDismissButton"),
+    accountDialog: document.querySelector("#accountDialog"),
+    accountDialogTitle: document.querySelector("#accountDialogTitle"),
+    accountCancelButton: document.querySelector("#accountCancelButton"),
+    accountDismissButton: document.querySelector("#accountDismissButton"),
+    accountSubmitButton: document.querySelector("#accountSubmitButton"),
+    accountMessage: document.querySelector("#accountMessage"),
+    textInputDialog: document.querySelector("#textInputDialog"),
+    textInputForm: document.querySelector("#textInputForm"),
+    textInputTitle: document.querySelector("#textInputTitle"),
+    textInputLabel: document.querySelector("#textInputLabel"),
+    textInputCancelButton: document.querySelector("#textInputCancelButton"),
+    textInputDismissButton: document.querySelector("#textInputDismissButton"),
+    confirmDialog: document.querySelector("#confirmDialog"),
+    confirmForm: document.querySelector("#confirmForm"),
+    confirmTitle: document.querySelector("#confirmTitle"),
+    confirmMessage: document.querySelector("#confirmMessage"),
+    confirmCancelButton: document.querySelector("#confirmCancelButton"),
+    confirmDismissButton: document.querySelector("#confirmDismissButton"),
+    confirmSubmitButton: document.querySelector("#confirmSubmitButton"),
   };
 
   elements.navItems.forEach((navItem) => {
@@ -53,23 +84,44 @@
     tab.addEventListener("click", () => activateView(tab.dataset.view));
   });
 
-  elements.accountForm.addEventListener("submit", addAccount);
+  elements.accountAddButton.addEventListener("click", openAccountAddDialog);
+  elements.accountForm.addEventListener("submit", saveAccount);
   elements.importForm.addEventListener("submit", importCsv);
   elements.categoryForm.addEventListener("submit", addCategory);
   elements.tagForm.addEventListener("submit", addTag);
-  elements.ruleForm.addEventListener("submit", addRule);
+  elements.ruleForm.addEventListener("submit", saveRule);
   elements.rawAccountFilter.addEventListener("change", renderRawRows);
   elements.rawStatusFilter.addEventListener("change", renderRawRows);
   elements.rawSearch.addEventListener("input", renderRawRows);
   elements.selectVisibleRowsButton.addEventListener("click", selectVisibleRawRows);
   elements.importSelectedRowsButton.addEventListener("click", importSelectedRawRows);
+  elements.regenerateDatabaseButton.addEventListener("click", regenerateDatabase);
+  elements.ruleAddButton.addEventListener("click", openRuleAddDialog);
+  elements.ruleCancelButton.addEventListener("click", closeRuleDialog);
+  elements.ruleDismissButton.addEventListener("click", closeRuleDialog);
+  elements.ruleDialog.addEventListener("close", () => {
+    editingRuleId = null;
+  });
   elements.themeToggle.addEventListener("change", updateTheme);
   elements.settingsThemeToggle.addEventListener("change", updateTheme);
-  elements.accountEditForm.addEventListener("submit", saveAccountEdit);
-  elements.accountEditCancelButton.addEventListener("click", closeAccountEditDialog);
-  elements.accountEditDismissButton.addEventListener("click", closeAccountEditDialog);
-  elements.accountEditDialog.addEventListener("close", () => {
+  elements.accountCancelButton.addEventListener("click", closeAccountDialog);
+  elements.accountDismissButton.addEventListener("click", closeAccountDialog);
+  elements.accountDialog.addEventListener("close", () => {
     editingAccountId = null;
+  });
+  elements.textInputForm.addEventListener("submit", resolveTextInput);
+  elements.textInputCancelButton.addEventListener("click", () => closeTextInputDialog(null));
+  elements.textInputDismissButton.addEventListener("click", () => closeTextInputDialog(null));
+  elements.textInputDialog.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    closeTextInputDialog(null);
+  });
+  elements.confirmForm.addEventListener("submit", resolveConfirm);
+  elements.confirmCancelButton.addEventListener("click", () => closeConfirmDialog(false));
+  elements.confirmDismissButton.addEventListener("click", () => closeConfirmDialog(false));
+  elements.confirmDialog.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    closeConfirmDialog(false);
   });
 
   initializeTheme();
@@ -124,6 +176,7 @@
 
   function applyStateFromPayload(payload) {
     state = normalizeState(payload.state || payload);
+    setAppMessage("");
     const visibleIds = new Set(state.rawRows.map((row) => row.id));
     [...selectedRawRowIds].forEach((rowId) => {
       if (!visibleIds.has(rowId)) {
@@ -157,20 +210,55 @@
     elements.views.forEach((view) => view.classList.toggle("is-active", view.id === `${viewName}View`));
   }
 
-  async function addAccount(event) {
+  function openAccountAddDialog() {
+    accountDialogMode = "add";
+    editingAccountId = null;
+    elements.accountDialogTitle.textContent = "Add Account";
+    elements.accountSubmitButton.textContent = "Add Account";
+    elements.accountMessage.textContent = "";
+    elements.accountMessage.classList.remove("error");
+    elements.accountForm.reset();
+    elements.accountForm.elements.accountType.value = "checking";
+    elements.accountForm.elements.currency.value = "USD";
+    elements.accountDialog.showModal();
+    elements.accountForm.elements.name.focus();
+  }
+
+  function openAccountEditDialog(account) {
+    accountDialogMode = "edit";
+    editingAccountId = account.id;
+    elements.accountDialogTitle.textContent = "Edit Account";
+    elements.accountSubmitButton.textContent = "Save";
+    elements.accountMessage.textContent = "";
+    elements.accountMessage.classList.remove("error");
+    const form = elements.accountForm;
+    form.elements.name.value = account.name || "";
+    form.elements.institution.value = account.institution || "";
+    form.elements.accountType.value = account.account_type || "checking";
+    form.elements.currency.value = account.currency || "USD";
+    elements.accountDialog.showModal();
+    form.elements.name.focus();
+  }
+
+  function closeAccountDialog() {
+    elements.accountDialog.close();
+  }
+
+  async function saveAccount(event) {
     event.preventDefault();
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
     const currency = clean(form.get("currency")).toUpperCase();
 
     if (!/^[A-Z]{3}$/.test(currency)) {
-      alert("Currency must be a three-letter code.");
+      setModalMessage(elements.accountMessage, "Currency must be a three-letter code.", true);
       return;
     }
 
     try {
-      const payload = await apiRequest("/api/accounts", {
-        method: "POST",
+      const isEdit = accountDialogMode === "edit";
+      const payload = await apiRequest(isEdit ? `/api/accounts/${editingAccountId}` : "/api/accounts", {
+        method: isEdit ? "PATCH" : "POST",
         body: JSON.stringify({
           name: clean(form.get("name")),
           institution: clean(form.get("institution")) || null,
@@ -178,11 +266,14 @@
           currency,
         }),
       });
-      formElement.reset();
-      formElement.elements.currency.value = "USD";
+      closeAccountDialog();
       applyStateFromPayload(payload);
     } catch (error) {
-      alert(error.message || "Could not add account.");
+      setModalMessage(
+        elements.accountMessage,
+        error.message || (accountDialogMode === "edit" ? "Could not update account." : "Could not add account."),
+        true,
+      );
     }
   }
 
@@ -239,7 +330,7 @@
       formElement.reset();
       applyStateFromPayload(payload);
     } catch (error) {
-      alert(error.message || "Could not add tag.");
+      setAppMessage(error.message || "Could not add tag.", true);
     }
   }
 
@@ -259,11 +350,50 @@
       formElement.reset();
       applyStateFromPayload(payload);
     } catch (error) {
-      alert(error.message || "Could not add category.");
+      setAppMessage(error.message || "Could not add category.", true);
     }
   }
 
-  async function addRule(event) {
+  function openRuleAddDialog() {
+    ruleDialogMode = "add";
+    editingRuleId = null;
+    elements.ruleMessage.textContent = "";
+    elements.ruleMessage.classList.remove("error");
+    elements.ruleDialogTitle.textContent = "Add Rule";
+    elements.ruleSubmitButton.textContent = "Add Rule";
+    elements.ruleForm.reset();
+    elements.ruleForm.elements.matchField.value = "description";
+    elements.ruleForm.elements.matchType.value = "contains";
+    elements.ruleForm.elements.priority.value = "100";
+    elements.ruleDialog.showModal();
+    elements.ruleForm.elements.name.focus();
+  }
+
+  function openRuleEditDialog(rule) {
+    ruleDialogMode = "edit";
+    editingRuleId = rule.id;
+    elements.ruleMessage.textContent = "";
+    elements.ruleMessage.classList.remove("error");
+    elements.ruleDialogTitle.textContent = "Edit Rule";
+    elements.ruleSubmitButton.textContent = "Save";
+    const form = elements.ruleForm;
+    form.elements.name.value = rule.name || "";
+    form.elements.matchField.value = rule.match_field || "description";
+    form.elements.matchType.value = rule.match_type || "contains";
+    form.elements.matchValue.value = rule.match_value || "";
+    form.elements.setCleanDescription.value = rule.set_clean_description || "";
+    form.elements.setCategoryId.value = rule.set_category_id === null ? "" : String(rule.set_category_id);
+    form.elements.addTagId.value = rule.add_tag_id === null ? "" : String(rule.add_tag_id);
+    form.elements.priority.value = String(rule.priority ?? 100);
+    elements.ruleDialog.showModal();
+    form.elements.name.focus();
+  }
+
+  function closeRuleDialog() {
+    elements.ruleDialog.close();
+  }
+
+  async function saveRule(event) {
     event.preventDefault();
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
@@ -272,13 +402,14 @@
     const addTagId = Number(form.get("addTagId")) || null;
 
     if (!setCategoryId && !setCleanDescription && !addTagId) {
-      alert("Set a clean category, clean description, or tag.");
+      setModalMessage(elements.ruleMessage, "Set a clean category, clean description, or tag.", true);
       return;
     }
 
     try {
-      const payload = await apiRequest("/api/rules", {
-        method: "POST",
+      const isEdit = ruleDialogMode === "edit";
+      const payload = await apiRequest(isEdit ? `/api/rules/${editingRuleId}` : "/api/rules", {
+        method: isEdit ? "PATCH" : "POST",
         body: JSON.stringify({
           name: clean(form.get("name")),
           match_field: clean(form.get("matchField")),
@@ -290,70 +421,40 @@
           priority: Number(form.get("priority")) || 100,
         }),
       });
-      formElement.reset();
-      formElement.elements.priority.value = "100";
+      closeRuleDialog();
       applyStateFromPayload(payload);
     } catch (error) {
-      alert(error.message || "Could not add rule.");
-    }
-  }
-
-  async function editAccount(account) {
-    editingAccountId = account.id;
-    const form = elements.accountEditForm;
-    form.elements.name.value = account.name || "";
-    form.elements.institution.value = account.institution || "";
-    form.elements.accountType.value = account.account_type || "checking";
-    form.elements.currency.value = account.currency || "USD";
-    elements.accountEditDialog.showModal();
-  }
-
-  function closeAccountEditDialog() {
-    elements.accountEditDialog.close();
-  }
-
-  async function saveAccountEdit(event) {
-    event.preventDefault();
-    if (editingAccountId === null) {
-      return;
-    }
-    const form = new FormData(elements.accountEditForm);
-    const currency = clean(form.get("currency")).toUpperCase();
-    if (!/^[A-Z]{3}$/.test(currency)) {
-      alert("Currency must be a three-letter code.");
-      return;
-    }
-    try {
-      const payload = await apiRequest(`/api/accounts/${editingAccountId}`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          name: clean(form.get("name")),
-          institution: clean(form.get("institution")) || null,
-          account_type: clean(form.get("accountType")) || null,
-          currency,
-        }),
-      });
-      closeAccountEditDialog();
-      applyStateFromPayload(payload);
-    } catch (error) {
-      alert(error.message || "Could not update account.");
+      setModalMessage(
+        elements.ruleMessage,
+        error.message || (ruleDialogMode === "edit" ? "Could not update rule." : "Could not add rule."),
+        true,
+      );
     }
   }
 
   async function deleteAccount(account) {
-    if (!confirm(`Delete account "${account.name}"?`)) {
+    const confirmed = await confirmDestructive({
+      title: "Delete Account",
+      message: `Delete account "${account.name}"? This cannot be undone.`,
+      actionLabel: "Delete Account",
+    });
+    if (!confirmed) {
       return;
     }
     try {
       const payload = await apiRequest(`/api/accounts/${account.id}`, { method: "DELETE" });
       applyStateFromPayload(payload);
     } catch (error) {
-      alert(error.message || "Could not delete account.");
+      setAppMessage(error.message || "Could not delete account.", true);
     }
   }
 
   async function editCategory(category) {
-    const name = prompt("Category name", category.name);
+    const name = await promptForText({
+      title: "Edit Category",
+      label: "Category name",
+      value: category.name,
+    });
     if (name === null) {
       return;
     }
@@ -364,24 +465,33 @@
       });
       applyStateFromPayload(payload);
     } catch (error) {
-      alert(error.message || "Could not update category.");
+      setAppMessage(error.message || "Could not update category.", true);
     }
   }
 
   async function deleteCategory(category) {
-    if (!confirm(`Delete category "${category.name}"?`)) {
+    const confirmed = await confirmDestructive({
+      title: "Delete Category",
+      message: `Delete category "${category.name}"? This cannot be undone.`,
+      actionLabel: "Delete Category",
+    });
+    if (!confirmed) {
       return;
     }
     try {
       const payload = await apiRequest(`/api/categories/${category.id}`, { method: "DELETE" });
       applyStateFromPayload(payload);
     } catch (error) {
-      alert(error.message || "Could not delete category.");
+      setAppMessage(error.message || "Could not delete category.", true);
     }
   }
 
   async function editTag(tag) {
-    const name = prompt("Tag name", tag.name);
+    const name = await promptForText({
+      title: "Edit Tag",
+      label: "Tag name",
+      value: tag.name,
+    });
     if (name === null) {
       return;
     }
@@ -392,31 +502,41 @@
       });
       applyStateFromPayload(payload);
     } catch (error) {
-      alert(error.message || "Could not update tag.");
+      setAppMessage(error.message || "Could not update tag.", true);
     }
   }
 
   async function deleteTag(tag) {
-    if (!confirm(`Delete tag "${tag.name}"?`)) {
+    const confirmed = await confirmDestructive({
+      title: "Delete Tag",
+      message: `Delete tag "${tag.name}"? This cannot be undone.`,
+      actionLabel: "Delete Tag",
+    });
+    if (!confirmed) {
       return;
     }
     try {
       const payload = await apiRequest(`/api/tags/${tag.id}`, { method: "DELETE" });
       applyStateFromPayload(payload);
     } catch (error) {
-      alert(error.message || "Could not delete tag.");
+      setAppMessage(error.message || "Could not delete tag.", true);
     }
   }
 
   async function deleteRule(rule) {
-    if (!confirm(`Delete rule "${rule.name}"?`)) {
+    const confirmed = await confirmDestructive({
+      title: "Delete Rule",
+      message: `Delete rule "${rule.name}"? This cannot be undone.`,
+      actionLabel: "Delete Rule",
+    });
+    if (!confirmed) {
       return;
     }
     try {
       const payload = await apiRequest(`/api/rules/${rule.id}`, { method: "DELETE" });
       applyStateFromPayload(payload);
     } catch (error) {
-      alert(error.message || "Could not delete rule.");
+      setAppMessage(error.message || "Could not delete rule.", true);
     }
   }
 
@@ -452,7 +572,7 @@
     state.accounts.forEach((account) => {
       const rowCount = state.rawRows.filter((row) => row.account_id === account.id).length;
       const actions = actionButtons([
-        ["edit", "Edit account", () => editAccount(account)],
+        ["edit", "Edit account", () => openAccountEditDialog(account)],
         ["close", "Delete account", () => deleteAccount(account)],
       ]);
       tbody.appendChild(tableRow([
@@ -576,10 +696,10 @@
   }
 
   function renderRules() {
-    const ruleList = document.querySelector("#ruleList");
-    clear(ruleList);
+    const tbody = document.querySelector("#rulesTable");
+    clear(tbody);
     if (!state.rules.length) {
-      appendEmpty(ruleList);
+      tbody.appendChild(emptyTableRow(4));
       return;
     }
 
@@ -589,15 +709,15 @@
       .forEach((rule) => {
         const tag = state.tags.find((candidate) => candidate.id === rule.add_tag_id);
         const category = state.categories.find((candidate) => candidate.id === rule.set_category_id);
-        const node = document.createElement("div");
-        node.className = "list-item";
-        node.append(
-          el("strong", `${rule.name} (${rule.priority})`),
-          el("span", `${rule.match_field} ${rule.match_type} "${rule.match_value}"`, "list-meta"),
-          el("span", ruleActions(rule, category, tag), "list-meta"),
-          actionButtons([["delete", "Delete rule", () => deleteRule(rule)]]),
-        );
-        ruleList.appendChild(node);
+        tbody.appendChild(tableRow([
+          `${rule.name} (${rule.priority})`,
+          `${rule.match_field} ${rule.match_type} "${rule.match_value}"`,
+          ruleActions(rule, category, tag) || "-",
+          actionButtons([
+            ["edit", "Edit rule", () => openRuleEditDialog(rule)],
+            ["close", "Delete rule", () => deleteRule(rule)],
+          ]),
+        ]));
       });
   }
 
@@ -738,9 +858,38 @@
         counts.error > 0,
       );
     } catch (error) {
-      alert(error.message || "Could not import selected rows.");
+      setMessage(error.message || "Could not import selected rows.", true);
     } finally {
       updateImportSelectedButton();
+    }
+  }
+
+  async function regenerateDatabase() {
+    const confirmed = await confirmDestructive({
+      title: "Regenerate Database",
+      message: "Regenerate the database? This permanently deletes all accounts, imports, transactions, categories, tags, rules, and logs.",
+      actionLabel: "Regenerate",
+    });
+    if (!confirmed) {
+      return;
+    }
+
+    setDevMessage("Regenerating database...");
+    elements.regenerateDatabaseButton.disabled = true;
+    try {
+      const payload = await apiRequest("/api/dev/regenerate-database", {
+        method: "POST",
+        body: JSON.stringify({ confirm: "DELETE ALL DATA" }),
+      });
+      selectedRawRowIds.clear();
+      rawRowNotes.clear();
+      visibleRawRows = [];
+      applyStateFromPayload(payload);
+      setDevMessage("Database regenerated.");
+    } catch (error) {
+      setDevMessage(error.message || "Could not regenerate database.", true);
+    } finally {
+      elements.regenerateDatabaseButton.disabled = false;
     }
   }
 
@@ -992,9 +1141,88 @@
     return actions.join(" | ");
   }
 
+  function promptForText({ title, label, value }) {
+    if (textInputResolver) {
+      closeTextInputDialog(null);
+    }
+    elements.textInputTitle.textContent = title;
+    elements.textInputLabel.textContent = label;
+    elements.textInputForm.elements.value.value = value || "";
+    elements.textInputDialog.showModal();
+    elements.textInputForm.elements.value.focus();
+    elements.textInputForm.elements.value.select();
+    return new Promise((resolve) => {
+      textInputResolver = resolve;
+    });
+  }
+
+  function resolveTextInput(event) {
+    event.preventDefault();
+    const value = clean(elements.textInputForm.elements.value.value);
+    if (!value) {
+      return;
+    }
+    closeTextInputDialog(value);
+  }
+
+  function closeTextInputDialog(value) {
+    if (elements.textInputDialog.open) {
+      elements.textInputDialog.close();
+    }
+    if (textInputResolver) {
+      textInputResolver(value);
+      textInputResolver = null;
+    }
+  }
+
+  function confirmDestructive({ title, message, actionLabel }) {
+    if (confirmResolver) {
+      closeConfirmDialog(false);
+    }
+    elements.confirmTitle.textContent = title;
+    elements.confirmMessage.textContent = message;
+    elements.confirmSubmitButton.textContent = actionLabel;
+    elements.confirmDialog.showModal();
+    elements.confirmSubmitButton.focus();
+    return new Promise((resolve) => {
+      confirmResolver = resolve;
+    });
+  }
+
+  function resolveConfirm(event) {
+    event.preventDefault();
+    closeConfirmDialog(true);
+  }
+
+  function closeConfirmDialog(confirmed) {
+    if (elements.confirmDialog.open) {
+      elements.confirmDialog.close();
+    }
+    if (confirmResolver) {
+      confirmResolver(confirmed);
+      confirmResolver = null;
+    }
+  }
+
+  function setModalMessage(element, message, isError = false) {
+    element.textContent = message;
+    element.classList.toggle("error", isError);
+  }
+
+  function setAppMessage(message, isError = false) {
+    elements.appMessage.textContent = message;
+    elements.appMessage.classList.toggle("error", isError);
+    elements.appMessage.classList.toggle("is-visible", Boolean(message));
+  }
+
   function setMessage(message, isError = false) {
     elements.importMessage.textContent = message;
     elements.importMessage.classList.toggle("error", isError);
+  }
+
+  function setDevMessage(message, isError = false) {
+    elements.devMessage.textContent = message;
+    elements.devMessage.classList.toggle("error", isError);
   }
 
   function setText(selector, value) {

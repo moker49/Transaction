@@ -304,6 +304,70 @@ def create_rule():
     return jsonify({"transaction_rule": rule, "state": state}), 201
 
 
+@app.patch("/api/rules/<int:rule_id>")
+def update_rule(rule_id: int):
+    ensure_database()
+    data = request.get_json(silent=True) or {}
+    updates: list[str] = []
+    values: list[Any] = []
+
+    with closing(connect(DEFAULT_DB_PATH)) as conn:
+        current = fetch_transaction_rule(conn, rule_id)
+        next_set_category_id = current["set_category_id"]
+        next_set_clean_description = current["set_clean_description"]
+        next_add_tag_id = current["add_tag_id"]
+
+        if "name" in data:
+            updates.append("name = ?")
+            values.append(nonempty(str(data.get("name", "")), "name"))
+        if "match_field" in data:
+            updates.append("match_field = ?")
+            values.append(validate_match_field(str(data.get("match_field", ""))))
+        if "match_type" in data:
+            updates.append("match_type = ?")
+            values.append(validate_match_type(str(data.get("match_type", ""))))
+        if "match_value" in data:
+            updates.append("match_value = ?")
+            values.append(nonempty(str(data.get("match_value", "")), "match_value"))
+        if "set_category_id" in data:
+            raw_category_id = data.get("set_category_id")
+            next_set_category_id = int(raw_category_id) if raw_category_id is not None else None
+            if next_set_category_id is not None:
+                require_category(conn, next_set_category_id)
+            updates.append("set_category_id = ?")
+            values.append(next_set_category_id)
+        if "set_clean_description" in data:
+            next_set_clean_description = optional_nonempty(data.get("set_clean_description"), "set_clean_description")
+            updates.append("set_clean_description = ?")
+            values.append(next_set_clean_description)
+        if "add_tag_id" in data:
+            raw_tag_id = data.get("add_tag_id")
+            next_add_tag_id = int(raw_tag_id) if raw_tag_id is not None else None
+            if next_add_tag_id is not None:
+                fetch_tag_by_id(conn, next_add_tag_id)
+            updates.append("add_tag_id = ?")
+            values.append(next_add_tag_id)
+        if "priority" in data:
+            updates.append("priority = ?")
+            values.append(int(data.get("priority", 100)))
+        if "is_active" in data:
+            updates.append("is_active = ?")
+            values.append(1 if data.get("is_active") else 0)
+        if not updates:
+            raise CliError("No changes requested.")
+
+        validate_rule_actions(next_set_category_id, next_set_clean_description, next_add_tag_id)
+
+        updates.append("updated_at = datetime('now')")
+        values.append(rule_id)
+        conn.execute(f"UPDATE transaction_import_rules SET {', '.join(updates)} WHERE id = ?", values)
+        rule = dict(fetch_transaction_rule(conn, rule_id))
+        state = read_state(conn)
+        conn.commit()
+
+    return jsonify({"transaction_rule": rule, "state": state})
+
+
 @app.delete("/api/rules/<int:rule_id>")
 def delete_rule(rule_id: int):
     ensure_database()
@@ -453,6 +517,27 @@ def import_selected_raw_rows():
         conn.commit()
 
     return jsonify({"import_result": result, "state": state})
+
+
+@app.post("/api/dev/regenerate-database")
+def regenerate_database():
+    data = request.get_json(silent=True) or {}
+    if data.get("confirm") != "DELETE ALL DATA":
+        raise CliError("Regenerate database requires confirmation.")
+
+    for path in [
+        DEFAULT_DB_PATH,
+        DEFAULT_DB_PATH.with_name(f"{DEFAULT_DB_PATH.name}-wal"),
+        DEFAULT_DB_PATH.with_name(f"{DEFAULT_DB_PATH.name}-shm"),
+    ]:
+        path.unlink(missing_ok=True)
+
+    init_db(DEFAULT_DB_PATH)
+    with closing(connect(DEFAULT_DB_PATH)) as conn:
+        state = read_state(conn)
+        conn.commit()
+
+    return jsonify({"status": "regenerated", "state": state})
 
 
 def ensure_database() -> None:
