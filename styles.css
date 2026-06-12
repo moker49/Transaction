@@ -322,6 +322,26 @@ select {
   padding: 0 10px;
 }
 
+input[type="file"] {
+  display: flex;
+  align-items: center;
+  height: 38px;
+  padding: 0 8px;
+  line-height: 38px;
+}
+
+input[type="file"]::file-selector-button {
+  height: 26px;
+  margin: 0 8px 0 0;
+  border: 0;
+  border-radius: 3px;
+  padding: 0 10px;
+  background: var(--surface-muted);
+  color: var(--text);
+  font: inherit;
+  line-height: 26px;
+}
+
 input:focus,
 select:focus,
 button:focus-visible {
