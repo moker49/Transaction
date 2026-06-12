@@ -658,4 +658,9 @@ def parse_positive_int(value: str | None, field_name: str) -> int:
 
 if __name__ == "__main__":
     ensure_database()
-    app.run(debug=True, port=int(os.environ.get("PORT", "5050")), use_reloader=False)
+    app.run(
+        host=os.environ.get("HOST", "0.0.0.0"),
+        port=int(os.environ.get("PORT", "5050")),
+        debug=True,
+        use_reloader=False,
+    )
