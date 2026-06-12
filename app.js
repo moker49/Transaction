@@ -20,6 +20,7 @@
   const importableRawRowStatuses = new Set(["new", "ready"]);
 
   const elements = {
+    navItems: document.querySelectorAll(".nav-item"),
     tabs: document.querySelectorAll(".tab"),
     views: document.querySelectorAll(".view"),
     accountForm: document.querySelector("#accountForm"),
@@ -37,11 +38,16 @@
     ruleCategorySelect: document.querySelector("#ruleCategorySelect"),
     ruleTagSelect: document.querySelector("#ruleTagSelect"),
     themeToggle: document.querySelector("#themeToggle"),
+    settingsThemeToggle: document.querySelector("#settingsThemeToggle"),
     accountEditDialog: document.querySelector("#accountEditDialog"),
     accountEditForm: document.querySelector("#accountEditForm"),
     accountEditCancelButton: document.querySelector("#accountEditCancelButton"),
     accountEditDismissButton: document.querySelector("#accountEditDismissButton"),
   };
+
+  elements.navItems.forEach((navItem) => {
+    navItem.addEventListener("click", () => activateView(navItem.dataset.defaultView));
+  });
 
   elements.tabs.forEach((tab) => {
     tab.addEventListener("click", () => activateView(tab.dataset.view));
@@ -58,6 +64,7 @@
   elements.selectVisibleRowsButton.addEventListener("click", selectVisibleRawRows);
   elements.importSelectedRowsButton.addEventListener("click", importSelectedRawRows);
   elements.themeToggle.addEventListener("change", updateTheme);
+  elements.settingsThemeToggle.addEventListener("change", updateTheme);
   elements.accountEditForm.addEventListener("submit", saveAccountEdit);
   elements.accountEditCancelButton.addEventListener("click", closeAccountEditDialog);
   elements.accountEditDismissButton.addEventListener("click", closeAccountEditDialog);
@@ -66,18 +73,24 @@
   });
 
   initializeTheme();
+  activateView("overview");
   loadInitialState();
 
   function initializeTheme() {
     const theme = localStorage.getItem("transaction-theme") || "dark";
-    document.documentElement.dataset.theme = theme;
-    elements.themeToggle.checked = theme === "dark";
+    setTheme(theme);
   }
 
-  function updateTheme() {
-    const theme = elements.themeToggle.checked ? "dark" : "light";
+  function setTheme(theme) {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem("transaction-theme", theme);
+    const isDark = theme === "dark";
+    elements.themeToggle.checked = isDark;
+    elements.settingsThemeToggle.checked = isDark;
+  }
+
+  function updateTheme(event) {
+    setTheme(event.currentTarget.checked ? "dark" : "light");
   }
 
   async function loadInitialState() {
@@ -126,7 +139,21 @@
   }
 
   function activateView(viewName) {
-    elements.tabs.forEach((tab) => tab.classList.toggle("is-active", tab.dataset.view === viewName));
+    const activeTab = [...elements.tabs].find((tab) => tab.dataset.view === viewName);
+    const activeSection = activeTab?.dataset.section || "dash";
+
+    elements.navItems.forEach((navItem) => {
+      const isActive = navItem.dataset.section === activeSection;
+      navItem.classList.toggle("is-active", isActive);
+      navItem.setAttribute("aria-current", isActive ? "page" : "false");
+    });
+    elements.tabs.forEach((tab) => {
+      const isActive = tab.dataset.view === viewName;
+      const isVisible = tab.dataset.section === activeSection;
+      tab.classList.toggle("is-active", isActive);
+      tab.hidden = !isVisible;
+      tab.setAttribute("aria-current", isActive ? "page" : "false");
+    });
     elements.views.forEach((view) => view.classList.toggle("is-active", view.id === `${viewName}View`));
   }
 

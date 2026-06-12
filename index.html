@@ -1,373 +1,429 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Transaction History</title>
-    <script>
-      document.documentElement.dataset.theme = localStorage.getItem("transaction-theme") || "dark";
-    </script>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:FILL@0..1">
-    <link rel="stylesheet" href="styles.css">
-  </head>
-  <body>
-    <div class="app-shell">
-      <header class="topbar">
-        <div>
-          <h1>Transaction History</h1>
-          <p class="subtle">Local first-version workspace</p>
-        </div>
-        <div class="topbar-actions">
-          <label class="theme-toggle" title="Toggle theme">
-            <input type="checkbox" id="themeToggle" checked aria-label="Use dark theme">
-            <span class="theme-track" aria-hidden="true">
-              <span class="theme-thumb"></span>
-              <span class="theme-icon theme-icon-light material-symbols-outlined">light_mode</span>
-              <span class="theme-icon theme-icon-dark material-symbols-outlined">dark_mode</span>
-            </span>
-          </label>
-        </div>
-      </header>
 
-      <nav class="tabs" aria-label="Main views">
-        <button class="tab is-active" type="button" data-view="overview">Overview</button>
-        <button class="tab" type="button" data-view="transactions">Transactions</button>
-        <button class="tab" type="button" data-view="accounts">Manage</button>
-        <button class="tab" type="button" data-view="rules">Rules</button>
-        <button class="tab" type="button" data-view="import">CSV Import</button>
-        <button class="tab" type="button" data-view="raw">Raw Rows</button>
-        <button class="tab" type="button" data-view="logs">Logs</button>
-      </nav>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Transaction History</title>
+  <script>
+    document.documentElement.dataset.theme = localStorage.getItem("transaction-theme") || "dark";
+  </script>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:FILL@0..1">
+  <link rel="stylesheet" href="styles.css">
+</head>
 
-      <main>
-        <section class="view is-active" id="overviewView">
-          <div class="metric-grid">
-            <div class="metric">
-              <span class="metric-label">Accounts</span>
-              <strong id="accountCount">0</strong>
-            </div>
-            <div class="metric">
-              <span class="metric-label">Imports</span>
-              <strong id="importCount">0</strong>
-            </div>
-            <div class="metric">
-              <span class="metric-label">Raw rows</span>
-              <strong id="rawRowCount">0</strong>
-            </div>
-            <div class="metric">
-              <span class="metric-label">New rows</span>
-              <strong id="newImportCount">0</strong>
-            </div>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div>
+        <h1>Transaction History</h1>
+        <p class="subtle">Local first-version workspace</p>
+      </div>
+      <div class="topbar-actions">
+        <label class="theme-toggle" title="Toggle theme">
+          <input type="checkbox" id="themeToggle" checked aria-label="Use dark theme">
+          <span class="theme-track" aria-hidden="true">
+            <span class="theme-thumb"></span>
+            <span class="theme-icon theme-icon-light material-symbols-outlined">light_mode</span>
+            <span class="theme-icon theme-icon-dark material-symbols-outlined">dark_mode</span>
+          </span>
+        </label>
+      </div>
+    </header>
+
+    <nav class="primary-nav" aria-label="Main navigation">
+      <button class="nav-item is-active" type="button" data-section="dash" data-default-view="overview">
+        <span class="material-symbols-outlined" aria-hidden="true">dashboard</span>
+        <span>Dash</span>
+      </button>
+      <button class="nav-item" type="button" data-section="manage" data-default-view="accounts">
+        <span class="material-symbols-outlined" aria-hidden="true">tune</span>
+        <span>Manage</span>
+      </button>
+      <button class="nav-item" type="button" data-section="import" data-default-view="import">
+        <span class="material-symbols-outlined" aria-hidden="true">upload_file</span>
+        <span>Import</span>
+      </button>
+      <button class="nav-item" type="button" data-section="settings" data-default-view="settings">
+        <span class="material-symbols-outlined" aria-hidden="true">settings</span>
+        <span>Settings</span>
+      </button>
+    </nav>
+
+    <nav class="tabs" aria-label="Section views">
+      <button class="tab is-active" type="button" data-section="dash" data-view="overview">Overview</button>
+      <button class="tab" type="button" data-section="dash" data-view="transactions">Transactions</button>
+      <button class="tab" type="button" data-section="manage" data-view="accounts">Accounts</button>
+      <button class="tab" type="button" data-section="manage" data-view="categories">Categories</button>
+      <button class="tab" type="button" data-section="manage" data-view="tags">Tags</button>
+      <button class="tab" type="button" data-section="manage" data-view="rules">Rules</button>
+      <button class="tab" type="button" data-section="import" data-view="import">CSV Import</button>
+      <button class="tab" type="button" data-section="import" data-view="raw">Raw Import Rows</button>
+      <button class="tab" type="button" data-section="settings" data-view="settings">Settings</button>
+      <button class="tab" type="button" data-section="settings" data-view="logs">Logs</button>
+    </nav>
+
+    <main>
+      <section class="view is-active" id="overviewView">
+        <div class="metric-grid">
+          <div class="metric">
+            <span class="metric-label">Accounts</span>
+            <strong id="accountCount">0</strong>
           </div>
-
-          <div class="content-grid two-column">
-            <section class="panel">
-              <div class="panel-heading">
-                <h2>Recent Imports</h2>
-              </div>
-              <div id="recentImports" class="list empty-target"></div>
-            </section>
-            <section class="panel">
-              <div class="panel-heading">
-                <h2>Raw Row Snapshot</h2>
-              </div>
-              <div class="table-wrap compact">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Date</th>
-                      <th>Description</th>
-                      <th>Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody id="snapshotRows"></tbody>
-                </table>
-              </div>
-            </section>
+          <div class="metric">
+            <span class="metric-label">Imports</span>
+            <strong id="importCount">0</strong>
           </div>
-        </section>
+          <div class="metric">
+            <span class="metric-label">Raw rows</span>
+            <strong id="rawRowCount">0</strong>
+          </div>
+          <div class="metric">
+            <span class="metric-label">New rows</span>
+            <strong id="newImportCount">0</strong>
+          </div>
+        </div>
 
-        <section class="view" id="transactionsView">
+        <div class="content-grid two-column">
           <section class="panel">
             <div class="panel-heading">
-              <h2>Transactions</h2>
+              <h2>Recent Imports</h2>
+            </div>
+            <div id="recentImports" class="list empty-target"></div>
+          </section>
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>Raw Row Snapshot</h2>
+            </div>
+            <div class="table-wrap compact">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Description</th>
+                    <th>Amount</th>
+                  </tr>
+                </thead>
+                <tbody id="snapshotRows"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="transactionsView">
+        <section class="panel">
+          <div class="panel-heading">
+            <h2>Transactions</h2>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Account</th>
+                  <th>Description</th>
+                  <th>Category</th>
+                  <th>Amount</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody id="transactionsTable"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <section class="view" id="accountsView">
+        <div class="content-grid two-column">
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>Add Account</h2>
+            </div>
+            <form id="accountForm" class="form-grid">
+              <label>
+                <span>Name</span>
+                <input name="name" type="text" required autocomplete="off">
+              </label>
+              <label>
+                <span>Institution</span>
+                <input name="institution" type="text" autocomplete="off">
+              </label>
+              <label>
+                <span>Account type</span>
+                <select name="accountType">
+                  <option value="checking">Checking</option>
+                  <option value="savings">Savings</option>
+                  <option value="credit">Credit</option>
+                  <option value="cash">Cash</option>
+                  <option value="investment">Investment</option>
+                </select>
+              </label>
+              <label>
+                <span>Currency</span>
+                <input name="currency" type="text" value="USD" maxlength="3" required>
+              </label>
+              <button type="submit" class="primary">Add Account</button>
+            </form>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>Accounts</h2>
             </div>
             <div class="table-wrap">
               <table>
                 <thead>
                   <tr>
-                    <th>Date</th>
-                    <th>Account</th>
-                    <th>Description</th>
-                    <th>Category</th>
-                    <th>Amount</th>
-                    <th>Notes</th>
+                    <th>Name</th>
+                    <th>Institution</th>
+                    <th>Account type</th>
+                    <th>Rows</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
-                <tbody id="transactionsTable"></tbody>
+                <tbody id="accountsTable"></tbody>
               </table>
             </div>
           </section>
-        </section>
+        </div>
+      </section>
 
-        <section class="view" id="accountsView">
-          <div class="content-grid two-column">
-            <section class="panel">
-              <div class="panel-heading">
-                <h2>Add Account</h2>
-              </div>
-              <form id="accountForm" class="form-grid">
-                <label>
-                  <span>Name</span>
-                  <input name="name" type="text" required autocomplete="off">
-                </label>
-                <label>
-                  <span>Institution</span>
-                  <input name="institution" type="text" autocomplete="off">
-                </label>
-                <label>
-                  <span>Account type</span>
-                  <select name="accountType">
-                    <option value="checking">Checking</option>
-                    <option value="savings">Savings</option>
-                    <option value="credit">Credit</option>
-                    <option value="cash">Cash</option>
-                    <option value="investment">Investment</option>
-                  </select>
-                </label>
-                <label>
-                  <span>Currency</span>
-                  <input name="currency" type="text" value="USD" maxlength="3" required>
-                </label>
-                <button type="submit" class="primary">Add Account</button>
-              </form>
-            </section>
-
-            <section class="panel">
-              <div class="panel-heading">
-                <h2>Accounts</h2>
-              </div>
-              <div class="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Institution</th>
-                      <th>Account type</th>
-                      <th>Rows</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody id="accountsTable"></tbody>
-                </table>
-              </div>
-            </section>
-
-            <section class="panel">
-              <div class="panel-heading">
-                <h2>Categories</h2>
-              </div>
-              <form id="categoryForm" class="inline-form">
-                <input name="name" type="text" placeholder="Category name" required autocomplete="off">
-                <button type="submit" class="primary">Add</button>
-              </form>
-              <div id="categoryList" class="chip-list empty-target"></div>
-            </section>
-
-            <section class="panel">
-              <div class="panel-heading">
-                <h2>Tags</h2>
-              </div>
-              <form id="tagForm" class="inline-form">
-                <input name="name" type="text" placeholder="Tag name" required autocomplete="off">
-                <button type="submit" class="primary">Add</button>
-              </form>
-              <div id="tagList" class="chip-list empty-target"></div>
-            </section>
-          </div>
-        </section>
-
-        <section class="view" id="importView">
-          <div class="content-grid two-column">
-            <section class="panel">
-              <div class="panel-heading">
-                <h2>CSV Import</h2>
-              </div>
-              <form id="importForm" class="form-grid">
-                <label>
-                  <span>Account</span>
-                  <select name="accountId" id="importAccountSelect" required></select>
-                </label>
-                <label>
-                  <span>CSV file</span>
-                  <input name="csvFile" type="file" accept=".csv,text/csv" required>
-                </label>
-                <label>
-                  <span>Source type</span>
-                  <input name="sourceType" type="text" value="csv" required>
-                </label>
-                <button type="submit" class="primary">Import CSV</button>
-              </form>
-              <div id="importMessage" class="message" role="status" aria-live="polite"></div>
-            </section>
-
-            <section class="panel">
-              <div class="panel-heading">
-                <h2>Imported Sources</h2>
-              </div>
-              <div id="importList" class="list empty-target"></div>
-            </section>
-          </div>
-        </section>
-
-        <section class="view" id="rawView">
-          <section class="panel">
-            <div class="panel-heading with-controls">
-              <h2>Raw Imported Rows</h2>
-              <div class="controls">
-                <input id="rawSearch" type="search" placeholder="Search rows" aria-label="Search raw rows">
-                <select id="rawAccountFilter" aria-label="Filter by account"></select>
-                <select id="rawStatusFilter" aria-label="Filter by import status">
-                  <option value="all">All rows</option>
-                  <option value="new">New</option>
-                  <option value="matched">Matched</option>
-                  <option value="unmatched">Unmatched</option>
-                  <option value="imported">Imported</option>
-                  <option value="duplicate">Duplicate</option>
-                  <option value="error">Error</option>
-                </select>
-                <button type="button" class="icon-button" id="selectVisibleRowsButton">Select visible</button>
-                <button type="button" class="primary" id="importSelectedRowsButton">Import selected</button>
-              </div>
-            </div>
-            <div class="table-wrap raw-table">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Select</th>
-                    <th>Status</th>
-                    <th>Account</th>
-                    <th>Date</th>
-                    <th>Category</th>
-                    <th>Description</th>
-                    <th>Amount</th>
-                    <th>Notes</th>
-                  </tr>
-                </thead>
-                <tbody id="rawRowsTable"></tbody>
-              </table>
-            </div>
-          </section>
-        </section>
-
-        <section class="view" id="rulesView">
-          <div class="content-grid two-column">
-            <section class="panel">
-              <div class="panel-heading">
-                <h2>Import Rules</h2>
-              </div>
-              <form id="ruleForm" class="form-grid">
-                <label>
-                  <span>Name</span>
-                  <input name="name" type="text" required autocomplete="off">
-                </label>
-                <label>
-                  <span>Match field</span>
-                  <select name="matchField">
-                    <option value="description">Description</option>
-                    <option value="category">Category</option>
-                  </select>
-                </label>
-                <label>
-                  <span>Match type</span>
-                  <select name="matchType">
-                    <option value="contains">Contains</option>
-                    <option value="equals">Equals</option>
-                    <option value="starts_with">Starts with</option>
-                    <option value="regex">Regex</option>
-                  </select>
-                </label>
-                <label>
-                  <span>Match value</span>
-                  <input name="matchValue" type="text" required autocomplete="off">
-                </label>
-                <label>
-                  <span>Clean description</span>
-                  <input name="setCleanDescription" type="text" autocomplete="off">
-                </label>
-                <label>
-                  <span>Clean Category</span>
-                  <select name="setCategoryId" id="ruleCategorySelect"></select>
-                </label>
-                <label>
-                  <span>Tag</span>
-                  <select name="addTagId" id="ruleTagSelect"></select>
-                </label>
-                <label>
-                  <span>Priority</span>
-                  <input name="priority" type="number" min="0" value="100">
-                </label>
-                <button type="submit" class="primary">Add Rule</button>
-              </form>
-              <div id="ruleList" class="list empty-target"></div>
-            </section>
-          </div>
-        </section>
-
-        <section class="view" id="logsView">
+      <section class="view" id="categoriesView">
+        <div class="content-grid">
           <section class="panel">
             <div class="panel-heading">
-              <h2>Logs & Errors</h2>
+              <h2>Categories</h2>
             </div>
-            <div id="logList" class="list empty-target"></div>
+            <form id="categoryForm" class="inline-form">
+              <input name="name" type="text" placeholder="Category name" required autocomplete="off">
+              <button type="submit" class="primary">Add</button>
+            </form>
+            <div id="categoryList" class="chip-list empty-target"></div>
           </section>
+        </div>
+      </section>
+
+      <section class="view" id="tagsView">
+        <div class="content-grid">
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>Tags</h2>
+            </div>
+            <form id="tagForm" class="inline-form">
+              <input name="name" type="text" placeholder="Tag name" required autocomplete="off">
+              <button type="submit" class="primary">Add</button>
+            </form>
+            <div id="tagList" class="chip-list empty-target"></div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="importView">
+        <div class="content-grid two-column">
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>CSV Import</h2>
+            </div>
+            <form id="importForm" class="form-grid">
+              <label>
+                <span>Account</span>
+                <select name="accountId" id="importAccountSelect" required></select>
+              </label>
+              <label>
+                <span>CSV file</span>
+                <input name="csvFile" type="file" accept=".csv,text/csv" required>
+              </label>
+              <label>
+                <span>Source type</span>
+                <input name="sourceType" type="text" value="csv" required>
+              </label>
+              <button type="submit" class="primary">Import CSV</button>
+            </form>
+            <div id="importMessage" class="message" role="status" aria-live="polite"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>Imported Sources</h2>
+            </div>
+            <div id="importList" class="list empty-target"></div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="rawView">
+        <section class="panel">
+          <div class="panel-heading with-controls">
+            <h2>Raw Imported Rows</h2>
+            <div class="controls">
+              <input id="rawSearch" type="search" placeholder="Search rows" aria-label="Search raw rows">
+              <select id="rawAccountFilter" aria-label="Filter by account"></select>
+              <select id="rawStatusFilter" aria-label="Filter by import status">
+                <option value="all">All rows</option>
+                <option value="new">New</option>
+                <option value="matched">Matched</option>
+                <option value="unmatched">Unmatched</option>
+                <option value="imported">Imported</option>
+                <option value="duplicate">Duplicate</option>
+                <option value="error">Error</option>
+              </select>
+              <button type="button" class="icon-button" id="selectVisibleRowsButton">Select visible</button>
+              <button type="button" class="primary" id="importSelectedRowsButton">Import selected</button>
+            </div>
+          </div>
+          <div class="table-wrap raw-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Select</th>
+                  <th>Status</th>
+                  <th>Account</th>
+                  <th>Date</th>
+                  <th>Category</th>
+                  <th>Description</th>
+                  <th>Amount</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody id="rawRowsTable"></tbody>
+            </table>
+          </div>
         </section>
-      </main>
-    </div>
+      </section>
 
-    <dialog id="accountEditDialog" class="modal">
-      <form id="accountEditForm" class="modal-panel">
-        <div class="panel-heading">
-          <h2>Edit Account</h2>
-          <button class="icon-only" type="button" id="accountEditCancelButton" aria-label="Close">
-            <span class="material-symbols-outlined" aria-hidden="true">close</span>
-          </button>
+      <section class="view" id="rulesView">
+        <div class="content-grid two-column">
+          <section class="panel">
+            <div class="panel-heading">
+              <h2>Import Rules</h2>
+            </div>
+            <form id="ruleForm" class="form-grid">
+              <label>
+                <span>Name</span>
+                <input name="name" type="text" required autocomplete="off">
+              </label>
+              <label>
+                <span>Match field</span>
+                <select name="matchField">
+                  <option value="description">Description</option>
+                  <option value="category">Category</option>
+                </select>
+              </label>
+              <label>
+                <span>Match type</span>
+                <select name="matchType">
+                  <option value="contains">Contains</option>
+                  <option value="equals">Equals</option>
+                  <option value="starts_with">Starts with</option>
+                  <option value="regex">Regex</option>
+                </select>
+              </label>
+              <label>
+                <span>Match value</span>
+                <input name="matchValue" type="text" required autocomplete="off">
+              </label>
+              <label>
+                <span>Clean description</span>
+                <input name="setCleanDescription" type="text" autocomplete="off">
+              </label>
+              <label>
+                <span>Clean Category</span>
+                <select name="setCategoryId" id="ruleCategorySelect"></select>
+              </label>
+              <label>
+                <span>Tag</span>
+                <select name="addTagId" id="ruleTagSelect"></select>
+              </label>
+              <label>
+                <span>Priority</span>
+                <input name="priority" type="number" min="0" value="100">
+              </label>
+              <button type="submit" class="primary">Add Rule</button>
+            </form>
+            <div id="ruleList" class="list empty-target"></div>
+          </section>
         </div>
-        <div class="form-grid">
-          <label>
-            <span>Name</span>
-            <input name="name" type="text" required autocomplete="off">
-          </label>
-          <label>
-            <span>Institution</span>
-            <input name="institution" type="text" autocomplete="off">
-          </label>
-          <label>
-            <span>Account type</span>
-            <select name="accountType">
-              <option value="checking">Checking</option>
-              <option value="savings">Savings</option>
-              <option value="credit">Credit</option>
-              <option value="cash">Cash</option>
-              <option value="investment">Investment</option>
-            </select>
-          </label>
-          <label>
-            <span>Currency</span>
-            <input name="currency" type="text" maxlength="3" required>
-          </label>
-        </div>
-        <div class="modal-actions">
-          <button type="button" class="icon-button" id="accountEditDismissButton">Cancel</button>
-          <button type="submit" class="primary">Save</button>
-        </div>
-      </form>
-    </dialog>
+      </section>
 
-    <template id="emptyTemplate">
-      <div class="empty">No rows yet.</div>
-    </template>
+      <section class="view" id="settingsView">
+        <section class="panel">
+          <div class="panel-heading">
+            <h2>Settings</h2>
+          </div>
+          <div class="settings-list">
+            <div class="setting-row">
+              <div>
+                <strong>Theme</strong>
+              </div>
+              <label class="theme-toggle" title="Toggle theme">
+                <input type="checkbox" id="settingsThemeToggle" checked aria-label="Use dark theme">
+                <span class="theme-track" aria-hidden="true">
+                  <span class="theme-thumb"></span>
+                  <span class="theme-icon theme-icon-light material-symbols-outlined">light_mode</span>
+                  <span class="theme-icon theme-icon-dark material-symbols-outlined">dark_mode</span>
+                </span>
+              </label>
+            </div>
+          </div>
+        </section>
+      </section>
 
-    <script src="app.js"></script>
-  </body>
+      <section class="view" id="logsView">
+        <section class="panel">
+          <div class="panel-heading">
+            <h2>Logs & Errors</h2>
+          </div>
+          <div id="logList" class="list empty-target"></div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="accountEditDialog" class="modal">
+    <form id="accountEditForm" class="modal-panel">
+      <div class="panel-heading">
+        <h2>Edit Account</h2>
+        <button class="icon-only" type="button" id="accountEditCancelButton" aria-label="Close">
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <div class="form-grid">
+        <label>
+          <span>Name</span>
+          <input name="name" type="text" required autocomplete="off">
+        </label>
+        <label>
+          <span>Institution</span>
+          <input name="institution" type="text" autocomplete="off">
+        </label>
+        <label>
+          <span>Account type</span>
+          <select name="accountType">
+            <option value="checking">Checking</option>
+            <option value="savings">Savings</option>
+            <option value="credit">Credit</option>
+            <option value="cash">Cash</option>
+            <option value="investment">Investment</option>
+          </select>
+        </label>
+        <label>
+          <span>Currency</span>
+          <input name="currency" type="text" maxlength="3" required>
+        </label>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="icon-button" id="accountEditDismissButton">Cancel</button>
+        <button type="submit" class="primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <template id="emptyTemplate">
+    <div class="empty">No rows yet.</div>
+  </template>
+
+  <script src="app.js"></script>
+</body>
+
 </html>
