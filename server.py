@@ -9,7 +9,7 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Any
 
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, request, send_from_directory, has_request_context
 
 
 ROOT = Path(__file__).resolve().parent
@@ -43,11 +43,14 @@ from db_cli import (  # noqa: E402
     validate_match_field,
     validate_match_type,
     validate_rule_actions,
+    parse_amount_cents,
+    make_transaction_hash,
 )
 from init_db import init_db  # noqa: E402
 
 
 app = Flask(__name__, static_folder=str(ROOT), static_url_path="")
+DUMMY_DB_PATH = DEFAULT_DB_PATH.with_name("transactions.dummy.sqlite")
 
 
 @app.errorhandler(CliError)
@@ -81,13 +84,14 @@ def index():
 
 @app.get("/api/health")
 def health():
-    return jsonify({"status": "ok", "database": str(DEFAULT_DB_PATH)})
+    db_path = current_db_path()
+    return jsonify({"status": "ok", "database": str(db_path), "is_dummy_database": db_path == DUMMY_DB_PATH})
 
 
 @app.get("/api/state")
 def get_state():
     ensure_database()
-    with closing(connect(DEFAULT_DB_PATH)) as conn:
+    with closing(connect(current_db_path())) as conn:
         state = read_state(conn)
         conn.commit()
         return jsonify(state)
@@ -102,7 +106,7 @@ def create_account():
     account_type = optional_nonempty(data.get("account_type"), "account_type")
     currency = normalize_currency(str(data.get("currency", "USD")))
 
-    with closing(connect(DEFAULT_DB_PATH)) as conn:
+    with closing(connect(current_db_path())) as conn:
         institution_id = get_or_create_institution(conn, institution)
         cursor = conn.execute(
             """
@@ -125,7 +129,7 @@ def update_account(account_id: int):
     updates: list[str] = []
     values: list[Any] = []
 
-    with closing(connect(DEFAULT_DB_PATH)) as conn:
+    with closing(connect(current_db_path())) as conn:
         fetch_account(conn, account_id)
         if "name" in data:
             updates.append("name = ?")
@@ -155,7 +159,7 @@ def update_account(account_id: int):
 @app.delete("/api/accounts/<int:account_id>")
 def delete_account(account_id: int):
     ensure_database()
-    with closing(connect(DEFAULT_DB_PATH)) as conn:
+    with closing(connect(current_db_path())) as conn:
         account = dict(fetch_account(conn, account_id))
         require_account_unused(conn, account_id)
         conn.execute("DELETE FROM accounts WHERE id = ?", (account_id,))
@@ -171,7 +175,7 @@ def create_tag():
     data = request.get_json(silent=True) or {}
     name = nonempty(str(data.get("name", "")), "name")
 
-    with closing(connect(DEFAULT_DB_PATH)) as conn:
+    with closing(connect(current_db_path())) as conn:
         if fetch_tag_by_name(conn, name) is not None:
             raise CliError(f"Tag already exists: {name}")
         cursor = conn.execute("INSERT INTO tags (name) VALUES (?)", (name,))
@@ -188,7 +192,7 @@ def update_tag(tag_id: int):
     data = request.get_json(silent=True) or {}
     name = nonempty(str(data.get("name", "")), "name")
 
-    with closing(connect(DEFAULT_DB_PATH)) as conn:
+    with closing(connect(current_db_path())) as conn:
         fetch_tag_by_id(conn, tag_id)
         conn.execute("UPDATE tags SET name = ? WHERE id = ?", (name, tag_id))
         tag = dict(fetch_tag_by_id(conn, tag_id))
@@ -201,7 +205,7 @@ def update_tag(tag_id: int):
 @app.delete("/api/tags/<int:tag_id>")
 def delete_tag(tag_id: int):
     ensure_database()
-    with closing(connect(DEFAULT_DB_PATH)) as conn:
+    with closing(connect(current_db_path())) as conn:
         tag = dict(fetch_tag_by_id(conn, tag_id))
         require_tag_unused(conn, tag_id)
         conn.execute("DELETE FROM tags WHERE id = ?", (tag_id,))
@@ -217,7 +221,7 @@ def create_category():
     data = request.get_json(silent=True) or {}
     name = nonempty(str(data.get("name", "")), "name")
 
-    with closing(connect(DEFAULT_DB_PATH)) as conn:
+    with closing(connect(current_db_path())) as conn:
         existing = conn.execute(
             "SELECT id FROM categories WHERE name = ?",
             (name,),
@@ -238,7 +242,7 @@ def update_category(category_id: int):
     data = request.get_json(silent=True) or {}
     name = nonempty(str(data.get("name", "")), "name")
 
-    with closing(connect(DEFAULT_DB_PATH)) as conn:
+    with closing(connect(current_db_path())) as conn:
         fetch_category(conn, category_id)
         conn.execute("UPDATE categories SET name = ? WHERE id = ?", (name, category_id))
         category = dict(fetch_category(conn, category_id))
@@ -251,7 +255,7 @@ def update_category(category_id: int):
 @app.delete("/api/categories/<int:category_id>")
 def delete_category(category_id: int):
     ensure_database()
-    with closing(connect(DEFAULT_DB_PATH)) as conn:
+    with closing(connect(current_db_path())) as conn:
         category = dict(fetch_category(conn, category_id))
         require_category_unused(conn, category_id)
         conn.execute("DELETE FROM categories WHERE id = ?", (category_id,))
@@ -276,7 +280,7 @@ def create_rule():
 
     validate_rule_actions(set_category_id, set_clean_description, add_tag_id)
 
-    with closing(connect(DEFAULT_DB_PATH)) as conn:
+    with closing(connect(current_db_path())) as conn:
         if set_category_id is not None:
             require_category(conn, set_category_id)
         if add_tag_id is not None:
@@ -311,7 +315,7 @@ def update_rule(rule_id: int):
     updates: list[str] = []
     values: list[Any] = []
 
-    with closing(connect(DEFAULT_DB_PATH)) as conn:
+    with closing(connect(current_db_path())) as conn:
         current = fetch_transaction_rule(conn, rule_id)
         next_set_category_id = current["set_category_id"]
         next_set_clean_description = current["set_clean_description"]
@@ -371,13 +375,105 @@ def update_rule(rule_id: int):
 @app.delete("/api/rules/<int:rule_id>")
 def delete_rule(rule_id: int):
     ensure_database()
-    with closing(connect(DEFAULT_DB_PATH)) as conn:
+    with closing(connect(current_db_path())) as conn:
         rule = dict(fetch_transaction_rule(conn, rule_id))
         conn.execute("DELETE FROM transaction_import_rules WHERE id = ?", (rule_id,))
         state = read_state(conn)
         conn.commit()
 
     return jsonify({"status": "deleted", "transaction_rule": rule, "state": state})
+
+
+@app.patch("/api/transactions/<int:transaction_id>")
+def update_transaction(transaction_id: int):
+    ensure_database()
+    data = request.get_json(silent=True) or {}
+    updates: list[str] = []
+    values: list[Any] = []
+
+    with closing(connect(current_db_path())) as conn:
+        transaction = conn.execute(
+            """
+            SELECT id, account_id, posted_date, amount_cents, clean_description
+            FROM transactions
+            WHERE id = ?
+            """,
+            (transaction_id,),
+        ).fetchone()
+        if transaction is None:
+            raise CliError(f"Transaction not found: {transaction_id}")
+        next_account_id = int(transaction["account_id"])
+        next_posted_date = transaction["posted_date"]
+        next_amount_cents = int(transaction["amount_cents"])
+        next_clean_description = transaction["clean_description"]
+
+        if "account_id" in data:
+            next_account_id = int(data.get("account_id"))
+            fetch_account(conn, next_account_id)
+            updates.append("account_id = ?")
+            values.append(next_account_id)
+        if "posted_date" in data:
+            next_posted_date = nonempty(str(data.get("posted_date", "")), "posted_date")
+            updates.append("posted_date = ?")
+            updates.append("transaction_date = ?")
+            values.extend([next_posted_date, next_posted_date])
+        if "category_id" in data:
+            raw_category_id = data.get("category_id")
+            category_id = int(raw_category_id) if raw_category_id is not None else None
+            if category_id is not None:
+                require_category(conn, category_id)
+            updates.append("category_id = ?")
+            values.append(category_id)
+        if "amount" in data:
+            next_amount_cents = parse_amount_cents(str(data.get("amount", "")))
+            updates.append("amount_cents = ?")
+            values.append(next_amount_cents)
+        if "clean_description" in data:
+            next_clean_description = optional_nonempty(data.get("clean_description"), "clean_description")
+            updates.append("clean_description = ?")
+            values.append(next_clean_description)
+        if "status" in data:
+            status = nonempty(str(data.get("status", "")), "status")
+            if status not in {"pending", "posted", "void"}:
+                raise CliError("status must be pending, posted, or void.")
+            updates.append("status = ?")
+            values.append(status)
+        notes_requested = "notes" in data
+        notes = optional_nonempty(data.get("notes"), "notes") if notes_requested else None
+
+        if updates:
+            updates.append("transaction_hash = ?")
+            values.append(
+                make_transaction_hash(
+                    next_account_id,
+                    next_posted_date,
+                    next_amount_cents,
+                    next_clean_description,
+                )
+            )
+            updates.append("updated_at = datetime('now')")
+            values.append(transaction_id)
+            conn.execute(f"UPDATE transactions SET {', '.join(updates)} WHERE id = ?", values)
+        if notes_requested:
+            conn.execute("DELETE FROM transaction_notes WHERE transaction_id = ?", (transaction_id,))
+            if notes is not None:
+                conn.execute(
+                    "INSERT INTO transaction_notes (transaction_id, note) VALUES (?, ?)",
+                    (transaction_id, notes),
+                )
+        if not updates and not notes_requested:
+            raise CliError("No changes requested.")
+
+        state = read_state(conn)
+        updated_transaction = next(
+            (item for item in state["transactions"] if int(item["id"]) == transaction_id),
+            None,
+        )
+        if updated_transaction is None:
+            raise CliError(f"Transaction not found: {transaction_id}")
+        conn.commit()
+
+    return jsonify({"transaction": updated_transaction, "state": state})
 
 
 @app.post("/api/imports/csv")
@@ -408,7 +504,7 @@ def import_csv():
         "layout": detect_csv_layout(fieldnames),
     }
 
-    with closing(connect(DEFAULT_DB_PATH)) as conn:
+    with closing(connect(current_db_path())) as conn:
         account = dict(fetch_account(conn, account_id))
         existing = conn.execute(
             "SELECT id, account_id FROM imported_source WHERE sha256 = ?",
@@ -504,7 +600,7 @@ def import_selected_raw_rows():
     if not isinstance(raw_row_notes, dict):
         raise CliError("raw_row_notes must be an object.")
 
-    with closing(connect(DEFAULT_DB_PATH)) as conn:
+    with closing(connect(current_db_path())) as conn:
         result = import_raw_rows(
             conn,
             [parse_positive_int(str(row_id), "raw_row_id") for row_id in raw_row_ids],
@@ -525,23 +621,30 @@ def regenerate_database():
     if data.get("confirm") != "DELETE ALL DATA":
         raise CliError("Regenerate database requires confirmation.")
 
+    db_path = current_db_path()
     for path in [
-        DEFAULT_DB_PATH,
-        DEFAULT_DB_PATH.with_name(f"{DEFAULT_DB_PATH.name}-wal"),
-        DEFAULT_DB_PATH.with_name(f"{DEFAULT_DB_PATH.name}-shm"),
+        db_path,
+        db_path.with_name(f"{db_path.name}-wal"),
+        db_path.with_name(f"{db_path.name}-shm"),
     ]:
         path.unlink(missing_ok=True)
 
-    init_db(DEFAULT_DB_PATH)
-    with closing(connect(DEFAULT_DB_PATH)) as conn:
+    init_db(db_path)
+    with closing(connect(db_path)) as conn:
         state = read_state(conn)
         conn.commit()
 
     return jsonify({"status": "regenerated", "state": state})
 
 
+def current_db_path() -> Path:
+    if has_request_context() and request.headers.get("X-Use-Dummy-Database") == "1":
+        return DUMMY_DB_PATH
+    return DEFAULT_DB_PATH
+
+
 def ensure_database() -> None:
-    init_db(DEFAULT_DB_PATH)
+    init_db(current_db_path())
 
 
 def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
@@ -621,13 +724,25 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
                 printf('%.2f', t.amount_cents / 100.0) AS amount,
                 t.currency,
                 t.status,
+                t.transaction_hash,
                 t.raw_imported_row_id,
+                rr.raw_date,
+                rr.raw_category,
+                rr.raw_description,
+                rr.raw_amount,
+                rr.import_status AS raw_import_status,
+                rr.import_error AS raw_import_error,
+                src.filename AS import_filename,
+                src.source_type AS import_source_type,
+                src.imported_at,
                 COALESCE(group_concat(n.note, char(10)), '') AS notes,
                 t.created_at,
                 t.updated_at
             FROM transactions t
             JOIN accounts a ON a.id = t.account_id
             LEFT JOIN categories c ON c.id = t.category_id
+            LEFT JOIN raw_imported_rows rr ON rr.id = t.raw_imported_row_id
+            LEFT JOIN imported_source src ON src.id = rr.imported_source_id
             LEFT JOIN transaction_notes n ON n.transaction_id = t.id
             GROUP BY t.id
             ORDER BY t.posted_date DESC, t.id DESC
@@ -749,3 +864,4 @@ if __name__ == "__main__":
         debug=True,
         use_reloader=False,
     )
+

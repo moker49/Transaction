@@ -1,5 +1,6 @@
 (function () {
   const API_BASE = window.location.protocol === "file:" ? "http://127.0.0.1:5050" : "";
+  const DUMMY_DATABASE_KEY = "transaction-use-dummy-database";
 
   const defaultState = {
     accounts: [],
@@ -18,6 +19,8 @@
   let visibleRawRows = [];
   let editingAccountId = null;
   let editingRuleId = null;
+  let activeTransactionId = null;
+  let transactionEditMode = false;
   let accountDialogMode = "add";
   let ruleDialogMode = "add";
   let confirmResolver = null;
@@ -42,6 +45,9 @@
     importMessage: document.querySelector("#importMessage"),
     devMessage: document.querySelector("#devMessage"),
     importAccountSelect: document.querySelector("#importAccountSelect"),
+    dummyDatabaseToggle: document.querySelector("#dummyDatabaseToggle"),
+    dummyDatabaseLabel: document.querySelector("#dummyDatabaseLabel"),
+    dummyDatabaseDescription: document.querySelector("#dummyDatabaseDescription"),
     rawAccountFilter: document.querySelector("#rawAccountFilter"),
     rawStatusFilter: document.querySelector("#rawStatusFilter"),
     rawRowsTableElement: document.querySelector("#rawRowsTableElement"),
@@ -79,6 +85,18 @@
     confirmCancelButton: document.querySelector("#confirmCancelButton"),
     confirmDismissButton: document.querySelector("#confirmDismissButton"),
     confirmSubmitButton: document.querySelector("#confirmSubmitButton"),
+    transactionDialog: document.querySelector("#transactionDialog"),
+    transactionForm: document.querySelector("#transactionForm"),
+    transactionDialogTitle: document.querySelector("#transactionDialogTitle"),
+    transactionCloseButton: document.querySelector("#transactionCloseButton"),
+    transactionAccountSelect: document.querySelector("#transactionAccountSelect"),
+    transactionCategorySelect: document.querySelector("#transactionCategorySelect"),
+    transactionRawValues: document.querySelector("#transactionRawValues"),
+    transactionMetadata: document.querySelector("#transactionMetadata"),
+    transactionMessage: document.querySelector("#transactionMessage"),
+    transactionEditButton: document.querySelector("#transactionEditButton"),
+    transactionCancelButton: document.querySelector("#transactionCancelButton"),
+    transactionSaveButton: document.querySelector("#transactionSaveButton"),
   };
 
   elements.navItems.forEach((navItem) => {
@@ -101,6 +119,7 @@
   elements.selectVisibleRowsButton.addEventListener("click", selectVisibleRawRows);
   elements.importSelectedRowsButton.addEventListener("click", importSelectedRawRows);
   elements.regenerateDatabaseButton.addEventListener("click", regenerateDatabase);
+  elements.dummyDatabaseToggle.addEventListener("change", updateDatabaseMode);
   elements.ruleAddButton.addEventListener("click", openRuleAddDialog);
   elements.ruleCancelButton.addEventListener("click", closeRuleDialog);
   elements.ruleDismissButton.addEventListener("click", closeRuleDialog);
@@ -128,8 +147,17 @@
     event.preventDefault();
     closeConfirmDialog(false);
   });
+  elements.transactionForm.addEventListener("submit", saveTransaction);
+  elements.transactionCloseButton.addEventListener("click", closeTransactionDialog);
+  elements.transactionEditButton.addEventListener("click", () => setTransactionEditMode(true));
+  elements.transactionCancelButton.addEventListener("click", cancelTransactionEdit);
+  elements.transactionDialog.addEventListener("close", () => {
+    activeTransactionId = null;
+    transactionEditMode = false;
+  });
 
   initializeTheme();
+  initializeDatabaseMode();
   activateView("overview");
   loadInitialState();
 
@@ -149,6 +177,38 @@
     setTheme(event.currentTarget.checked ? "dark" : "light");
   }
 
+  function initializeDatabaseMode() {
+    elements.dummyDatabaseToggle.checked = localStorage.getItem(DUMMY_DATABASE_KEY) === "true";
+    renderDatabaseModeLabel();
+  }
+
+  function updateDatabaseMode(event) {
+    localStorage.setItem(DUMMY_DATABASE_KEY, event.currentTarget.checked ? "true" : "false");
+    renderDatabaseModeLabel();
+    selectedRawRowIds.clear();
+    rawRowNotes.clear();
+    visibleRawRows = [];
+    setMessage("");
+    setDevMessage(event.currentTarget.checked ? "Using dummy database." : "Using primary database.");
+    loadInitialState();
+  }
+
+  function isUsingDummyDatabase() {
+    return elements.dummyDatabaseToggle.checked;
+  }
+
+  function renderDatabaseModeLabel() {
+    if (isUsingDummyDatabase()) {
+      elements.dummyDatabaseLabel.textContent = "Using dummy database";
+      elements.dummyDatabaseDescription.textContent =
+        "All reads, writes, imports, and dev actions are using data/transactions.dummy.sqlite.";
+      return;
+    }
+    elements.dummyDatabaseLabel.textContent = "Using primary database";
+    elements.dummyDatabaseDescription.textContent =
+      "All reads, writes, imports, and dev actions are using data/transactions.sqlite.";
+  }
+
   async function loadInitialState() {
     try {
       state = normalizeState(await apiRequest("/api/state"));
@@ -160,9 +220,14 @@
   }
 
   async function apiRequest(path, options = {}) {
+    const headers = {
+      ...(options.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
+      "X-Use-Dummy-Database": isUsingDummyDatabase() ? "1" : "0",
+      ...(options.headers || {}),
+    };
     const response = await fetch(`${API_BASE}${path}`, {
-      headers: options.body instanceof FormData ? undefined : { "Content-Type": "application/json" },
       ...options,
+      headers,
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -606,15 +671,130 @@
     }
 
     state.transactions.forEach((transaction) => {
-      tbody.appendChild(tableRow([
+      const row = tableRow([
         transaction.posted_date || "-",
         transaction.category || "-",
         transaction.amount || formatCents(transaction.amount_cents),
         transaction.clean_description || "-",
         transaction.account || "-",
         transaction.notes || "-",
-      ]));
+      ]);
+      row.classList.add("clickable-row");
+      row.tabIndex = 0;
+      row.setAttribute("role", "button");
+      row.setAttribute("aria-label", `View transaction ${transaction.clean_description || transaction.id}`);
+      row.addEventListener("click", () => openTransactionDialog(transaction));
+      row.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          openTransactionDialog(transaction);
+        }
+      });
+      tbody.appendChild(row);
     });
+  }
+
+  function openTransactionDialog(transaction) {
+    activeTransactionId = transaction.id;
+    transactionEditMode = false;
+    elements.transactionDialog.showModal();
+    populateTransactionDialog(transaction);
+    setTransactionEditMode(false);
+  }
+
+  function closeTransactionDialog() {
+    elements.transactionDialog.close();
+  }
+
+  function activeTransaction() {
+    return state.transactions.find((transaction) => transaction.id === activeTransactionId) || null;
+  }
+
+  function populateTransactionDialog(transaction) {
+    const form = elements.transactionForm;
+    elements.transactionDialogTitle.textContent = transaction.clean_description || `Transaction ${transaction.id}`;
+    elements.transactionMessage.textContent = "";
+    elements.transactionMessage.classList.remove("error");
+    form.elements.postedDate.value = transaction.posted_date || "";
+    form.elements.accountId.value = String(transaction.account_id);
+    form.elements.categoryId.value = transaction.category_id === null ? "" : String(transaction.category_id);
+    form.elements.amount.value = transaction.amount || formatCents(transaction.amount_cents);
+    form.elements.cleanDescription.value = transaction.clean_description || "";
+    form.elements.status.value = transaction.status || "posted";
+    form.elements.notes.value = transaction.notes || "";
+    renderDefinitionList(elements.transactionRawValues, [
+      ["Raw date", transaction.raw_date],
+      ["Raw category", transaction.raw_category],
+      ["Raw amount", transaction.raw_amount],
+      ["Raw description", transaction.raw_description],
+      ["Raw row status", transaction.raw_import_status],
+      ["Raw row error", transaction.raw_import_error],
+    ]);
+    renderDefinitionList(elements.transactionMetadata, [
+      ["ID", transaction.id],
+      ["Account", transaction.account],
+      ["Currency", transaction.currency],
+      ["Transaction date", transaction.transaction_date],
+      ["Raw row ID", transaction.raw_imported_row_id],
+      ["Import file", transaction.import_filename],
+      ["Import source", transaction.import_source_type],
+      ["Imported at", formatMaybeDateTime(transaction.imported_at)],
+      ["Created", formatMaybeDateTime(transaction.created_at)],
+      ["Updated", formatMaybeDateTime(transaction.updated_at)],
+      ["Hash", transaction.transaction_hash],
+    ]);
+  }
+
+  function setTransactionEditMode(isEditing) {
+    transactionEditMode = isEditing;
+    elements.transactionForm.querySelectorAll("[data-editable-field]").forEach((field) => {
+      if (field.tagName === "SELECT") {
+        field.disabled = !isEditing;
+      } else {
+        field.readOnly = !isEditing;
+      }
+    });
+    elements.transactionEditButton.hidden = isEditing;
+    elements.transactionCancelButton.hidden = !isEditing;
+    elements.transactionSaveButton.hidden = !isEditing;
+  }
+
+  function cancelTransactionEdit() {
+    const transaction = activeTransaction();
+    if (!transaction) {
+      return;
+    }
+    populateTransactionDialog(transaction);
+    setTransactionEditMode(false);
+  }
+
+  async function saveTransaction(event) {
+    event.preventDefault();
+    const transaction = activeTransaction();
+    if (!transaction || !transactionEditMode) {
+      return;
+    }
+    const form = new FormData(elements.transactionForm);
+    try {
+      const payload = await apiRequest(`/api/transactions/${transaction.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          posted_date: clean(form.get("postedDate")),
+          account_id: Number(form.get("accountId")),
+          category_id: Number(form.get("categoryId")) || null,
+          amount: clean(form.get("amount")),
+          clean_description: clean(form.get("cleanDescription")) || null,
+          status: clean(form.get("status")),
+          notes: clean(form.get("notes")),
+        }),
+      });
+      applyStateFromPayload(payload);
+      activeTransactionId = payload.transaction.id;
+      populateTransactionDialog(payload.transaction);
+      setTransactionEditMode(false);
+    } catch (error) {
+      setModalMessage(elements.transactionMessage, error.message || "Could not update transaction.", true);
+    }
   }
 
   function renderAccountSelects() {
@@ -624,6 +804,7 @@
 
     fillSelect(elements.importAccountSelect, options, "Select account");
     fillSelect(elements.rawAccountFilter, [{ value: "all", label: "All accounts" }, ...options]);
+    fillSelect(elements.transactionAccountSelect, options);
   }
 
   function renderImports() {
@@ -700,6 +881,13 @@
 
     fillSelect(
       elements.ruleCategorySelect,
+      [
+        { value: "", label: "No category" },
+        ...state.categories.map((category) => ({ value: String(category.id), label: category.name })),
+      ],
+    );
+    fillSelect(
+      elements.transactionCategorySelect,
       [
         { value: "", label: "No category" },
         ...state.categories.map((category) => ({ value: String(category.id), label: category.name })),
@@ -1325,6 +1513,17 @@
     }
   }
 
+  function renderDefinitionList(list, items) {
+    clear(list);
+    items.forEach(([label, value]) => {
+      const term = document.createElement("dt");
+      term.textContent = label;
+      const detail = document.createElement("dd");
+      detail.textContent = value === null || value === undefined || value === "" ? "-" : String(value);
+      list.append(term, detail);
+    });
+  }
+
   function tableRow(values) {
     const tr = document.createElement("tr");
     values.forEach((value) => tr.appendChild(cell(value)));
@@ -1400,5 +1599,9 @@
       dateStyle: "medium",
       timeStyle: "short",
     }).format(new Date(value));
+  }
+
+  function formatMaybeDateTime(value) {
+    return value ? formatDateTime(value) : "-";
   }
 })();

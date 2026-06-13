@@ -318,6 +318,20 @@
             <h2>Dev</h2>
           </div>
           <div class="settings-list">
+            <div class="setting-row">
+              <div>
+                <strong id="dummyDatabaseLabel">Use dummy database</strong>
+                <span class="setting-note" id="dummyDatabaseDescription">Route all reads, writes, imports, and dev actions to a separate dummy SQLite file.</span>
+              </div>
+              <label class="theme-toggle" title="Use dummy database">
+                <input type="checkbox" id="dummyDatabaseToggle" aria-label="Use dummy database">
+                <span class="theme-track" aria-hidden="true">
+                  <span class="theme-thumb"></span>
+                  <span class="theme-icon theme-icon-light material-symbols-outlined">database</span>
+                  <span class="theme-icon theme-icon-dark material-symbols-outlined">science</span>
+                </span>
+              </label>
+            </div>
             <div class="setting-row danger-row">
               <div>
                 <strong>Regenerate database</strong>
@@ -437,6 +451,70 @@
       <div class="modal-actions">
         <button type="button" class="icon-button" id="ruleDismissButton">Cancel</button>
         <button type="submit" class="primary" id="ruleSubmitButton">Add Rule</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="transactionDialog" class="modal wide-modal">
+    <form id="transactionForm" class="modal-panel">
+      <div class="panel-heading">
+        <h2 id="transactionDialogTitle">Transaction</h2>
+        <button class="icon-only" type="button" id="transactionCloseButton" aria-label="Close">
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <div class="transaction-detail-grid">
+        <section>
+          <h3>Clean Values</h3>
+          <div class="detail-list">
+            <label>
+              <span>Date</span>
+              <input name="postedDate" type="date" data-editable-field readonly>
+            </label>
+            <label>
+              <span>Category</span>
+              <select name="categoryId" id="transactionCategorySelect" data-editable-field disabled></select>
+            </label>
+            <label>
+              <span>Account</span>
+              <select name="accountId" id="transactionAccountSelect" data-editable-field disabled></select>
+            </label>
+            <label>
+              <span>Amount</span>
+              <input name="amount" type="text" inputmode="decimal" data-editable-field readonly>
+            </label>
+            <label>
+              <span>Description</span>
+              <input name="cleanDescription" type="text" data-editable-field readonly>
+            </label>
+            <label>
+              <span>Status</span>
+              <select name="status" data-editable-field disabled>
+                <option value="pending">Pending</option>
+                <option value="posted">Posted</option>
+                <option value="void">Void</option>
+              </select>
+            </label>
+            <label>
+              <span>Notes</span>
+              <textarea name="notes" rows="4" data-editable-field readonly></textarea>
+            </label>
+          </div>
+        </section>
+        <section>
+          <h3>Raw Values</h3>
+          <dl id="transactionRawValues" class="detail-list readonly-details"></dl>
+        </section>
+        <section>
+          <h3>Metadata</h3>
+          <dl id="transactionMetadata" class="detail-list readonly-details"></dl>
+        </section>
+      </div>
+      <div id="transactionMessage" class="modal-message" role="status" aria-live="polite"></div>
+      <div class="modal-actions">
+        <button type="button" class="icon-button" id="transactionEditButton">Edit</button>
+        <button type="button" class="icon-button" id="transactionCancelButton" hidden>Cancel</button>
+        <button type="submit" class="primary" id="transactionSaveButton" hidden>Save</button>
       </div>
     </form>
   </dialog>
