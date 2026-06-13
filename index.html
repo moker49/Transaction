@@ -64,49 +64,23 @@
       </div>
 
       <section class="view is-active" id="overviewView">
-        <div class="metric-grid">
+        <div class="metric-grid dashboard-grid">
           <div class="metric">
-            <span class="metric-label">Accounts</span>
-            <strong id="accountCount">0</strong>
+            <span class="metric-label">Income</span>
+            <strong id="dashboardIncome">$0.00</strong>
           </div>
           <div class="metric">
-            <span class="metric-label">Imports</span>
-            <strong id="importCount">0</strong>
+            <span class="metric-label">Bills</span>
+            <strong id="dashboardBills">$0.00</strong>
           </div>
           <div class="metric">
-            <span class="metric-label">Raw rows</span>
-            <strong id="rawRowCount">0</strong>
+            <span class="metric-label">Splurge</span>
+            <strong id="dashboardSplurge">$0.00</strong>
           </div>
           <div class="metric">
-            <span class="metric-label">New rows</span>
-            <strong id="newImportCount">0</strong>
+            <span class="metric-label">Saved</span>
+            <strong id="dashboardSaved">$0.00</strong>
           </div>
-        </div>
-
-        <div class="content-grid two-column">
-          <section class="panel">
-            <div class="panel-heading">
-              <h2>Recent Imports</h2>
-            </div>
-            <div id="recentImports" class="list empty-target"></div>
-          </section>
-          <section class="panel">
-            <div class="panel-heading">
-              <h2>Raw Row Snapshot</h2>
-            </div>
-            <div class="table-wrap compact">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Description</th>
-                    <th>Amount</th>
-                  </tr>
-                </thead>
-                <tbody id="snapshotRows"></tbody>
-              </table>
-            </div>
-          </section>
         </div>
       </section>
 
@@ -357,7 +331,7 @@
     </main>
   </div>
 
-  <dialog id="accountDialog" class="modal">
+  <dialog id="accountDialog" class="modal" tabindex="-1">
     <form id="accountForm" class="modal-panel">
       <div class="panel-heading">
         <h2 id="accountDialogTitle">Edit Account</h2>
@@ -397,7 +371,7 @@
     </form>
   </dialog>
 
-  <dialog id="ruleDialog" class="modal">
+  <dialog id="ruleDialog" class="modal" tabindex="-1">
     <form id="ruleForm" class="modal-panel">
       <div class="panel-heading">
         <h2 id="ruleDialogTitle">Add Rule</h2>
@@ -455,7 +429,7 @@
     </form>
   </dialog>
 
-  <dialog id="transactionDialog" class="modal wide-modal">
+  <dialog id="transactionDialog" class="modal wide-modal" tabindex="-1">
     <form id="transactionForm" class="modal-panel">
       <div class="panel-heading">
         <h2 id="transactionDialogTitle">Transaction</h2>
@@ -523,7 +497,7 @@
     </form>
   </dialog>
 
-  <dialog id="textInputDialog" class="modal">
+  <dialog id="textInputDialog" class="modal" tabindex="-1">
     <form id="textInputForm" class="modal-panel">
       <div class="panel-heading">
         <h2 id="textInputTitle">Edit</h2>
@@ -544,7 +518,7 @@
     </form>
   </dialog>
 
-  <dialog id="confirmDialog" class="modal confirm-modal">
+  <dialog id="confirmDialog" class="modal confirm-modal" tabindex="-1">
     <form id="confirmForm" class="modal-panel">
       <div class="panel-heading">
         <h2 id="confirmTitle">Confirm</h2>

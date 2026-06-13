@@ -51,6 +51,7 @@ from init_db import init_db  # noqa: E402
 
 app = Flask(__name__, static_folder=str(ROOT), static_url_path="")
 DUMMY_DB_PATH = DEFAULT_DB_PATH.with_name("transactions.dummy.sqlite")
+FINANCE_TAGS = ("income", "bill", "splurge")
 
 
 @app.errorhandler(CliError)
@@ -193,7 +194,9 @@ def update_tag(tag_id: int):
     name = nonempty(str(data.get("name", "")), "name")
 
     with closing(connect(current_db_path())) as conn:
-        fetch_tag_by_id(conn, tag_id)
+        tag = dict(fetch_tag_by_id(conn, tag_id))
+        if tag["name"] in FINANCE_TAGS:
+            raise CliError(f"Reserved tag cannot be edited: {tag['name']}")
         conn.execute("UPDATE tags SET name = ? WHERE id = ?", (name, tag_id))
         tag = dict(fetch_tag_by_id(conn, tag_id))
         state = read_state(conn)
@@ -207,6 +210,8 @@ def delete_tag(tag_id: int):
     ensure_database()
     with closing(connect(current_db_path())) as conn:
         tag = dict(fetch_tag_by_id(conn, tag_id))
+        if tag["name"] in FINANCE_TAGS:
+            raise CliError(f"Reserved tag cannot be deleted: {tag['name']}")
         require_tag_unused(conn, tag_id)
         conn.execute("DELETE FROM tags WHERE id = ?", (tag_id,))
         state = read_state(conn)
@@ -664,6 +669,7 @@ def ensure_database() -> None:
 
 def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
     sync_raw_row_ready_status(conn)
+    ensure_finance_tags(conn)
     accounts = rows_to_dicts(
         conn.execute(
             """
@@ -833,6 +839,8 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
         row["preview_clean_description"] = preview.get("clean_description")
     for rule in rules:
         rule["is_active"] = bool(rule["is_active"])
+    for tag in tags:
+        tag["is_protected"] = tag["name"] in FINANCE_TAGS
     for log in logs:
         log["details"] = parse_metadata(log.pop("details_json"))
 
@@ -846,6 +854,13 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
         "rawRows": raw_rows,
         "logs": logs,
     }
+
+
+def ensure_finance_tags(conn: sqlite3.Connection) -> None:
+    conn.executemany(
+        "INSERT OR IGNORE INTO tags (name) VALUES (?)",
+        [(name,) for name in FINANCE_TAGS],
+    )
 
 
 def rows_to_dicts(rows) -> list[dict[str, Any]]:

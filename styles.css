@@ -61,6 +61,10 @@ body {
   line-height: 1.4;
 }
 
+body.modal-open {
+  overflow: hidden;
+}
+
 button,
 input,
 select {
@@ -634,6 +638,10 @@ td {
   box-shadow: var(--shadow);
 }
 
+.modal:focus {
+  outline: none;
+}
+
 .wide-modal {
   width: min(980px, calc(100vw - 28px));
 }
@@ -924,11 +932,14 @@ tr.is-matched-row td {
     justify-content: flex-start;
   }
 
-  .metric-grid,
   .two-column,
   .form-grid,
   .transaction-detail-grid {
     grid-template-columns: 1fr;
+  }
+
+  .metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .primary-nav {

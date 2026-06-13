@@ -156,6 +156,9 @@
     activeTransactionId = null;
     transactionEditMode = false;
   });
+  document.querySelectorAll("dialog.modal").forEach((dialog) => {
+    dialog.addEventListener("close", updateModalScrollLock);
+  });
 
   initializeTheme();
   initializeDatabaseMode();
@@ -298,8 +301,7 @@
     elements.accountForm.reset();
     elements.accountForm.elements.accountType.value = "checking";
     elements.accountForm.elements.currency.value = "USD";
-    elements.accountDialog.showModal();
-    elements.accountForm.elements.name.focus();
+    openModal(elements.accountDialog);
   }
 
   function openAccountEditDialog(account) {
@@ -314,8 +316,7 @@
     form.elements.institution.value = account.institution || "";
     form.elements.accountType.value = account.account_type || "checking";
     form.elements.currency.value = account.currency || "USD";
-    elements.accountDialog.showModal();
-    form.elements.name.focus();
+    openModal(elements.accountDialog);
   }
 
   function closeAccountDialog() {
@@ -443,8 +444,7 @@
     elements.ruleForm.elements.matchField.value = "description";
     elements.ruleForm.elements.matchType.value = "contains";
     elements.ruleForm.elements.priority.value = "100";
-    elements.ruleDialog.showModal();
-    elements.ruleForm.elements.name.focus();
+    openModal(elements.ruleDialog);
   }
 
   function openRuleEditDialog(rule) {
@@ -463,8 +463,7 @@
     form.elements.setCategoryId.value = rule.set_category_id === null ? "" : String(rule.set_category_id);
     form.elements.addTagId.value = rule.add_tag_id === null ? "" : String(rule.add_tag_id);
     form.elements.priority.value = String(rule.priority ?? 100);
-    elements.ruleDialog.showModal();
-    form.elements.name.focus();
+    openModal(elements.ruleDialog);
   }
 
   function closeRuleDialog() {
@@ -619,12 +618,11 @@
   }
 
   function render() {
-    renderMetrics();
+    renderDashboard();
     renderAccounts();
     renderTransactions();
     renderAccountSelects();
     renderImports();
-    renderSnapshotRows();
     renderCategories();
     renderTags();
     renderRules();
@@ -632,11 +630,19 @@
     renderRawRows();
   }
 
-  function renderMetrics() {
-    setText("#accountCount", state.accounts.length);
-    setText("#importCount", state.imports.length);
-    setText("#rawRowCount", state.rawRows.length);
-    setText("#newImportCount", state.rawRows.filter((row) => isImportableRawRow(row)).length);
+  function renderDashboard() {
+    const period = lastFullMonthPeriod();
+    const transactions = state.transactions.filter((transaction) => {
+      return transaction.posted_date >= period.start && transaction.posted_date < period.end;
+    });
+    const income = sumTaggedTransactions(transactions, "income", false);
+    const bills = sumTaggedTransactions(transactions, "bill", true);
+    const splurge = sumTaggedTransactions(transactions, "splurge", true);
+    const saved = income - bills - splurge;
+    setText("#dashboardIncome", formatDollars(income));
+    setText("#dashboardBills", formatDollars(bills));
+    setText("#dashboardSplurge", formatDollars(splurge));
+    setText("#dashboardSaved", formatDollars(saved));
   }
 
   function renderAccounts() {
@@ -698,7 +704,7 @@
   function openTransactionDialog(transaction) {
     activeTransactionId = transaction.id;
     transactionEditMode = false;
-    elements.transactionDialog.showModal();
+    openModal(elements.transactionDialog);
     populateTransactionDialog(transaction);
     setTransactionEditMode(false);
   }
@@ -853,18 +859,14 @@
 
   function renderImports() {
     const importList = document.querySelector("#importList");
-    const recentImports = document.querySelector("#recentImports");
     clear(importList);
-    clear(recentImports);
 
     if (!state.imports.length) {
       appendEmpty(importList);
-      appendEmpty(recentImports);
       return;
     }
 
     state.imports.slice().reverse().forEach((item) => importList.appendChild(importListItem(item)));
-    state.imports.slice(-5).reverse().forEach((item) => recentImports.appendChild(importListItem(item)));
   }
 
   function importListItem(item) {
@@ -879,31 +881,19 @@
     return node;
   }
 
-  function renderSnapshotRows() {
-    const tbody = document.querySelector("#snapshotRows");
-    clear(tbody);
-    const rows = state.rawRows.slice(-8).reverse();
-    if (!rows.length) {
-      tbody.appendChild(emptyTableRow(3));
-      return;
-    }
-
-    rows.forEach((row) => {
-      tbody.appendChild(tableRow([
-        row.raw_date || "-",
-        row.raw_description || "-",
-        row.raw_amount || "-",
-      ]));
-    });
-  }
-
   function renderTags() {
     const tagList = document.querySelector("#tagList");
     clear(tagList);
     if (!state.tags.length) {
       appendEmpty(tagList);
     } else {
-      state.tags.forEach((tag) => tagList.appendChild(manageableChip(tag.name, () => editTag(tag), () => deleteTag(tag))));
+      state.tags.forEach((tag) => {
+        if (tag.is_protected) {
+          tagList.appendChild(el("span", tag.name, "chip"));
+        } else {
+          tagList.appendChild(manageableChip(tag.name, () => editTag(tag), () => deleteTag(tag)));
+        }
+      });
     }
 
     fillSelect(
@@ -1388,6 +1378,44 @@
     return account.institution ? `${account.name} - ${account.institution}` : account.name;
   }
 
+  function lastFullMonthPeriod() {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const end = new Date(now.getFullYear(), now.getMonth(), 1);
+    return {
+      start: formatDateKey(start),
+      end: formatDateKey(end),
+    };
+  }
+
+  function formatDateKey(date) {
+    return [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, "0"),
+      String(date.getDate()).padStart(2, "0"),
+    ].join("-");
+  }
+
+  function sumTaggedTransactions(transactions, tagName, useAbsoluteValue) {
+    return transactions.reduce((total, transaction) => {
+      const hasTag = (transaction.tags || []).some((tag) => tag.name === tagName);
+      if (!hasTag) {
+        return total;
+      }
+      const amount = Number(transaction.amount_cents) || 0;
+      return total + (useAbsoluteValue ? Math.abs(amount) : amount);
+    }, 0);
+  }
+
+  function formatDollars(cents) {
+    const amount = Math.abs(cents) / 100;
+    const formatted = new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: "USD",
+    }).format(amount);
+    return cents < 0 ? `-${formatted}` : formatted;
+  }
+
   function formatCents(value) {
     const cents = Number(value);
     if (!Number.isFinite(cents)) {
@@ -1419,9 +1447,7 @@
     elements.textInputTitle.textContent = title;
     elements.textInputLabel.textContent = label;
     elements.textInputForm.elements.value.value = value || "";
-    elements.textInputDialog.showModal();
-    elements.textInputForm.elements.value.focus();
-    elements.textInputForm.elements.value.select();
+    openModal(elements.textInputDialog, { focusSingleTextField: true });
     return new Promise((resolve) => {
       textInputResolver = resolve;
     });
@@ -1453,8 +1479,7 @@
     elements.confirmTitle.textContent = title;
     elements.confirmMessage.textContent = message;
     elements.confirmSubmitButton.textContent = actionLabel;
-    elements.confirmDialog.showModal();
-    elements.confirmSubmitButton.focus();
+    openModal(elements.confirmDialog);
     return new Promise((resolve) => {
       confirmResolver = resolve;
     });
@@ -1566,6 +1591,23 @@
       detail.textContent = value === null || value === undefined || value === "" ? "-" : String(value);
       list.append(term, detail);
     });
+  }
+
+  function openModal(dialog, { focusSingleTextField } = {}) {
+    dialog.showModal();
+    updateModalScrollLock();
+    if (focusSingleTextField) {
+      const input = dialog.querySelector("input[type='text']");
+      input?.focus();
+      input?.select();
+      return;
+    }
+    dialog.focus({ preventScroll: true });
+  }
+
+  function updateModalScrollLock() {
+    const hasOpenModal = Boolean(document.querySelector("dialog.modal[open]"));
+    document.body.classList.toggle("modal-open", hasOpenModal);
   }
 
   function tableRow(values) {
