@@ -34,6 +34,7 @@ VALID_CURRENCY_RE = re.compile(r"^[A-Z]{3}$")
 MATCH_FIELDS = {"category", "description"}
 MATCH_TYPES = {"contains", "equals", "starts_with", "regex"}
 IMPORTABLE_RAW_ROW_STATUSES = {"new", "ready"}
+TRANSACTION_TYPES = {"income", "bill", "splurge"}
 
 
 class CliError(Exception):
@@ -135,9 +136,34 @@ def validate_match_type(value: str) -> str:
     return normalized
 
 
-def validate_rule_actions(set_category_id: int | None, set_clean_description: str | None, add_tag_id: int | None) -> None:
-    if set_category_id is None and set_clean_description is None and add_tag_id is None:
-        raise CliError("A transaction rule must set a category, set a clean description, and/or add a tag.")
+def validate_transaction_type(
+    value: str | None,
+    field_name: str = "transaction_type",
+    allow_empty: bool = True,
+) -> str | None:
+    normalized = normalize_text(value)
+    if normalized is None:
+        if allow_empty:
+            return None
+        raise CliError(f"{field_name} cannot be empty.")
+    if normalized not in TRANSACTION_TYPES:
+        raise CliError(f"{field_name} must be one of: {', '.join(sorted(TRANSACTION_TYPES))}")
+    return normalized
+
+
+def validate_rule_actions(
+    set_category_id: int | None,
+    set_clean_description: str | None,
+    set_transaction_type: str | None,
+    add_tag_id: int | None,
+) -> None:
+    if (
+        set_category_id is None
+        and set_clean_description is None
+        and set_transaction_type is None
+        and add_tag_id is None
+    ):
+        raise CliError("A transaction rule must set a category, set a description, set a type, and/or add a tag.")
 
 
 def require_category(conn: sqlite3.Connection, category_id: int) -> None:
@@ -327,6 +353,7 @@ def fetch_transaction_rule(conn: sqlite3.Connection, rule_id: int) -> sqlite3.Ro
             r.set_category_id,
             c.name AS set_category,
             r.set_clean_description,
+            r.set_transaction_type,
             r.add_tag_id,
             tags.name AS add_tag,
             r.priority,
@@ -504,7 +531,7 @@ def parse_amount_cents(value: str | None) -> int:
 def fetch_active_rules(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     return conn.execute(
         """
-        SELECT id, match_field, match_type, match_value, set_category_id, set_clean_description, add_tag_id
+        SELECT id, match_field, match_type, match_value, set_category_id, set_clean_description, set_transaction_type, add_tag_id
         FROM transaction_import_rules
         WHERE is_active = 1
         ORDER BY priority, id
@@ -534,7 +561,7 @@ def rule_matches(rule: sqlite3.Row, raw_row: sqlite3.Row) -> bool:
 
 
 def apply_import_rules(conn: sqlite3.Connection, raw_row: sqlite3.Row) -> dict[str, Any]:
-    result: dict[str, Any] = {"category_id": None, "clean_description": None, "tag_ids": []}
+    result: dict[str, Any] = {"category_id": None, "clean_description": None, "transaction_type": None, "tag_ids": []}
     for rule in fetch_active_rules(conn):
         if not rule_matches(rule, raw_row):
             continue
@@ -542,13 +569,15 @@ def apply_import_rules(conn: sqlite3.Connection, raw_row: sqlite3.Row) -> dict[s
             result["category_id"] = int(rule["set_category_id"])
         if rule["set_clean_description"] is not None:
             result["clean_description"] = rule["set_clean_description"]
+        if rule["set_transaction_type"] is not None:
+            result["transaction_type"] = rule["set_transaction_type"]
         if rule["add_tag_id"] is not None and int(rule["add_tag_id"]) not in result["tag_ids"]:
             result["tag_ids"].append(int(rule["add_tag_id"]))
     return result
 
 
 def raw_row_has_matching_rule(conn: sqlite3.Connection, raw_row: sqlite3.Row) -> bool:
-    return any(rule_matches(rule, raw_row) for rule in fetch_active_rules(conn))
+    return apply_import_rules(conn, raw_row)["transaction_type"] is not None
 
 
 def sync_raw_row_ready_status(conn: sqlite3.Connection) -> None:
@@ -660,12 +689,17 @@ def import_raw_rows(
         raise CliError(f"Only new raw rows can be imported: {', '.join(unavailable_rows)}")
 
     uncategorized_rows = []
+    untyped_rows = []
     for raw_row in raw_rows:
         rule_result = apply_import_rules(conn, raw_row)
         if rule_result["category_id"] is None:
             uncategorized_rows.append(str(raw_row["id"]))
+        if rule_result["transaction_type"] is None:
+            untyped_rows.append(str(raw_row["id"]))
     if uncategorized_rows:
         raise CliError(f"Raw rows require a matched category before import: {', '.join(uncategorized_rows)}")
+    if untyped_rows:
+        raise CliError(f"Raw rows require a matched type before import: {', '.join(untyped_rows)}")
 
     results = []
     counts = {"imported": 0, "duplicate": 0, "error": 0}
@@ -723,19 +757,21 @@ def import_raw_rows(
                     category_id,
                     posted_date,
                     transaction_date,
+                    transaction_type,
                     clean_description,
                     amount_cents,
                     currency,
                     raw_imported_row_id,
                     transaction_hash
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     raw_row["account_id"],
                     rule_result["category_id"],
                     posted_date,
                     posted_date,
+                    rule_result["transaction_type"],
                     clean_description,
                     amount_cents,
                     raw_row["currency"],
@@ -875,6 +911,7 @@ def command_recent(args: argparse.Namespace) -> None:
                 t.id,
                 t.posted_date,
                 a.name AS account,
+                t.transaction_type,
                 t.clean_description,
                 t.amount_cents,
                 printf('%.2f', t.amount_cents / 100.0) AS amount,
@@ -920,6 +957,7 @@ def command_transaction(args: argparse.Namespace) -> None:
                 t.id,
                 t.posted_date,
                 t.transaction_date,
+                t.transaction_type,
                 a.name AS account,
                 t.clean_description,
                 t.amount_cents,
@@ -1299,9 +1337,10 @@ def command_add_transaction_rule(args: argparse.Namespace) -> None:
     match_type = validate_match_type(args.match_type)
     match_value = nonempty(args.match_value, "match_value")
     set_clean_description = optional_nonempty(args.set_clean_description, "set_clean_description")
+    set_transaction_type = validate_transaction_type(args.set_type, "set_type")
     is_active = 0 if args.inactive else 1
 
-    validate_rule_actions(args.set_category_id, set_clean_description, args.add_tag_id)
+    validate_rule_actions(args.set_category_id, set_clean_description, set_transaction_type, args.add_tag_id)
 
     with connect(args.db) as conn:
         if args.set_category_id is not None:
@@ -1318,11 +1357,12 @@ def command_add_transaction_rule(args: argparse.Namespace) -> None:
                 match_value,
                 set_category_id,
                 set_clean_description,
+                set_transaction_type,
                 add_tag_id,
                 priority,
                 is_active
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 name,
@@ -1331,6 +1371,7 @@ def command_add_transaction_rule(args: argparse.Namespace) -> None:
                 match_value,
                 args.set_category_id,
                 set_clean_description,
+                set_transaction_type,
                 args.add_tag_id,
                 args.priority,
                 is_active,
@@ -1356,6 +1397,7 @@ def command_update_transaction_rule(args: argparse.Namespace) -> None:
 
         next_set_category_id = current["set_category_id"]
         next_set_clean_description = current["set_clean_description"]
+        next_set_transaction_type = current["set_transaction_type"]
         next_add_tag_id = current["add_tag_id"]
 
         if args.name is not None:
@@ -1390,6 +1432,15 @@ def command_update_transaction_rule(args: argparse.Namespace) -> None:
             updates.append("set_clean_description = ?")
             values.append(next_set_clean_description)
 
+        if args.clear_type:
+            next_set_transaction_type = None
+            updates.append("set_transaction_type = ?")
+            values.append(None)
+        elif args.set_type is not None:
+            next_set_transaction_type = validate_transaction_type(args.set_type, "set_type")
+            updates.append("set_transaction_type = ?")
+            values.append(next_set_transaction_type)
+
         if args.clear_tag:
             next_add_tag_id = None
             updates.append("add_tag_id = ?")
@@ -1413,7 +1464,7 @@ def command_update_transaction_rule(args: argparse.Namespace) -> None:
         if not updates:
             raise CliError("No changes requested.")
 
-        validate_rule_actions(next_set_category_id, next_set_clean_description, next_add_tag_id)
+        validate_rule_actions(next_set_category_id, next_set_clean_description, next_set_transaction_type, next_add_tag_id)
 
         updates.append("updated_at = datetime('now')")
         values.append(args.id)
@@ -1595,6 +1646,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_rule_parser.add_argument("--match-value", required=True)
     add_rule_parser.add_argument("--set-category-id", type=positive_int)
     add_rule_parser.add_argument("--set-clean-description")
+    add_rule_parser.add_argument("--set-type", choices=sorted(TRANSACTION_TYPES))
     add_rule_parser.add_argument("--add-tag-id", type=positive_int)
     add_rule_parser.add_argument("--priority", type=nonnegative_int, default=100)
     add_rule_parser.add_argument("--inactive", action="store_true")
@@ -1615,6 +1667,9 @@ def build_parser() -> argparse.ArgumentParser:
     description_group = update_rule_parser.add_mutually_exclusive_group()
     description_group.add_argument("--set-clean-description")
     description_group.add_argument("--clear-clean-description", action="store_true")
+    type_group = update_rule_parser.add_mutually_exclusive_group()
+    type_group.add_argument("--set-type", choices=sorted(TRANSACTION_TYPES))
+    type_group.add_argument("--clear-type", action="store_true")
     tag_group = update_rule_parser.add_mutually_exclusive_group()
     tag_group.add_argument("--add-tag-id", type=positive_int)
     tag_group.add_argument("--clear-tag", action="store_true")

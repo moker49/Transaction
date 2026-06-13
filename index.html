@@ -408,6 +408,15 @@
           <input name="setCleanDescription" type="text" autocomplete="off">
         </label>
         <label>
+          <span>Type</span>
+          <select name="setTransactionType">
+            <option value="">No type</option>
+            <option value="income">Income</option>
+            <option value="bill">Bill</option>
+            <option value="splurge">Splurge</option>
+          </select>
+        </label>
+        <label>
           <span>Clean Category</span>
           <select name="setCategoryId" id="ruleCategorySelect"></select>
         </label>
@@ -445,8 +454,16 @@
               <input name="postedDate" type="date" data-editable-field readonly>
             </label>
             <label>
+              <span>Type</span>
+              <select name="transactionType" data-editable-field disabled required>
+                <option value="income">Income</option>
+                <option value="bill">Bill</option>
+                <option value="splurge">Splurge</option>
+              </select>
+            </label>
+            <label>
               <span>Category</span>
-              <select name="categoryId" id="transactionCategorySelect" data-editable-field disabled></select>
+              <select name="categoryId" id="transactionCategorySelect" data-editable-field disabled required></select>
             </label>
             <label>
               <span>Account</span>

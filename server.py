@@ -40,6 +40,7 @@ from db_cli import (  # noqa: E402
     require_tag_unused,
     raw_row_hash,
     sync_raw_row_ready_status,
+    validate_transaction_type,
     validate_match_field,
     validate_match_type,
     validate_rule_actions,
@@ -51,7 +52,7 @@ from init_db import init_db  # noqa: E402
 
 app = Flask(__name__, static_folder=str(ROOT), static_url_path="")
 DUMMY_DB_PATH = DEFAULT_DB_PATH.with_name("transactions.dummy.sqlite")
-FINANCE_TAGS = ("income", "bill", "splurge")
+TRANSACTION_TYPES = ("income", "bill", "splurge")
 DEFAULT_CATEGORY_TREE = {
     "Income": ["Salary", "Bonus", "Interest", "Dividend", "Refund", "Gift Received"],
     "Housing": ["Rent", "Mortgage", "Property Tax", "HOA", "Home Insurance", "Home Maintenance"],
@@ -238,8 +239,6 @@ def update_tag(tag_id: int):
 
     with closing(connect(current_db_path())) as conn:
         tag = dict(fetch_tag_by_id(conn, tag_id))
-        if tag["name"] in FINANCE_TAGS:
-            raise CliError(f"Reserved tag cannot be edited: {tag['name']}")
         conn.execute("UPDATE tags SET name = ? WHERE id = ?", (name, tag_id))
         tag = dict(fetch_tag_by_id(conn, tag_id))
         state = read_state(conn)
@@ -253,8 +252,6 @@ def delete_tag(tag_id: int):
     ensure_database()
     with closing(connect(current_db_path())) as conn:
         tag = dict(fetch_tag_by_id(conn, tag_id))
-        if tag["name"] in FINANCE_TAGS:
-            raise CliError(f"Reserved tag cannot be deleted: {tag['name']}")
         require_tag_unused(conn, tag_id)
         conn.execute("DELETE FROM tags WHERE id = ?", (tag_id,))
         state = read_state(conn)
@@ -341,10 +338,11 @@ def create_rule():
     match_value = nonempty(str(data.get("match_value", "")), "match_value")
     set_category_id = int(data["set_category_id"]) if data.get("set_category_id") is not None else None
     set_clean_description = optional_nonempty(data.get("set_clean_description"), "set_clean_description")
+    set_transaction_type = validate_transaction_type(data.get("set_transaction_type"), allow_empty=True)
     add_tag_id = int(data["add_tag_id"]) if data.get("add_tag_id") is not None else None
     priority = int(data.get("priority", 100))
 
-    validate_rule_actions(set_category_id, set_clean_description, add_tag_id)
+    validate_rule_actions(set_category_id, set_clean_description, set_transaction_type, add_tag_id)
 
     with closing(connect(current_db_path())) as conn:
         if set_category_id is not None:
@@ -360,12 +358,23 @@ def create_rule():
                 match_value,
                 set_category_id,
                 set_clean_description,
+                set_transaction_type,
                 add_tag_id,
                 priority
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (name, match_field, match_type, match_value, set_category_id, set_clean_description, add_tag_id, priority),
+            (
+                name,
+                match_field,
+                match_type,
+                match_value,
+                set_category_id,
+                set_clean_description,
+                set_transaction_type,
+                add_tag_id,
+                priority,
+            ),
         )
         rule = dict(fetch_transaction_rule(conn, int(cursor.lastrowid)))
         state = read_state(conn)
@@ -385,6 +394,7 @@ def update_rule(rule_id: int):
         current = fetch_transaction_rule(conn, rule_id)
         next_set_category_id = current["set_category_id"]
         next_set_clean_description = current["set_clean_description"]
+        next_set_transaction_type = current["set_transaction_type"]
         next_add_tag_id = current["add_tag_id"]
 
         if "name" in data:
@@ -410,6 +420,10 @@ def update_rule(rule_id: int):
             next_set_clean_description = optional_nonempty(data.get("set_clean_description"), "set_clean_description")
             updates.append("set_clean_description = ?")
             values.append(next_set_clean_description)
+        if "set_transaction_type" in data:
+            next_set_transaction_type = validate_transaction_type(data.get("set_transaction_type"), allow_empty=True)
+            updates.append("set_transaction_type = ?")
+            values.append(next_set_transaction_type)
         if "add_tag_id" in data:
             raw_tag_id = data.get("add_tag_id")
             next_add_tag_id = int(raw_tag_id) if raw_tag_id is not None else None
@@ -426,7 +440,7 @@ def update_rule(rule_id: int):
         if not updates:
             raise CliError("No changes requested.")
 
-        validate_rule_actions(next_set_category_id, next_set_clean_description, next_add_tag_id)
+        validate_rule_actions(next_set_category_id, next_set_clean_description, next_set_transaction_type, next_add_tag_id)
 
         updates.append("updated_at = datetime('now')")
         values.append(rule_id)
@@ -485,11 +499,16 @@ def update_transaction(transaction_id: int):
             values.extend([next_posted_date, next_posted_date])
         if "category_id" in data:
             raw_category_id = data.get("category_id")
-            category_id = int(raw_category_id) if raw_category_id is not None else None
-            if category_id is not None:
-                require_category(conn, category_id)
+            if raw_category_id in (None, ""):
+                raise CliError("category_id cannot be empty.")
+            category_id = int(raw_category_id)
+            require_category(conn, category_id)
             updates.append("category_id = ?")
             values.append(category_id)
+        if "transaction_type" in data:
+            transaction_type = validate_transaction_type(data.get("transaction_type"), allow_empty=False)
+            updates.append("transaction_type = ?")
+            values.append(transaction_type)
         if "amount" in data:
             next_amount_cents = parse_amount_cents(str(data.get("amount", "")))
             updates.append("amount_cents = ?")
@@ -729,8 +748,8 @@ def ensure_database() -> None:
 
 
 def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
+    migrate_finance_tags_to_transaction_type(conn)
     sync_raw_row_ready_status(conn)
-    ensure_finance_tags(conn)
     ensure_default_categories(conn)
     accounts = rows_to_dicts(
         conn.execute(
@@ -802,6 +821,7 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
                 c.name AS category,
                 t.posted_date,
                 t.transaction_date,
+                t.transaction_type,
                 t.clean_description,
                 t.amount_cents,
                 printf('%.2f', t.amount_cents / 100.0) AS amount,
@@ -861,6 +881,7 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
                 r.set_category_id,
                 c.name AS set_category,
                 r.set_clean_description,
+                r.set_transaction_type,
                 r.add_tag_id,
                 tags.name AS add_tag,
                 r.priority,
@@ -899,12 +920,13 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
         preview_category_id = preview.get("category_id")
         row["preview_category"] = categories_by_id.get(preview_category_id) if preview_category_id is not None else None
         row["preview_clean_description"] = preview.get("clean_description")
+        row["preview_type"] = preview.get("transaction_type")
     for rule in rules:
         rule["is_active"] = bool(rule["is_active"])
     for category in categories:
         category["is_default"] = category["name"] in DEFAULT_CATEGORY_NAMES
     for tag in tags:
-        tag["is_protected"] = tag["name"] in FINANCE_TAGS
+        tag["is_protected"] = False
     for log in logs:
         log["details"] = parse_metadata(log.pop("details_json"))
 
@@ -920,11 +942,35 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
     }
 
 
-def ensure_finance_tags(conn: sqlite3.Connection) -> None:
-    conn.executemany(
-        "INSERT OR IGNORE INTO tags (name) VALUES (?)",
-        [(name,) for name in FINANCE_TAGS],
-    )
+def migrate_finance_tags_to_transaction_type(conn: sqlite3.Connection) -> None:
+    for transaction_type in TRANSACTION_TYPES:
+        tag = conn.execute("SELECT id FROM tags WHERE name = ?", (transaction_type,)).fetchone()
+        if tag is None:
+            continue
+        tag_id = int(tag["id"])
+        conn.execute(
+            """
+            UPDATE transactions
+            SET transaction_type = ?
+            WHERE id IN (
+                SELECT transaction_id
+                FROM transaction_tags
+                WHERE tag_id = ?
+            )
+            """,
+            (transaction_type, tag_id),
+        )
+        conn.execute(
+            """
+            UPDATE transaction_import_rules
+            SET set_transaction_type = ?,
+                add_tag_id = NULL
+            WHERE add_tag_id = ?
+            """,
+            (transaction_type, tag_id),
+        )
+        conn.execute("DELETE FROM transaction_tags WHERE tag_id = ?", (tag_id,))
+        conn.execute("DELETE FROM tags WHERE id = ?", (tag_id,))
 
 
 def ensure_default_categories(conn: sqlite3.Connection) -> None:

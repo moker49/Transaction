@@ -29,6 +29,11 @@
   let textInputDeleteHandler = null;
   let popupTimer = null;
   const importableRawRowStatuses = new Set(["new", "ready"]);
+  const transactionTypes = [
+    { value: "income", label: "Income" },
+    { value: "bill", label: "Bill" },
+    { value: "splurge", label: "Splurge" },
+  ];
   const defaultCategoryOrder = [
     "Income", "Salary", "Bonus", "Interest", "Dividend", "Refund", "Gift Received",
     "Housing", "Rent", "Mortgage", "Property Tax", "HOA", "Home Insurance", "Home Maintenance",
@@ -529,6 +534,7 @@
     form.elements.matchType.value = rule.match_type || "contains";
     form.elements.matchValue.value = rule.match_value || "";
     form.elements.setCleanDescription.value = rule.set_clean_description || "";
+    form.elements.setTransactionType.value = rule.set_transaction_type || "";
     form.elements.setCategoryId.value = rule.set_category_id === null ? "" : String(rule.set_category_id);
     form.elements.addTagId.value = rule.add_tag_id === null ? "" : String(rule.add_tag_id);
     form.elements.priority.value = String(rule.priority ?? 100);
@@ -544,11 +550,12 @@
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
     const setCleanDescription = clean(form.get("setCleanDescription"));
+    const setTransactionType = clean(form.get("setTransactionType"));
     const setCategoryId = Number(form.get("setCategoryId")) || null;
     const addTagId = Number(form.get("addTagId")) || null;
 
-    if (!setCategoryId && !setCleanDescription && !addTagId) {
-      setModalMessage(elements.ruleMessage, "Set a clean category, clean description, or tag.", true);
+    if (!setCategoryId && !setCleanDescription && !setTransactionType && !addTagId) {
+      setModalMessage(elements.ruleMessage, "Set a category, description, type, or tag.", true);
       return;
     }
 
@@ -563,6 +570,7 @@
           match_value: clean(form.get("matchValue")),
           set_category_id: setCategoryId,
           set_clean_description: setCleanDescription || null,
+          set_transaction_type: setTransactionType || null,
           add_tag_id: addTagId,
           priority: Number(form.get("priority")) || 100,
         }),
@@ -707,9 +715,9 @@
     const transactions = state.transactions.filter((transaction) => {
       return transaction.posted_date >= period.start && transaction.posted_date < period.end;
     });
-    const income = sumTaggedTransactions(transactions, "income", false);
-    const bills = sumTaggedTransactions(transactions, "bill", true);
-    const splurge = sumTaggedTransactions(transactions, "splurge", true);
+    const income = sumTypedTransactions(transactions, "income", false);
+    const bills = sumTypedTransactions(transactions, "bill", true);
+    const splurge = sumTypedTransactions(transactions, "splurge", true);
     const saved = income - bills - splurge;
     setText("#dashboardIncome", formatDollars(income));
     setText("#dashboardBills", formatDollars(bills));
@@ -796,6 +804,7 @@
     elements.transactionMessage.classList.remove("error");
     form.elements.postedDate.value = transaction.posted_date || "";
     form.elements.accountId.value = String(transaction.account_id);
+    form.elements.transactionType.value = transaction.transaction_type || "";
     form.elements.categoryId.value = transaction.category_id === null ? "" : String(transaction.category_id);
     form.elements.amount.value = transaction.amount || formatCents(transaction.amount_cents);
     form.elements.cleanDescription.value = transaction.clean_description || "";
@@ -902,7 +911,8 @@
         body: JSON.stringify({
           posted_date: clean(form.get("postedDate")),
           account_id: Number(form.get("accountId")),
-          category_id: Number(form.get("categoryId")) || null,
+          category_id: Number(form.get("categoryId")),
+          transaction_type: clean(form.get("transactionType")) || null,
           amount: clean(form.get("amount")),
           clean_description: clean(form.get("cleanDescription")) || null,
           status: clean(form.get("status")),
@@ -990,13 +1000,7 @@
         ...categoryOptions(),
       ],
     );
-    fillSelect(
-      elements.transactionCategorySelect,
-      [
-        { value: "", label: "No category" },
-        ...categoryOptions(),
-      ],
-    );
+    fillSelect(elements.transactionCategorySelect, categoryOptions());
   }
 
   function populateCategoryParentSelect(category = null) {
@@ -1357,11 +1361,15 @@
   }
 
   function isImportableRawRow(rawRow) {
-    return importableRawRowStatuses.has(rawRow.import_status || "new") && hasMatchedCategory(rawRow);
+    return importableRawRowStatuses.has(rawRow.import_status || "new") && hasMatchedCategory(rawRow) && hasMatchedType(rawRow);
   }
 
   function hasMatchedCategory(rawRow) {
     return Boolean(clean(rawRow.preview_category));
+  }
+
+  function hasMatchedType(rawRow) {
+    return Boolean(clean(rawRow.preview_type));
   }
 
   function isMatchedRawRow(rawRow) {
@@ -1549,10 +1557,9 @@
     ].join("-");
   }
 
-  function sumTaggedTransactions(transactions, tagName, useAbsoluteValue) {
+  function sumTypedTransactions(transactions, transactionType, useAbsoluteValue) {
     return transactions.reduce((total, transaction) => {
-      const hasTag = (transaction.tags || []).some((tag) => tag.name === tagName);
-      if (!hasTag) {
+      if (transaction.transaction_type !== transactionType) {
         return total;
       }
       const amount = Number(transaction.amount_cents) || 0;
@@ -1587,10 +1594,17 @@
     if (rule.set_clean_description) {
       actions.push(`description: ${rule.set_clean_description}`);
     }
+    if (rule.set_transaction_type) {
+      actions.push(`type: ${transactionTypeLabel(rule.set_transaction_type)}`);
+    }
     if (tag) {
       actions.push(`tag: ${tag.name}`);
     }
     return actions.join(" | ");
+  }
+
+  function transactionTypeLabel(value) {
+    return transactionTypes.find((type) => type.value === value)?.label || value;
   }
 
   function promptForText({ title, label, value, deleteLabel, onDelete }) {
