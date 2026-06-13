@@ -655,7 +655,7 @@ td {
 
 .transaction-detail-grid {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) minmax(220px, 0.9fr) minmax(220px, 0.9fr);
+  grid-template-columns: minmax(260px, 1fr) minmax(170px, 0.65fr) minmax(210px, 0.8fr) minmax(210px, 0.8fr);
   gap: 18px;
   padding: 18px;
 }
@@ -670,6 +670,31 @@ td {
 .detail-list {
   display: grid;
   gap: 10px;
+}
+
+.tag-check-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag-check {
+  display: inline-flex;
+  grid-template-columns: none;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
+.tag-check input {
+  width: 16px;
+  min-height: 16px;
+  padding: 0;
 }
 
 textarea {

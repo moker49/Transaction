@@ -91,6 +91,7 @@
     transactionCloseButton: document.querySelector("#transactionCloseButton"),
     transactionAccountSelect: document.querySelector("#transactionAccountSelect"),
     transactionCategorySelect: document.querySelector("#transactionCategorySelect"),
+    transactionTags: document.querySelector("#transactionTags"),
     transactionRawValues: document.querySelector("#transactionRawValues"),
     transactionMetadata: document.querySelector("#transactionMetadata"),
     transactionMessage: document.querySelector("#transactionMessage"),
@@ -722,6 +723,7 @@
     form.elements.cleanDescription.value = transaction.clean_description || "";
     form.elements.status.value = transaction.status || "posted";
     form.elements.notes.value = transaction.notes || "";
+    renderTransactionTags(transaction);
     renderDefinitionList(elements.transactionRawValues, [
       ["Raw date", transaction.raw_date],
       ["Raw category", transaction.raw_category],
@@ -747,6 +749,10 @@
 
   function setTransactionEditMode(isEditing) {
     transactionEditMode = isEditing;
+    const transaction = activeTransaction();
+    if (transaction) {
+      renderTransactionTags(transaction);
+    }
     elements.transactionForm.querySelectorAll("[data-editable-field]").forEach((field) => {
       if (field.tagName === "SELECT") {
         field.disabled = !isEditing;
@@ -754,9 +760,43 @@
         field.readOnly = !isEditing;
       }
     });
+    elements.transactionTags.querySelectorAll("input[type='checkbox']").forEach((checkbox) => {
+      checkbox.disabled = !isEditing;
+    });
     elements.transactionEditButton.hidden = isEditing;
     elements.transactionCancelButton.hidden = !isEditing;
     elements.transactionSaveButton.hidden = !isEditing;
+  }
+
+  function renderTransactionTags(transaction) {
+    clear(elements.transactionTags);
+    const selectedTagIds = new Set((transaction.tags || []).map((tag) => Number(tag.id)));
+    if (!transactionEditMode) {
+      if (!transaction.tags?.length) {
+        elements.transactionTags.appendChild(el("span", "No tags.", "list-meta"));
+        return;
+      }
+      transaction.tags.forEach((tag) => {
+        elements.transactionTags.appendChild(el("span", tag.name, "chip"));
+      });
+      return;
+    }
+    if (!state.tags.length) {
+      elements.transactionTags.appendChild(el("span", "No tags available.", "list-meta"));
+      return;
+    }
+    state.tags.forEach((tag) => {
+      const label = document.createElement("label");
+      label.className = "tag-check";
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.name = "tagIds";
+      checkbox.value = String(tag.id);
+      checkbox.checked = selectedTagIds.has(Number(tag.id));
+      checkbox.disabled = !transactionEditMode;
+      label.append(checkbox, el("span", tag.name));
+      elements.transactionTags.appendChild(label);
+    });
   }
 
   function cancelTransactionEdit() {
@@ -775,6 +815,9 @@
       return;
     }
     const form = new FormData(elements.transactionForm);
+    const tagIds = [...elements.transactionTags.querySelectorAll("input[type='checkbox']:checked")]
+      .map((checkbox) => Number(checkbox.value))
+      .filter((tagId) => Number.isInteger(tagId) && tagId > 0);
     try {
       const payload = await apiRequest(`/api/transactions/${transaction.id}`, {
         method: "PATCH",
@@ -786,6 +829,7 @@
           clean_description: clean(form.get("cleanDescription")) || null,
           status: clean(form.get("status")),
           notes: clean(form.get("notes")),
+          tag_ids: tagIds,
         }),
       });
       applyStateFromPayload(payload);

@@ -440,6 +440,15 @@ def update_transaction(transaction_id: int):
             values.append(status)
         notes_requested = "notes" in data
         notes = optional_nonempty(data.get("notes"), "notes") if notes_requested else None
+        tag_ids_requested = "tag_ids" in data
+        tag_ids: list[int] = []
+        if tag_ids_requested:
+            raw_tag_ids = data.get("tag_ids")
+            if not isinstance(raw_tag_ids, list):
+                raise CliError("tag_ids must be a list.")
+            tag_ids = sorted({int(tag_id) for tag_id in raw_tag_ids})
+            for tag_id in tag_ids:
+                fetch_tag_by_id(conn, tag_id)
 
         if updates:
             updates.append("transaction_hash = ?")
@@ -461,7 +470,13 @@ def update_transaction(transaction_id: int):
                     "INSERT INTO transaction_notes (transaction_id, note) VALUES (?, ?)",
                     (transaction_id, notes),
                 )
-        if not updates and not notes_requested:
+        if tag_ids_requested:
+            conn.execute("DELETE FROM transaction_tags WHERE transaction_id = ?", (transaction_id,))
+            conn.executemany(
+                "INSERT INTO transaction_tags (transaction_id, tag_id) VALUES (?, ?)",
+                [(transaction_id, tag_id) for tag_id in tag_ids],
+            )
+        if not updates and not notes_requested and not tag_ids_requested:
             raise CliError("No changes requested.")
 
         state = read_state(conn)
@@ -753,6 +768,19 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
         conn.execute("SELECT id, name, parent_id, created_at FROM categories ORDER BY name, id").fetchall()
     )
     tags = rows_to_dicts(conn.execute("SELECT id, name, created_at FROM tags ORDER BY name, id").fetchall())
+    transaction_tags = rows_to_dicts(
+        conn.execute(
+            """
+            SELECT
+                tt.transaction_id,
+                tags.id,
+                tags.name
+            FROM transaction_tags tt
+            JOIN tags ON tags.id = tt.tag_id
+            ORDER BY tags.name, tags.id
+            """
+        ).fetchall()
+    )
     rules = rows_to_dicts(
         conn.execute(
             """
@@ -791,6 +819,12 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
 
     for item in imports:
         item["metadata"] = parse_metadata(item.pop("metadata_json"))
+    tags_by_transaction: dict[int, list[dict[str, Any]]] = {}
+    for tag in transaction_tags:
+        transaction_id = int(tag.pop("transaction_id"))
+        tags_by_transaction.setdefault(transaction_id, []).append(tag)
+    for transaction in transactions:
+        transaction["tags"] = tags_by_transaction.get(int(transaction["id"]), [])
     categories_by_id = {category["id"]: category["name"] for category in categories}
     for row in raw_rows:
         preview = apply_import_rules(conn, row) if row["import_status"] == "ready" else {}
