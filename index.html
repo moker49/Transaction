@@ -140,11 +140,10 @@
             <div class="panel-heading">
               <h2>Categories</h2>
             </div>
-            <form id="categoryForm" class="inline-form">
-              <input name="name" type="text" placeholder="Category name" required autocomplete="off">
-              <button type="submit" class="primary">Add</button>
-            </form>
             <div id="categoryList" class="chip-list empty-target"></div>
+            <div class="panel-footer">
+              <button type="button" class="primary" id="categoryAddButton">Add Category</button>
+            </div>
           </section>
         </div>
       </section>
@@ -497,6 +496,33 @@
     </form>
   </dialog>
 
+  <dialog id="categoryDialog" class="modal" tabindex="-1">
+    <form id="categoryDialogForm" class="modal-panel">
+      <div class="panel-heading">
+        <h2 id="categoryDialogTitle">Add Category</h2>
+        <button class="icon-only" type="button" id="categoryCloseButton" aria-label="Close">
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <div class="form-grid">
+        <label>
+          <span>Name</span>
+          <input name="name" type="text" required autocomplete="off">
+        </label>
+        <label>
+          <span>Parent category</span>
+          <select name="parentId" id="categoryParentSelect"></select>
+        </label>
+      </div>
+      <div id="categoryMessage" class="modal-message" role="status" aria-live="polite"></div>
+      <div class="modal-actions">
+        <button type="button" class="danger-button" id="categoryDeleteButton" hidden>Delete</button>
+        <button type="button" class="icon-button" id="categoryCancelButton">Cancel</button>
+        <button type="submit" class="primary" id="categorySubmitButton">Add Category</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="textInputDialog" class="modal" tabindex="-1">
     <form id="textInputForm" class="modal-panel">
       <div class="panel-heading">
@@ -512,6 +538,7 @@
         </label>
       </div>
       <div class="modal-actions">
+        <button type="button" class="danger-button" id="textInputDeleteButton" hidden>Delete</button>
         <button type="button" class="icon-button" id="textInputDismissButton">Cancel</button>
         <button type="submit" class="primary">Save</button>
       </div>

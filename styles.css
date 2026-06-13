@@ -542,6 +542,36 @@ td {
   padding: 0 18px 18px;
 }
 
+#categoryList {
+  display: grid;
+  gap: 14px;
+}
+
+.category-section {
+  display: grid;
+  gap: 8px;
+}
+
+.category-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.category-section-heading h3 {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  text-transform: uppercase;
+}
+
+.category-section-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .settings-list {
   display: grid;
   gap: 12px;
@@ -586,6 +616,10 @@ td {
 
 .manageable-chip {
   padding-right: 4px;
+}
+
+.category-chip {
+  border-radius: 7px;
 }
 
 .action-row {

@@ -52,6 +52,49 @@ from init_db import init_db  # noqa: E402
 app = Flask(__name__, static_folder=str(ROOT), static_url_path="")
 DUMMY_DB_PATH = DEFAULT_DB_PATH.with_name("transactions.dummy.sqlite")
 FINANCE_TAGS = ("income", "bill", "splurge")
+DEFAULT_CATEGORY_TREE = {
+    "Income": ["Salary", "Bonus", "Interest", "Dividend", "Refund", "Gift Received"],
+    "Housing": ["Rent", "Mortgage", "Property Tax", "HOA", "Home Insurance", "Home Maintenance"],
+    "Utility": ["Electric", "Gas", "Water", "Sewer", "Trash", "Internet", "Phone"],
+    "Transportation": ["Car Payment", "Fuel", "Charging", "Auto Insurance", "Maintenance", "Registration", "Parking", "Toll", "Public Transit"],
+    "Food & Dining": ["Groceries", "Restaurant"],
+    "Shopping": ["Clothing", "Electronic", "Household", "Furniture"],
+    "Health": ["Medical", "Dental", "Vision", "Pharmacy", "Fitness"],
+    "Entertainment": ["Activity", "Streaming", "Gaming", "Movie", "Music", "Hobby"],
+    "Travel": ["Hotel", "Flight", "Rental"],
+    "Financial": ["Fee", "Loan Payment", "Investment Contribution", "Tax Payment"],
+    "Insurance": ["Life Insurance", "Umbrella Insurance"],
+    "Education": ["Tuition", "Books", "Courses", "Certifications"],
+    "Family & Personal": ["Childcare", "Pet Expense", "Gift Given", "Personal Care"],
+    "Business": ["Software", "Equipment", "Service", "Office Expense"],
+    "Transfer": ["Brokerage Transfer", "Internal Transfer", "Credit Card Payment"],
+}
+CATEGORY_RENAMES = {
+    "Dividends": "Dividend",
+    "Refunds": "Refund",
+    "Gifts Received": "Gift Received",
+    "Utilities": "Utility",
+    "Tolls": "Toll",
+    "Restaurants": "Restaurant",
+    "Electronics": "Electronic",
+    "Movies": "Movie",
+    "Hobbies": "Hobby",
+    "Hotels": "Hotel",
+    "Flights": "Flight",
+    "Fees": "Fee",
+    "Loan Payments": "Loan Payment",
+    "Investment Contributions": "Investment Contribution",
+    "Tax Payments": "Tax Payment",
+    "Pet Expenses": "Pet Expense",
+    "Gifts Given": "Gift Given",
+    "Services": "Service",
+    "Office Expenses": "Office Expense",
+    "Transfers": "Transfer",
+}
+DEFAULT_CATEGORY_NAMES = frozenset(
+    [parent for parent in DEFAULT_CATEGORY_TREE]
+    + [child for children in DEFAULT_CATEGORY_TREE.values() for child in children]
+)
 
 
 @app.errorhandler(CliError)
@@ -225,15 +268,20 @@ def create_category():
     ensure_database()
     data = request.get_json(silent=True) or {}
     name = nonempty(str(data.get("name", "")), "name")
+    parent_id = int(data["parent_id"]) if data.get("parent_id") is not None else None
 
     with closing(connect(current_db_path())) as conn:
+        if parent_id is not None:
+            parent = dict(fetch_category(conn, parent_id))
+            if parent["parent_id"] is not None:
+                raise CliError("Category parent must be a top-level category.")
         existing = conn.execute(
             "SELECT id FROM categories WHERE name = ?",
             (name,),
         ).fetchone()
         if existing is not None:
             raise CliError(f"Category already exists: {name}")
-        cursor = conn.execute("INSERT INTO categories (name) VALUES (?)", (name,))
+        cursor = conn.execute("INSERT INTO categories (name, parent_id) VALUES (?, ?)", (name, parent_id))
         category = dict(fetch_category(conn, int(cursor.lastrowid)))
         state = read_state(conn)
         conn.commit()
@@ -246,10 +294,21 @@ def update_category(category_id: int):
     ensure_database()
     data = request.get_json(silent=True) or {}
     name = nonempty(str(data.get("name", "")), "name")
+    parent_id = int(data["parent_id"]) if data.get("parent_id") is not None else None
 
     with closing(connect(current_db_path())) as conn:
-        fetch_category(conn, category_id)
-        conn.execute("UPDATE categories SET name = ? WHERE id = ?", (name, category_id))
+        category = dict(fetch_category(conn, category_id))
+        if category["name"] in DEFAULT_CATEGORY_NAMES:
+            raise CliError(f"Default category cannot be edited: {category['name']}")
+        if parent_id == category_id:
+            raise CliError("Category cannot be its own parent.")
+        if parent_id is not None:
+            parent = dict(fetch_category(conn, parent_id))
+            if parent["parent_id"] is not None:
+                raise CliError("Category parent must be a top-level category.")
+            if parent_id in category_descendant_ids(conn, category_id):
+                raise CliError("Category cannot use a descendant as its parent.")
+        conn.execute("UPDATE categories SET name = ?, parent_id = ? WHERE id = ?", (name, parent_id, category_id))
         category = dict(fetch_category(conn, category_id))
         state = read_state(conn)
         conn.commit()
@@ -262,6 +321,8 @@ def delete_category(category_id: int):
     ensure_database()
     with closing(connect(current_db_path())) as conn:
         category = dict(fetch_category(conn, category_id))
+        if category["name"] in DEFAULT_CATEGORY_NAMES:
+            raise CliError(f"Default category cannot be deleted: {category['name']}")
         require_category_unused(conn, category_id)
         conn.execute("DELETE FROM categories WHERE id = ?", (category_id,))
         state = read_state(conn)
@@ -670,6 +731,7 @@ def ensure_database() -> None:
 def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
     sync_raw_row_ready_status(conn)
     ensure_finance_tags(conn)
+    ensure_default_categories(conn)
     accounts = rows_to_dicts(
         conn.execute(
             """
@@ -839,6 +901,8 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
         row["preview_clean_description"] = preview.get("clean_description")
     for rule in rules:
         rule["is_active"] = bool(rule["is_active"])
+    for category in categories:
+        category["is_default"] = category["name"] in DEFAULT_CATEGORY_NAMES
     for tag in tags:
         tag["is_protected"] = tag["name"] in FINANCE_TAGS
     for log in logs:
@@ -861,6 +925,58 @@ def ensure_finance_tags(conn: sqlite3.Connection) -> None:
         "INSERT OR IGNORE INTO tags (name) VALUES (?)",
         [(name,) for name in FINANCE_TAGS],
     )
+
+
+def ensure_default_categories(conn: sqlite3.Connection) -> None:
+    normalize_default_category_names(conn)
+    for parent_name, child_names in DEFAULT_CATEGORY_TREE.items():
+        parent_id = ensure_category(conn, parent_name, None)
+        for child_name in child_names:
+            ensure_category(conn, child_name, parent_id)
+
+
+def normalize_default_category_names(conn: sqlite3.Connection) -> None:
+    for old_name, new_name in CATEGORY_RENAMES.items():
+        old_row = conn.execute("SELECT id FROM categories WHERE name = ?", (old_name,)).fetchone()
+        if old_row is None:
+            continue
+        old_id = int(old_row["id"])
+        new_row = conn.execute("SELECT id FROM categories WHERE name = ?", (new_name,)).fetchone()
+        if new_row is None:
+            conn.execute("UPDATE categories SET name = ? WHERE id = ?", (new_name, old_id))
+            continue
+        new_id = int(new_row["id"])
+        conn.execute("UPDATE transactions SET category_id = ? WHERE category_id = ?", (new_id, old_id))
+        conn.execute(
+            "UPDATE transaction_import_rules SET set_category_id = ? WHERE set_category_id = ?",
+            (new_id, old_id),
+        )
+        conn.execute("UPDATE categories SET parent_id = ? WHERE parent_id = ?", (new_id, old_id))
+        conn.execute("DELETE FROM categories WHERE id = ?", (old_id,))
+
+
+def ensure_category(conn: sqlite3.Connection, name: str, parent_id: int | None) -> int:
+    row = conn.execute("SELECT id, parent_id FROM categories WHERE name = ?", (name,)).fetchone()
+    if row is not None:
+        if row["parent_id"] != parent_id:
+            conn.execute("UPDATE categories SET parent_id = ? WHERE id = ?", (parent_id, row["id"]))
+        return int(row["id"])
+    cursor = conn.execute("INSERT INTO categories (name, parent_id) VALUES (?, ?)", (name, parent_id))
+    return int(cursor.lastrowid)
+
+
+def category_descendant_ids(conn: sqlite3.Connection, category_id: int) -> set[int]:
+    descendants: set[int] = set()
+    pending = [category_id]
+    while pending:
+        current_id = pending.pop()
+        rows = conn.execute("SELECT id FROM categories WHERE parent_id = ?", (current_id,)).fetchall()
+        for row in rows:
+            child_id = int(row["id"])
+            if child_id not in descendants:
+                descendants.add(child_id)
+                pending.append(child_id)
+    return descendants
 
 
 def rows_to_dicts(rows) -> list[dict[str, Any]]:

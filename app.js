@@ -19,14 +19,33 @@
   let visibleRawRows = [];
   let editingAccountId = null;
   let editingRuleId = null;
+  let editingCategoryId = null;
   let activeTransactionId = null;
   let transactionEditMode = false;
   let accountDialogMode = "add";
   let ruleDialogMode = "add";
   let confirmResolver = null;
   let textInputResolver = null;
+  let textInputDeleteHandler = null;
   let popupTimer = null;
   const importableRawRowStatuses = new Set(["new", "ready"]);
+  const defaultCategoryOrder = [
+    "Income", "Salary", "Bonus", "Interest", "Dividend", "Refund", "Gift Received",
+    "Housing", "Rent", "Mortgage", "Property Tax", "HOA", "Home Insurance", "Home Maintenance",
+    "Utility", "Electric", "Gas", "Water", "Sewer", "Trash", "Internet", "Phone",
+    "Transportation", "Car Payment", "Fuel", "Charging", "Auto Insurance", "Maintenance", "Registration", "Parking", "Toll", "Public Transit",
+    "Food & Dining", "Groceries", "Restaurant",
+    "Shopping", "Clothing", "Electronic", "Household", "Furniture",
+    "Health", "Medical", "Dental", "Vision", "Pharmacy", "Fitness",
+    "Entertainment", "Activity", "Streaming", "Gaming", "Movie", "Music", "Hobby",
+    "Travel", "Hotel", "Flight", "Rental",
+    "Financial", "Fee", "Loan Payment", "Investment Contribution", "Tax Payment",
+    "Insurance", "Life Insurance", "Umbrella Insurance",
+    "Education", "Tuition", "Books", "Courses", "Certifications",
+    "Family & Personal", "Childcare", "Pet Expense", "Gift Given", "Personal Care",
+    "Business", "Software", "Equipment", "Service", "Office Expense",
+    "Transfer", "Brokerage Transfer", "Internal Transfer", "Credit Card Payment",
+  ];
 
   const elements = {
     navItems: document.querySelectorAll(".nav-item"),
@@ -39,7 +58,7 @@
     accountAddButton: document.querySelector("#accountAddButton"),
     accountForm: document.querySelector("#accountForm"),
     importForm: document.querySelector("#importForm"),
-    categoryForm: document.querySelector("#categoryForm"),
+    categoryAddButton: document.querySelector("#categoryAddButton"),
     tagForm: document.querySelector("#tagForm"),
     ruleForm: document.querySelector("#ruleForm"),
     importMessage: document.querySelector("#importMessage"),
@@ -78,6 +97,7 @@
     textInputLabel: document.querySelector("#textInputLabel"),
     textInputCancelButton: document.querySelector("#textInputCancelButton"),
     textInputDismissButton: document.querySelector("#textInputDismissButton"),
+    textInputDeleteButton: document.querySelector("#textInputDeleteButton"),
     confirmDialog: document.querySelector("#confirmDialog"),
     confirmForm: document.querySelector("#confirmForm"),
     confirmTitle: document.querySelector("#confirmTitle"),
@@ -98,6 +118,15 @@
     transactionEditButton: document.querySelector("#transactionEditButton"),
     transactionCancelButton: document.querySelector("#transactionCancelButton"),
     transactionSaveButton: document.querySelector("#transactionSaveButton"),
+    categoryDialog: document.querySelector("#categoryDialog"),
+    categoryDialogForm: document.querySelector("#categoryDialogForm"),
+    categoryDialogTitle: document.querySelector("#categoryDialogTitle"),
+    categoryCloseButton: document.querySelector("#categoryCloseButton"),
+    categoryCancelButton: document.querySelector("#categoryCancelButton"),
+    categoryDeleteButton: document.querySelector("#categoryDeleteButton"),
+    categorySubmitButton: document.querySelector("#categorySubmitButton"),
+    categoryParentSelect: document.querySelector("#categoryParentSelect"),
+    categoryMessage: document.querySelector("#categoryMessage"),
   };
 
   elements.navItems.forEach((navItem) => {
@@ -111,7 +140,7 @@
   elements.accountAddButton.addEventListener("click", openAccountAddDialog);
   elements.accountForm.addEventListener("submit", saveAccount);
   elements.importForm.addEventListener("submit", importCsv);
-  elements.categoryForm.addEventListener("submit", addCategory);
+  elements.categoryAddButton.addEventListener("click", openCategoryAddDialog);
   elements.tagForm.addEventListener("submit", addTag);
   elements.ruleForm.addEventListener("submit", saveRule);
   elements.rawAccountFilter.addEventListener("change", renderRawRows);
@@ -137,6 +166,11 @@
   elements.textInputForm.addEventListener("submit", resolveTextInput);
   elements.textInputCancelButton.addEventListener("click", () => closeTextInputDialog(null));
   elements.textInputDismissButton.addEventListener("click", () => closeTextInputDialog(null));
+  elements.textInputDeleteButton.addEventListener("click", async () => {
+    if (textInputDeleteHandler) {
+      await textInputDeleteHandler();
+    }
+  });
   elements.textInputDialog.addEventListener("cancel", (event) => {
     event.preventDefault();
     closeTextInputDialog(null);
@@ -155,6 +189,13 @@
   elements.transactionDialog.addEventListener("close", () => {
     activeTransactionId = null;
     transactionEditMode = false;
+  });
+  elements.categoryDialogForm.addEventListener("submit", saveCategory);
+  elements.categoryCloseButton.addEventListener("click", closeCategoryDialog);
+  elements.categoryCancelButton.addEventListener("click", closeCategoryDialog);
+  elements.categoryDeleteButton.addEventListener("click", deleteEditingCategory);
+  elements.categoryDialog.addEventListener("close", () => {
+    editingCategoryId = null;
   });
   document.querySelectorAll("dialog.modal").forEach((dialog) => {
     dialog.addEventListener("close", updateModalScrollLock);
@@ -413,23 +454,51 @@
     }
   }
 
-  async function addCategory(event) {
+  function openCategoryAddDialog() {
+    editingCategoryId = null;
+    elements.categoryDialogTitle.textContent = "Add Category";
+    elements.categorySubmitButton.textContent = "Add Category";
+    elements.categoryDeleteButton.hidden = true;
+    elements.categoryMessage.textContent = "";
+    elements.categoryMessage.classList.remove("error");
+    elements.categoryDialogForm.reset();
+    populateCategoryParentSelect();
+    openModal(elements.categoryDialog);
+  }
+
+  function openCategoryEditDialog(category) {
+    editingCategoryId = category.id;
+    elements.categoryDialogTitle.textContent = "Edit Category";
+    elements.categorySubmitButton.textContent = "Save";
+    elements.categoryDeleteButton.hidden = Boolean(category.is_default);
+    elements.categoryMessage.textContent = "";
+    elements.categoryMessage.classList.remove("error");
+    elements.categoryDialogForm.elements.name.value = category.name || "";
+    populateCategoryParentSelect(category);
+    elements.categoryDialogForm.elements.parentId.value = category.parent_id === null ? "" : String(category.parent_id);
+    openModal(elements.categoryDialog);
+  }
+
+  function closeCategoryDialog() {
+    elements.categoryDialog.close();
+  }
+
+  async function saveCategory(event) {
     event.preventDefault();
-    const formElement = event.currentTarget;
-    const form = new FormData(formElement);
-    const name = clean(form.get("name"));
-    if (!name) {
-      return;
-    }
+    const form = new FormData(elements.categoryDialogForm);
+    const payload = {
+      name: clean(form.get("name")),
+      parent_id: Number(form.get("parentId")) || null,
+    };
     try {
-      const payload = await apiRequest("/api/categories", {
-        method: "POST",
-        body: JSON.stringify({ name }),
+      const response = await apiRequest(editingCategoryId ? `/api/categories/${editingCategoryId}` : "/api/categories", {
+        method: editingCategoryId ? "PATCH" : "POST",
+        body: JSON.stringify(payload),
       });
-      formElement.reset();
-      applyStateFromPayload(payload);
+      closeCategoryDialog();
+      applyStateFromPayload(response);
     } catch (error) {
-      showPopup(error.message || "Could not add category.", "error");
+      setModalMessage(elements.categoryMessage, error.message || "Could not save category.", true);
     }
   }
 
@@ -527,23 +596,7 @@
   }
 
   async function editCategory(category) {
-    const name = await promptForText({
-      title: "Edit Category",
-      label: "Category name",
-      value: category.name,
-    });
-    if (name === null) {
-      return;
-    }
-    try {
-      const payload = await apiRequest(`/api/categories/${category.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({ name: clean(name) }),
-      });
-      applyStateFromPayload(payload);
-    } catch (error) {
-      showPopup(error.message || "Could not update category.", "error");
-    }
+    openCategoryEditDialog(category);
   }
 
   async function deleteCategory(category) {
@@ -563,11 +616,28 @@
     }
   }
 
+  async function deleteEditingCategory() {
+    const category = state.categories.find((candidate) => candidate.id === editingCategoryId);
+    if (!category) {
+      return;
+    }
+    await deleteCategory(category);
+    if (!state.categories.some((candidate) => candidate.id === editingCategoryId)) {
+      closeCategoryDialog();
+    }
+  }
+
   async function editTag(tag) {
     const name = await promptForText({
       title: "Edit Tag",
       label: "Tag name",
       value: tag.name,
+      deleteLabel: "Delete Tag",
+      onDelete: async () => {
+        if (await deleteTag(tag)) {
+          closeTextInputDialog(null);
+        }
+      },
     });
     if (name === null) {
       return;
@@ -590,13 +660,15 @@
       actionLabel: "Delete Tag",
     });
     if (!confirmed) {
-      return;
+      return false;
     }
     try {
       const payload = await apiRequest(`/api/tags/${tag.id}`, { method: "DELETE" });
       applyStateFromPayload(payload);
+      return true;
     } catch (error) {
       showPopup(error.message || "Could not delete tag.", "error");
+      return false;
     }
   }
 
@@ -891,7 +963,7 @@
         if (tag.is_protected) {
           tagList.appendChild(el("span", tag.name, "chip"));
         } else {
-          tagList.appendChild(manageableChip(tag.name, () => editTag(tag), () => deleteTag(tag)));
+          tagList.appendChild(manageableChip(tag.name, () => editTag(tag)));
         }
       });
     }
@@ -908,25 +980,106 @@
     if (!state.categories.length) {
       appendEmpty(categoryList);
     } else {
-      state.categories.forEach((category) => {
-        categoryList.appendChild(manageableChip(category.name, () => editCategory(category), () => deleteCategory(category)));
-      });
+      renderCategorySections(categoryList);
     }
 
     fillSelect(
       elements.ruleCategorySelect,
       [
         { value: "", label: "No category" },
-        ...state.categories.map((category) => ({ value: String(category.id), label: category.name })),
+        ...categoryOptions(),
       ],
     );
     fillSelect(
       elements.transactionCategorySelect,
       [
         { value: "", label: "No category" },
-        ...state.categories.map((category) => ({ value: String(category.id), label: category.name })),
+        ...categoryOptions(),
       ],
     );
+  }
+
+  function populateCategoryParentSelect(category = null) {
+    const options = orderedCategories()
+      .filter((option) => option.parent_id === null && option.id !== category?.id)
+      .map((option) => ({ value: String(option.id), label: option.name }));
+    fillSelect(elements.categoryParentSelect, [{ value: "", label: "No parent" }, ...options]);
+  }
+
+  function categoryOptions() {
+    return orderedCategories().map((category) => ({ value: String(category.id), label: categoryLabel(category) }));
+  }
+
+  function renderCategorySections(categoryList) {
+    const roots = orderedCategories().filter((category) => category.parent_id === null);
+    const rendered = new Set();
+    roots.forEach((root) => {
+      const section = document.createElement("section");
+      section.className = "category-section";
+      const header = document.createElement("div");
+      header.className = "category-section-heading";
+      header.appendChild(el("h3", root.name));
+      if (!root.is_default) {
+        header.appendChild(actionButtons([["edit", `Edit ${root.name}`, () => editCategory(root)]]));
+      }
+      const chips = document.createElement("div");
+      chips.className = "category-section-chips";
+      const children = orderedCategories().filter((category) => category.parent_id === root.id);
+      if (!children.length && !root.is_default) {
+        chips.appendChild(categoryChip(root));
+        rendered.add(root.id);
+      }
+      children.forEach((child) => {
+        chips.appendChild(categoryChip(child));
+        rendered.add(child.id);
+      });
+      section.append(header, chips);
+      categoryList.appendChild(section);
+      rendered.add(root.id);
+    });
+    orderedCategories()
+      .filter((category) => !rendered.has(category.id))
+      .forEach((category) => categoryList.appendChild(categoryChip(category)));
+  }
+
+  function categoryChip(category) {
+    if (category.is_default) {
+      return el("span", category.name, "chip category-chip");
+    }
+    return manageableChip(category.name, () => editCategory(category), "category-chip");
+  }
+
+  function orderedCategories() {
+    return state.categories.slice().sort((a, b) => categorySortKey(a).localeCompare(categorySortKey(b)));
+  }
+
+  function categorySortKey(category) {
+    const parent = state.categories.find((candidate) => candidate.id === category.parent_id);
+    const parentName = parent?.name || category.name;
+    const parentIndex = defaultCategoryOrder.indexOf(parentName);
+    const categoryIndex = defaultCategoryOrder.indexOf(category.name);
+    const parentRank = parentIndex === -1 ? 999 : parentIndex;
+    const categoryRank = category.parent_id === null ? -1 : categoryIndex === -1 ? 999 : categoryIndex;
+    return `${String(parentRank).padStart(3, "0")}:${parentName}:${String(categoryRank).padStart(3, "0")}:${category.name}`;
+  }
+
+  function categoryLabel(category) {
+    const parent = state.categories.find((candidate) => candidate.id === category.parent_id);
+    return parent ? `${parent.name} / ${category.name}` : category.name;
+  }
+
+  function categoryDescendantIds(categoryId) {
+    const descendants = new Set();
+    const visit = (parentId) => {
+      state.categories
+        .filter((category) => category.parent_id === parentId)
+        .forEach((category) => {
+          descendants.add(category.id);
+          visit(category.id);
+        });
+    };
+    visit(categoryId);
+    return descendants;
   }
 
   function renderRules() {
@@ -1440,13 +1593,16 @@
     return actions.join(" | ");
   }
 
-  function promptForText({ title, label, value }) {
+  function promptForText({ title, label, value, deleteLabel, onDelete }) {
     if (textInputResolver) {
       closeTextInputDialog(null);
     }
     elements.textInputTitle.textContent = title;
     elements.textInputLabel.textContent = label;
     elements.textInputForm.elements.value.value = value || "";
+    textInputDeleteHandler = onDelete || null;
+    elements.textInputDeleteButton.hidden = !onDelete;
+    elements.textInputDeleteButton.textContent = deleteLabel || "Delete";
     openModal(elements.textInputDialog, { focusSingleTextField: true });
     return new Promise((resolve) => {
       textInputResolver = resolve;
@@ -1470,6 +1626,8 @@
       textInputResolver(value);
       textInputResolver = null;
     }
+    textInputDeleteHandler = null;
+    elements.textInputDeleteButton.hidden = true;
   }
 
   function confirmDestructive({ title, message, actionLabel }) {
@@ -1658,15 +1816,12 @@
     return wrapper;
   }
 
-  function manageableChip(label, onEdit, onDelete) {
+  function manageableChip(label, onEdit, extraClass = "") {
     const wrapper = document.createElement("span");
-    wrapper.className = "chip manageable-chip";
+    wrapper.className = `chip manageable-chip${extraClass ? ` ${extraClass}` : ""}`;
     wrapper.append(
       el("span", label),
-      actionButtons([
-        ["edit", `Edit ${label}`, onEdit],
-        ["close", `Delete ${label}`, onDelete],
-      ]),
+      actionButtons([["edit", `Edit ${label}`, onEdit]]),
     );
     return wrapper;
   }
