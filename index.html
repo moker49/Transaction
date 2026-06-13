@@ -51,7 +51,7 @@
       <button class="tab" type="button" data-section="manage" data-view="tags">Tags</button>
       <button class="tab" type="button" data-section="manage" data-view="rules">Rules</button>
       <button class="tab" type="button" data-section="import" data-view="import">CSV Import</button>
-      <button class="tab" type="button" data-section="import" data-view="raw">Raw Import Rows</button>
+      <button class="tab" type="button" data-section="import" data-view="raw">Pending</button>
       <button class="tab" type="button" data-section="settings" data-view="settings">Settings</button>
       <button class="tab" type="button" data-section="settings" data-view="dev">Dev</button>
       <button class="tab" type="button" data-section="settings" data-view="logs">Logs</button>
@@ -120,18 +120,17 @@
                     <th>Name</th>
                     <th>Institution</th>
                     <th>Account type</th>
-                    <th>Rows</th>
-                    <th>Actions</th>
+                    <th>Records</th>
                   </tr>
                 </thead>
                 <tbody id="accountsTable"></tbody>
               </table>
             </div>
-            <div class="panel-footer">
-              <button type="button" class="primary" id="accountAddButton">Add Account</button>
-            </div>
           </section>
         </div>
+        <button type="button" class="primary fab-button manage-fab" id="accountAddButton" aria-label="Add Account" title="Add Account">
+          <span class="material-symbols-outlined" aria-hidden="true">add</span>
+        </button>
       </section>
 
       <section class="view" id="categoriesView">
@@ -141,11 +140,11 @@
               <h2>Categories</h2>
             </div>
             <div id="categoryList" class="chip-list empty-target"></div>
-            <div class="panel-footer">
-              <button type="button" class="primary" id="categoryAddButton">Add Category</button>
-            </div>
           </section>
         </div>
+        <button type="button" class="primary fab-button manage-fab" id="categoryAddButton" aria-label="Add Category" title="Add Category">
+          <span class="material-symbols-outlined" aria-hidden="true">add</span>
+        </button>
       </section>
 
       <section class="view" id="tagsView">
@@ -154,13 +153,12 @@
             <div class="panel-heading">
               <h2>Tags</h2>
             </div>
-            <form id="tagForm" class="inline-form">
-              <input name="name" type="text" placeholder="Tag name" required autocomplete="off">
-              <button type="submit" class="primary">Add</button>
-            </form>
             <div id="tagList" class="chip-list empty-target"></div>
           </section>
         </div>
+        <button type="button" class="primary fab-button manage-fab" id="tagAddButton" aria-label="Add Tag" title="Add Tag">
+          <span class="material-symbols-outlined" aria-hidden="true">add</span>
+        </button>
       </section>
 
       <section class="view" id="importView">
@@ -178,10 +176,6 @@
                 <span>CSV file</span>
                 <input name="csvFile" type="file" accept=".csv,text/csv" required>
               </label>
-              <label>
-                <span>Source type</span>
-                <input name="sourceType" type="text" value="csv" required>
-              </label>
               <button type="submit" class="primary">Import CSV</button>
             </form>
             <div id="importMessage" class="message" role="status" aria-live="polite"></div>
@@ -189,7 +183,7 @@
 
           <section class="panel">
             <div class="panel-heading">
-              <h2>Imported Sources</h2>
+              <h2>Recent CSV imports</h2>
             </div>
             <div id="importList" class="list empty-target"></div>
           </section>
@@ -198,22 +192,21 @@
 
       <section class="view" id="rawView">
         <section class="panel">
-          <div class="panel-heading with-controls">
-            <h2>Raw Imported Rows</h2>
-            <div class="controls">
-              <input id="rawSearch" type="search" placeholder="Search rows" aria-label="Search raw rows">
+          <div class="panel-heading with-controls raw-controls-heading">
+            <div class="controls raw-controls">
+              <button type="button" class="icon-button icon-only" id="selectVisibleRowsButton" aria-label="Select visible" title="Select visible">
+                <span class="material-symbols-outlined" aria-hidden="true">select_all</span>
+              </button>
               <select id="rawAccountFilter" aria-label="Filter by account"></select>
               <select id="rawStatusFilter" aria-label="Filter by import status">
                 <option value="all">All rows</option>
-                <option value="new">New</option>
+                <option value="new" selected>New</option>
                 <option value="matched">Matched</option>
                 <option value="unmatched">Unmatched</option>
                 <option value="imported">Imported</option>
                 <option value="duplicate">Duplicate</option>
                 <option value="error">Error</option>
               </select>
-              <button type="button" class="icon-button" id="selectVisibleRowsButton">Select visible</button>
-              <button type="button" class="primary" id="importSelectedRowsButton">Import selected</button>
             </div>
           </div>
           <div class="table-wrap raw-table raw-table-wrap">
@@ -221,18 +214,21 @@
               <thead>
                 <tr>
                   <th data-raw-column="select">Select</th>
-                  <th data-raw-column="status">Status</th>
-                  <th data-raw-column="account">Account</th>
                   <th data-raw-column="date">Date</th>
                   <th data-raw-column="category">Category</th>
-                  <th data-raw-column="description">Description</th>
                   <th data-raw-column="amount">Amount</th>
+                  <th data-raw-column="description">Description</th>
+                  <th data-raw-column="account">Account</th>
                   <th data-raw-column="notes">Notes</th>
+                  <th data-raw-column="status">Status</th>
                 </tr>
               </thead>
               <tbody id="rawRowsTable"></tbody>
             </table>
           </div>
+          <button type="button" class="primary fab-button import-fab" id="importSelectedRowsButton" aria-label="Import selected" title="Import selected">
+            <span class="material-symbols-outlined" aria-hidden="true">download</span>
+          </button>
         </section>
       </section>
 
@@ -249,17 +245,16 @@
                     <th>Name</th>
                     <th>Match</th>
                     <th>Effects</th>
-                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody id="rulesTable"></tbody>
               </table>
             </div>
-            <div class="panel-footer">
-              <button type="button" class="primary" id="ruleAddButton">Add Rule</button>
-            </div>
           </section>
         </div>
+        <button type="button" class="primary fab-button manage-fab" id="ruleAddButton" aria-label="Add Rule" title="Add Rule">
+          <span class="material-symbols-outlined" aria-hidden="true">add</span>
+        </button>
       </section>
 
       <section class="view" id="settingsView">
@@ -364,6 +359,7 @@
       </div>
       <div id="accountMessage" class="modal-message" role="status" aria-live="polite"></div>
       <div class="modal-actions">
+        <button type="button" class="danger-button modal-delete-button" id="accountDeleteButton" hidden>Delete</button>
         <button type="button" class="icon-button" id="accountDismissButton">Cancel</button>
         <button type="submit" class="primary" id="accountSubmitButton">Save</button>
       </div>
@@ -431,6 +427,7 @@
       </div>
       <div id="ruleMessage" class="modal-message" role="status" aria-live="polite"></div>
       <div class="modal-actions">
+        <button type="button" class="danger-button modal-delete-button" id="ruleDeleteButton" hidden>Delete</button>
         <button type="button" class="icon-button" id="ruleDismissButton">Cancel</button>
         <button type="submit" class="primary" id="ruleSubmitButton">Add Rule</button>
       </div>
@@ -533,7 +530,7 @@
       </div>
       <div id="categoryMessage" class="modal-message" role="status" aria-live="polite"></div>
       <div class="modal-actions">
-        <button type="button" class="danger-button" id="categoryDeleteButton" hidden>Delete</button>
+        <button type="button" class="danger-button modal-delete-button" id="categoryDeleteButton" hidden>Delete</button>
         <button type="button" class="icon-button" id="categoryCancelButton">Cancel</button>
         <button type="submit" class="primary" id="categorySubmitButton">Add Category</button>
       </div>
@@ -555,7 +552,7 @@
         </label>
       </div>
       <div class="modal-actions">
-        <button type="button" class="danger-button" id="textInputDeleteButton" hidden>Delete</button>
+        <button type="button" class="danger-button modal-delete-button" id="textInputDeleteButton" hidden>Delete</button>
         <button type="button" class="icon-button" id="textInputDismissButton">Cancel</button>
         <button type="submit" class="primary">Save</button>
       </div>

@@ -64,7 +64,7 @@
     accountForm: document.querySelector("#accountForm"),
     importForm: document.querySelector("#importForm"),
     categoryAddButton: document.querySelector("#categoryAddButton"),
-    tagForm: document.querySelector("#tagForm"),
+    tagAddButton: document.querySelector("#tagAddButton"),
     ruleForm: document.querySelector("#ruleForm"),
     importMessage: document.querySelector("#importMessage"),
     devMessage: document.querySelector("#devMessage"),
@@ -75,7 +75,6 @@
     rawAccountFilter: document.querySelector("#rawAccountFilter"),
     rawStatusFilter: document.querySelector("#rawStatusFilter"),
     rawRowsTableElement: document.querySelector("#rawRowsTableElement"),
-    rawSearch: document.querySelector("#rawSearch"),
     selectVisibleRowsButton: document.querySelector("#selectVisibleRowsButton"),
     importSelectedRowsButton: document.querySelector("#importSelectedRowsButton"),
     regenerateDatabaseButton: document.querySelector("#regenerateDatabaseButton"),
@@ -88,6 +87,7 @@
     ruleDialogTitle: document.querySelector("#ruleDialogTitle"),
     ruleMessage: document.querySelector("#ruleMessage"),
     ruleSubmitButton: document.querySelector("#ruleSubmitButton"),
+    ruleDeleteButton: document.querySelector("#ruleDeleteButton"),
     profileButton: document.querySelector("#profileButton"),
     settingsThemeToggle: document.querySelector("#settingsThemeToggle"),
     accountDialog: document.querySelector("#accountDialog"),
@@ -95,6 +95,7 @@
     accountCancelButton: document.querySelector("#accountCancelButton"),
     accountDismissButton: document.querySelector("#accountDismissButton"),
     accountSubmitButton: document.querySelector("#accountSubmitButton"),
+    accountDeleteButton: document.querySelector("#accountDeleteButton"),
     accountMessage: document.querySelector("#accountMessage"),
     textInputDialog: document.querySelector("#textInputDialog"),
     textInputForm: document.querySelector("#textInputForm"),
@@ -146,11 +147,10 @@
   elements.accountForm.addEventListener("submit", saveAccount);
   elements.importForm.addEventListener("submit", importCsv);
   elements.categoryAddButton.addEventListener("click", openCategoryAddDialog);
-  elements.tagForm.addEventListener("submit", addTag);
+  elements.tagAddButton.addEventListener("click", addTag);
   elements.ruleForm.addEventListener("submit", saveRule);
   elements.rawAccountFilter.addEventListener("change", renderRawRows);
   elements.rawStatusFilter.addEventListener("change", renderRawRows);
-  elements.rawSearch.addEventListener("input", renderRawRows);
   elements.selectVisibleRowsButton.addEventListener("click", selectVisibleRawRows);
   elements.importSelectedRowsButton.addEventListener("click", importSelectedRawRows);
   elements.regenerateDatabaseButton.addEventListener("click", regenerateDatabase);
@@ -158,6 +158,7 @@
   elements.ruleAddButton.addEventListener("click", openRuleAddDialog);
   elements.ruleCancelButton.addEventListener("click", closeRuleDialog);
   elements.ruleDismissButton.addEventListener("click", closeRuleDialog);
+  elements.ruleDeleteButton.addEventListener("click", deleteEditingRule);
   elements.ruleDialog.addEventListener("close", () => {
     editingRuleId = null;
   });
@@ -165,6 +166,7 @@
   elements.settingsThemeToggle.addEventListener("change", updateTheme);
   elements.accountCancelButton.addEventListener("click", closeAccountDialog);
   elements.accountDismissButton.addEventListener("click", closeAccountDialog);
+  elements.accountDeleteButton.addEventListener("click", deleteEditingAccount);
   elements.accountDialog.addEventListener("close", () => {
     editingAccountId = null;
   });
@@ -342,6 +344,7 @@
     editingAccountId = null;
     elements.accountDialogTitle.textContent = "Add Account";
     elements.accountSubmitButton.textContent = "Add Account";
+    elements.accountDeleteButton.hidden = true;
     elements.accountMessage.textContent = "";
     elements.accountMessage.classList.remove("error");
     elements.accountForm.reset();
@@ -355,6 +358,7 @@
     editingAccountId = account.id;
     elements.accountDialogTitle.textContent = "Edit Account";
     elements.accountSubmitButton.textContent = "Save";
+    elements.accountDeleteButton.hidden = false;
     elements.accountMessage.textContent = "";
     elements.accountMessage.classList.remove("error");
     const form = elements.accountForm;
@@ -410,7 +414,7 @@
     const form = new FormData(formElement);
     const accountId = Number(form.get("accountId"));
     const file = form.get("csvFile");
-    const sourceType = clean(form.get("sourceType")) || "csv";
+    const sourceType = "csv";
 
     if (!accountId || !(file instanceof File)) {
       showPopup("Choose an account and CSV file.", "warning");
@@ -427,7 +431,6 @@
         body: upload,
       });
       formElement.reset();
-      formElement.elements.sourceType.value = "csv";
       applyStateFromPayload(payload);
       if (payload.status === "already_imported") {
         showPopup("File already imported for this account.", "warning");
@@ -439,11 +442,12 @@
     }
   }
 
-  async function addTag(event) {
-    event.preventDefault();
-    const formElement = event.currentTarget;
-    const form = new FormData(formElement);
-    const name = clean(form.get("name"));
+  async function addTag() {
+    const name = await promptForText({
+      title: "Add Tag",
+      label: "Tag name",
+      value: "",
+    });
     if (!name) {
       return;
     }
@@ -452,7 +456,6 @@
         method: "POST",
         body: JSON.stringify({ name }),
       });
-      formElement.reset();
       applyStateFromPayload(payload);
     } catch (error) {
       showPopup(error.message || "Could not add tag.", "error");
@@ -514,6 +517,7 @@
     elements.ruleMessage.classList.remove("error");
     elements.ruleDialogTitle.textContent = "Add Rule";
     elements.ruleSubmitButton.textContent = "Add Rule";
+    elements.ruleDeleteButton.hidden = true;
     elements.ruleForm.reset();
     elements.ruleForm.elements.matchField.value = "description";
     elements.ruleForm.elements.matchType.value = "contains";
@@ -528,6 +532,7 @@
     elements.ruleMessage.classList.remove("error");
     elements.ruleDialogTitle.textContent = "Edit Rule";
     elements.ruleSubmitButton.textContent = "Save";
+    elements.ruleDeleteButton.hidden = false;
     const form = elements.ruleForm;
     form.elements.name.value = rule.name || "";
     form.elements.matchField.value = rule.match_field || "description";
@@ -593,13 +598,25 @@
       actionLabel: "Delete Account",
     });
     if (!confirmed) {
-      return;
+      return false;
     }
     try {
       const payload = await apiRequest(`/api/accounts/${account.id}`, { method: "DELETE" });
       applyStateFromPayload(payload);
+      return true;
     } catch (error) {
       showPopup(error.message || "Could not delete account.", "error");
+      return false;
+    }
+  }
+
+  async function deleteEditingAccount() {
+    const account = state.accounts.find((candidate) => candidate.id === editingAccountId);
+    if (!account) {
+      return;
+    }
+    if (await deleteAccount(account)) {
+      closeAccountDialog();
     }
   }
 
@@ -640,7 +657,7 @@
       title: "Edit Tag",
       label: "Tag name",
       value: tag.name,
-      deleteLabel: "Delete Tag",
+      deleteLabel: "Delete",
       onDelete: async () => {
         if (await deleteTag(tag)) {
           closeTextInputDialog(null);
@@ -687,13 +704,25 @@
       actionLabel: "Delete Rule",
     });
     if (!confirmed) {
-      return;
+      return false;
     }
     try {
       const payload = await apiRequest(`/api/rules/${rule.id}`, { method: "DELETE" });
       applyStateFromPayload(payload);
+      return true;
     } catch (error) {
       showPopup(error.message || "Could not delete rule.", "error");
+      return false;
+    }
+  }
+
+  async function deleteEditingRule() {
+    const rule = state.rules.find((candidate) => candidate.id === editingRuleId);
+    if (!rule) {
+      return;
+    }
+    if (await deleteRule(rule)) {
+      closeRuleDialog();
     }
   }
 
@@ -729,23 +758,20 @@
     const tbody = document.querySelector("#accountsTable");
     clear(tbody);
     if (!state.accounts.length) {
-      tbody.appendChild(emptyTableRow(5));
+      tbody.appendChild(emptyTableRow(4));
       return;
     }
 
     state.accounts.forEach((account) => {
       const rowCount = state.rawRows.filter((row) => row.account_id === account.id).length;
-      const actions = actionButtons([
-        ["edit", "Edit account", () => openAccountEditDialog(account)],
-        ["close", "Delete account", () => deleteAccount(account)],
-      ]);
-      tbody.appendChild(tableRow([
+      const row = tableRow([
         account.name,
         account.institution || "-",
         account.account_type || "-",
         String(rowCount),
-        actions,
-      ]));
+      ]);
+      makeEditableRow(row, `Edit account ${account.name}`, () => openAccountEditDialog(account));
+      tbody.appendChild(row);
     });
   }
 
@@ -766,6 +792,7 @@
         transaction.account || "-",
         transaction.notes || "-",
       ]);
+      row.children[2]?.classList.add("amount");
       row.classList.add("clickable-row");
       row.tabIndex = 0;
       row.setAttribute("role", "button");
@@ -948,7 +975,7 @@
       return;
     }
 
-    state.imports.slice().reverse().forEach((item) => importList.appendChild(importListItem(item)));
+    state.imports.slice().reverse().slice(0, 5).forEach((item) => importList.appendChild(importListItem(item)));
   }
 
   function importListItem(item) {
@@ -1004,6 +1031,10 @@
   }
 
   function populateCategoryParentSelect(category = null) {
+    if (category && categoryDescendantIds(category.id).size > 0) {
+      fillSelect(elements.categoryParentSelect, [{ value: "", label: "No parent" }]);
+      return;
+    }
     const options = orderedCategories()
       .filter((option) => option.parent_id === null && option.id !== category?.id)
       .map((option) => ({ value: String(option.id), label: option.name }));
@@ -1090,7 +1121,7 @@
     const tbody = document.querySelector("#rulesTable");
     clear(tbody);
     if (!state.rules.length) {
-      tbody.appendChild(emptyTableRow(4));
+      tbody.appendChild(emptyTableRow(3));
       return;
     }
 
@@ -1100,15 +1131,13 @@
       .forEach((rule) => {
         const tag = state.tags.find((candidate) => candidate.id === rule.add_tag_id);
         const category = state.categories.find((candidate) => candidate.id === rule.set_category_id);
-        tbody.appendChild(tableRow([
+        const row = tableRow([
           `${rule.name} (${rule.priority})`,
           `${rule.match_field} ${rule.match_type} "${rule.match_value}"`,
           ruleActions(rule, category, tag) || "-",
-          actionButtons([
-            ["edit", "Edit rule", () => openRuleEditDialog(rule)],
-            ["close", "Delete rule", () => deleteRule(rule)],
-          ]),
-        ]));
+        ]);
+        makeEditableRow(row, `Edit rule ${rule.name}`, () => openRuleEditDialog(rule));
+        tbody.appendChild(row);
       });
   }
 
@@ -1150,7 +1179,6 @@
     }
     updateRawColumnHeaders(hiddenColumns);
     const rawColumnCount = 8 - hiddenColumns.size;
-    const search = elements.rawSearch.value.trim().toLowerCase();
 
     [...selectedRawRowIds].forEach((rowId) => {
       const rawRow = state.rawRows.find((candidate) => candidate.id === rowId);
@@ -1166,13 +1194,7 @@
       if (!rawRowMatchesStatusFilter(row, statusFilter)) {
         return false;
       }
-      if (!search) {
-        return true;
-      }
-      return [row.raw_date, row.raw_category, row.raw_description, row.raw_amount]
-        .join(" ")
-        .toLowerCase()
-        .includes(search);
+      return true;
     });
     visibleRawRows = rows;
     if (!rows.length) {
@@ -1219,13 +1241,13 @@
 
       const cells = [
         ["select", cell(checkbox)],
-        ["status", cell(statusBadge(rawRow), "status-cell")],
-        ["account", cell(account ? account.name : "Unknown", "muted-cell")],
         ["date", cell(rawRow.raw_date || "-")],
         ["category", cell(rawValueWithPreview(rawRow.raw_category, rawRow.preview_category))],
-        ["description", cell(rawValueWithPreview(rawRow.raw_description, rawRow.preview_clean_description))],
         ["amount", cell(rawRow.raw_amount || "-", "amount")],
+        ["description", cell(rawValueWithPreview(rawRow.raw_description, rawRow.preview_clean_description))],
+        ["account", cell(account ? account.name : "Unknown", "muted-cell")],
         ["notes", cell(noteInput)],
+        ["status", cell(statusBadge(rawRow), "status-cell")],
       ];
       tr.append(...cells.filter(([column]) => !hiddenColumns.has(column)).map(([, node]) => node));
       tbody.appendChild(tr);
@@ -1251,7 +1273,7 @@
     }, {});
 
     elements.importSelectedRowsButton.disabled = true;
-    elements.importSelectedRowsButton.textContent = "Importing...";
+    elements.importSelectedRowsButton.title = "Importing";
     try {
       const payload = await apiRequest("/api/raw-rows/import", {
         method: "POST",
@@ -1320,8 +1342,9 @@
       return rawRow && isImportableRawRow(rawRow);
     }).length;
     elements.importSelectedRowsButton.disabled = importableCount === 0;
-    elements.importSelectedRowsButton.textContent =
+    elements.importSelectedRowsButton.title =
       importableCount === 0 ? "Import selected" : `Import selected (${importableCount})`;
+    elements.importSelectedRowsButton.setAttribute("aria-label", elements.importSelectedRowsButton.title);
   }
 
   function updateSelectVisibleButton() {
@@ -1330,7 +1353,9 @@
       .map((row) => row.id);
     const allSelected = selectableIds.length > 0 && selectableIds.every((rowId) => selectedRawRowIds.has(rowId));
     elements.selectVisibleRowsButton.disabled = selectableIds.length === 0;
-    elements.selectVisibleRowsButton.textContent = allSelected ? "Clear visible" : "Select visible";
+    elements.selectVisibleRowsButton.title = allSelected ? "Clear visible" : "Select visible";
+    elements.selectVisibleRowsButton.setAttribute("aria-label", elements.selectVisibleRowsButton.title);
+    elements.selectVisibleRowsButton.querySelector(".material-symbols-outlined").textContent = allSelected ? "deselect" : "select_all";
   }
 
   function updateRawColumnHeaders(hiddenColumns) {
@@ -1786,6 +1811,20 @@
     const tr = document.createElement("tr");
     values.forEach((value) => tr.appendChild(cell(value)));
     return tr;
+  }
+
+  function makeEditableRow(row, label, handler) {
+    row.classList.add("clickable-row");
+    row.tabIndex = 0;
+    row.setAttribute("role", "button");
+    row.setAttribute("aria-label", label);
+    row.addEventListener("click", handler);
+    row.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        handler();
+      }
+    });
   }
 
   function emptyTableRow(colspan) {

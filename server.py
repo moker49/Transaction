@@ -300,6 +300,8 @@ def update_category(category_id: int):
         if parent_id == category_id:
             raise CliError("Category cannot be its own parent.")
         if parent_id is not None:
+            if category_descendant_ids(conn, category_id):
+                raise CliError("Category with child categories cannot be moved under another parent.")
             parent = dict(fetch_category(conn, parent_id))
             if parent["parent_id"] is not None:
                 raise CliError("Category parent must be a top-level category.")
