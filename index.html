@@ -20,14 +20,9 @@
         <p class="subtle">Local first-version workspace</p>
       </div>
       <div class="topbar-actions">
-        <label class="theme-toggle" title="Toggle theme">
-          <input type="checkbox" id="themeToggle" checked aria-label="Use dark theme">
-          <span class="theme-track" aria-hidden="true">
-            <span class="theme-thumb"></span>
-            <span class="theme-icon theme-icon-light material-symbols-outlined">light_mode</span>
-            <span class="theme-icon theme-icon-dark material-symbols-outlined">dark_mode</span>
-          </span>
-        </label>
+        <button class="profile-button" type="button" id="profileButton" aria-label="Profile and settings" title="Profile and settings">
+          <span class="material-symbols-outlined" aria-hidden="true">account_circle</span>
+        </button>
       </div>
     </header>
 
@@ -35,6 +30,10 @@
       <button class="nav-item is-active" type="button" data-section="dash" data-default-view="overview">
         <span class="material-symbols-outlined" aria-hidden="true">dashboard</span>
         <span>Dash</span>
+      </button>
+      <button class="nav-item" type="button" data-section="transactions" data-default-view="transactions">
+        <span class="material-symbols-outlined" aria-hidden="true">receipt_long</span>
+        <span>Transactions</span>
       </button>
       <button class="nav-item" type="button" data-section="manage" data-default-view="accounts">
         <span class="material-symbols-outlined" aria-hidden="true">tune</span>
@@ -44,15 +43,9 @@
         <span class="material-symbols-outlined" aria-hidden="true">upload_file</span>
         <span>Import</span>
       </button>
-      <button class="nav-item" type="button" data-section="settings" data-default-view="settings">
-        <span class="material-symbols-outlined" aria-hidden="true">settings</span>
-        <span>Settings</span>
-      </button>
     </nav>
 
     <nav class="tabs" aria-label="Section views">
-      <button class="tab is-active" type="button" data-section="dash" data-view="overview">Overview</button>
-      <button class="tab" type="button" data-section="dash" data-view="transactions">Transactions</button>
       <button class="tab" type="button" data-section="manage" data-view="accounts">Accounts</button>
       <button class="tab" type="button" data-section="manage" data-view="categories">Categories</button>
       <button class="tab" type="button" data-section="manage" data-view="tags">Tags</button>
@@ -127,10 +120,10 @@
               <thead>
                 <tr>
                   <th>Date</th>
-                  <th>Account</th>
-                  <th>Description</th>
                   <th>Category</th>
                   <th>Amount</th>
+                  <th>Description</th>
+                  <th>Account</th>
                   <th>Notes</th>
                 </tr>
               </thead>
@@ -250,7 +243,7 @@
               <button type="button" class="primary" id="importSelectedRowsButton">Import selected</button>
             </div>
           </div>
-          <div class="table-wrap raw-table">
+          <div class="table-wrap raw-table raw-table-wrap">
             <table id="rawRowsTableElement">
               <thead>
                 <tr>

@@ -50,6 +50,7 @@
 
 * {
   box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
@@ -129,6 +130,25 @@ h2 {
   background: var(--surface);
   border: 1px solid var(--border);
   color: var(--text);
+}
+
+.profile-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+
+.profile-button:hover,
+.profile-button.is-active {
+  background: var(--success-bg);
+  color: var(--accent-dark);
 }
 
 .theme-toggle {
@@ -248,6 +268,10 @@ h2 {
   border-bottom: 1px solid var(--border);
   overflow-x: auto;
   scrollbar-width: thin;
+}
+
+.tabs[hidden] {
+  display: none;
 }
 
 .tab {
@@ -452,7 +476,7 @@ button:focus-visible {
 }
 
 .raw-table {
-  max-height: 65vh;
+  max-height: none;
 }
 
 table {
@@ -798,7 +822,6 @@ tr.is-matched-row td {
     padding-top: 14px;
   }
 
-  .topbar,
   .panel-heading.with-controls {
     align-items: stretch;
     flex-direction: column;
@@ -807,10 +830,6 @@ tr.is-matched-row td {
   .topbar-actions,
   .controls {
     justify-content: flex-start;
-  }
-
-  .topbar-actions {
-    display: none;
   }
 
   .metric-grid,

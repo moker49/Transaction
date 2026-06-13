@@ -27,6 +27,7 @@
 
   const elements = {
     navItems: document.querySelectorAll(".nav-item"),
+    tabNav: document.querySelector(".tabs"),
     tabs: document.querySelectorAll(".tab"),
     views: document.querySelectorAll(".view"),
     appMessage: document.querySelector("#appMessage"),
@@ -57,7 +58,7 @@
     ruleDialogTitle: document.querySelector("#ruleDialogTitle"),
     ruleMessage: document.querySelector("#ruleMessage"),
     ruleSubmitButton: document.querySelector("#ruleSubmitButton"),
-    themeToggle: document.querySelector("#themeToggle"),
+    profileButton: document.querySelector("#profileButton"),
     settingsThemeToggle: document.querySelector("#settingsThemeToggle"),
     accountDialog: document.querySelector("#accountDialog"),
     accountDialogTitle: document.querySelector("#accountDialogTitle"),
@@ -106,7 +107,7 @@
   elements.ruleDialog.addEventListener("close", () => {
     editingRuleId = null;
   });
-  elements.themeToggle.addEventListener("change", updateTheme);
+  elements.profileButton.addEventListener("click", () => activateView("settings"));
   elements.settingsThemeToggle.addEventListener("change", updateTheme);
   elements.accountCancelButton.addEventListener("click", closeAccountDialog);
   elements.accountDismissButton.addEventListener("click", closeAccountDialog);
@@ -141,7 +142,6 @@
     document.documentElement.dataset.theme = theme;
     localStorage.setItem("transaction-theme", theme);
     const isDark = theme === "dark";
-    elements.themeToggle.checked = isDark;
     elements.settingsThemeToggle.checked = isDark;
   }
 
@@ -197,20 +197,28 @@
 
   function activateView(viewName) {
     const activeTab = [...elements.tabs].find((tab) => tab.dataset.view === viewName);
-    const activeSection = activeTab?.dataset.section || "dash";
+    const activeNavItem = [...elements.navItems].find((navItem) => navItem.dataset.defaultView === viewName);
+    const activeSection = activeTab?.dataset.section || activeNavItem?.dataset.section || "dash";
+    let visibleTabCount = 0;
 
     elements.navItems.forEach((navItem) => {
       const isActive = navItem.dataset.section === activeSection;
       navItem.classList.toggle("is-active", isActive);
       navItem.setAttribute("aria-current", isActive ? "page" : "false");
     });
+    elements.profileButton.classList.toggle("is-active", activeSection === "settings");
+    elements.profileButton.setAttribute("aria-current", activeSection === "settings" ? "page" : "false");
     elements.tabs.forEach((tab) => {
       const isActive = tab.dataset.view === viewName;
       const isVisible = tab.dataset.section === activeSection;
       tab.classList.toggle("is-active", isActive);
       tab.hidden = !isVisible;
+      if (isVisible) {
+        visibleTabCount += 1;
+      }
       tab.setAttribute("aria-current", isActive ? "page" : "false");
     });
+    elements.tabNav.hidden = visibleTabCount === 0;
     elements.views.forEach((view) => view.classList.toggle("is-active", view.id === `${viewName}View`));
   }
 
@@ -600,10 +608,10 @@
     state.transactions.forEach((transaction) => {
       tbody.appendChild(tableRow([
         transaction.posted_date || "-",
-        transaction.account || "-",
-        transaction.clean_description || "-",
         transaction.category || "-",
         transaction.amount || formatCents(transaction.amount_cents),
+        transaction.clean_description || "-",
+        transaction.account || "-",
         transaction.notes || "-",
       ]));
     });
