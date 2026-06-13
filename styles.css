@@ -111,6 +111,15 @@ h2 {
   margin-top: 4px;
 }
 
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
 .topbar-actions,
 .controls,
 .primary-nav,
@@ -494,6 +503,11 @@ button:focus-visible {
   width: 100%;
 }
 
+.transaction-controls {
+  width: 100%;
+  justify-content: flex-start;
+}
+
 .raw-controls .icon-only {
   flex: 0 0 42px;
   height: 38px;
@@ -593,6 +607,11 @@ td.amount {
 .category-section {
   display: grid;
   gap: 8px;
+}
+
+.category-section + .category-section {
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
 }
 
 .category-section-heading {

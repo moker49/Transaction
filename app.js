@@ -117,6 +117,8 @@
     transactionCloseButton: document.querySelector("#transactionCloseButton"),
     transactionAccountSelect: document.querySelector("#transactionAccountSelect"),
     transactionCategorySelect: document.querySelector("#transactionCategorySelect"),
+    transactionCategoryFilter: document.querySelector("#transactionCategoryFilter"),
+    transactionSearch: document.querySelector("#transactionSearch"),
     transactionTags: document.querySelector("#transactionTags"),
     transactionRawValues: document.querySelector("#transactionRawValues"),
     transactionMetadata: document.querySelector("#transactionMetadata"),
@@ -193,6 +195,8 @@
   elements.transactionCloseButton.addEventListener("click", closeTransactionDialog);
   elements.transactionEditButton.addEventListener("click", () => setTransactionEditMode(true));
   elements.transactionCancelButton.addEventListener("click", cancelTransactionEdit);
+  elements.transactionCategoryFilter.addEventListener("change", renderTransactions);
+  elements.transactionSearch.addEventListener("input", renderTransactions);
   elements.transactionDialog.addEventListener("close", () => {
     activeTransactionId = null;
     transactionEditMode = false;
@@ -778,12 +782,31 @@
   function renderTransactions() {
     const tbody = document.querySelector("#transactionsTable");
     clear(tbody);
-    if (!state.transactions.length) {
+    const categoryFilter = Number(elements.transactionCategoryFilter.value) || null;
+    const categoryIds = categoryFilter === null ? null : new Set([categoryFilter, ...categoryDescendantIds(categoryFilter)]);
+    const search = clean(elements.transactionSearch.value).toLowerCase();
+    const transactions = state.transactions.filter((transaction) => {
+      if (categoryIds && !categoryIds.has(Number(transaction.category_id))) {
+        return false;
+      }
+      if (!search) {
+        return true;
+      }
+      return [
+        transaction.posted_date,
+        transaction.category,
+        transaction.amount || formatCents(transaction.amount_cents),
+        transaction.clean_description,
+        transaction.account,
+        transaction.notes,
+      ].join(" ").toLowerCase().includes(search);
+    });
+    if (!transactions.length) {
       tbody.appendChild(emptyTableRow(6));
       return;
     }
 
-    state.transactions.forEach((transaction) => {
+    transactions.forEach((transaction) => {
       const row = tableRow([
         transaction.posted_date || "-",
         transaction.category || "-",
@@ -1024,6 +1047,13 @@
       elements.ruleCategorySelect,
       [
         { value: "", label: "No category" },
+        ...categoryOptions(),
+      ],
+    );
+    fillSelect(
+      elements.transactionCategoryFilter,
+      [
+        { value: "", label: "All categories" },
         ...categoryOptions(),
       ],
     );

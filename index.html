@@ -86,8 +86,11 @@
 
       <section class="view" id="transactionsView">
         <section class="panel">
-          <div class="panel-heading">
-            <h2>Transactions</h2>
+          <div class="panel-heading with-controls">
+            <div class="controls transaction-controls">
+              <select id="transactionCategoryFilter" aria-label="Filter transactions by category"></select>
+              <input id="transactionSearch" type="search" placeholder="Search transactions" aria-label="Search transactions">
+            </div>
           </div>
           <div class="table-wrap">
             <table>
@@ -110,9 +113,6 @@
       <section class="view" id="accountsView">
         <div class="content-grid">
           <section class="panel">
-            <div class="panel-heading">
-              <h2>Accounts</h2>
-            </div>
             <div class="table-wrap">
               <table>
                 <thead>
@@ -136,9 +136,6 @@
       <section class="view" id="categoriesView">
         <div class="content-grid">
           <section class="panel">
-            <div class="panel-heading">
-              <h2>Categories</h2>
-            </div>
             <div id="categoryList" class="chip-list empty-target"></div>
           </section>
         </div>
@@ -150,9 +147,6 @@
       <section class="view" id="tagsView">
         <div class="content-grid">
           <section class="panel">
-            <div class="panel-heading">
-              <h2>Tags</h2>
-            </div>
             <div id="tagList" class="chip-list empty-target"></div>
           </section>
         </div>
@@ -164,9 +158,6 @@
       <section class="view" id="importView">
         <div class="content-grid two-column">
           <section class="panel">
-            <div class="panel-heading">
-              <h2>CSV Import</h2>
-            </div>
             <form id="importForm" class="form-grid">
               <label>
                 <span>Account</span>
@@ -182,9 +173,7 @@
           </section>
 
           <section class="panel">
-            <div class="panel-heading">
-              <h2>Recent CSV imports</h2>
-            </div>
+            <h2 class="visually-hidden">Recent CSV imports</h2>
             <div id="importList" class="list empty-target"></div>
           </section>
         </div>
@@ -235,9 +224,6 @@
       <section class="view" id="rulesView">
         <div class="content-grid">
           <section class="panel">
-            <div class="panel-heading">
-              <h2>Import Rules</h2>
-            </div>
             <div class="table-wrap">
               <table>
                 <thead>
@@ -259,9 +245,6 @@
 
       <section class="view" id="settingsView">
         <section class="panel">
-          <div class="panel-heading">
-            <h2>Settings</h2>
-          </div>
           <div class="settings-list">
             <div class="setting-row">
               <div>
@@ -282,9 +265,6 @@
 
       <section class="view" id="devView">
         <section class="panel">
-          <div class="panel-heading">
-            <h2>Dev</h2>
-          </div>
           <div class="settings-list">
             <div class="setting-row">
               <div>
@@ -316,9 +296,6 @@
 
       <section class="view" id="logsView">
         <section class="panel">
-          <div class="panel-heading">
-            <h2>Logs & Errors</h2>
-          </div>
           <div id="logList" class="list empty-target"></div>
         </section>
       </section>
