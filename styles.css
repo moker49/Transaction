@@ -645,23 +645,47 @@ td {
 
 .app-message {
   display: none;
-  margin-bottom: 12px;
+  position: fixed;
+  right: 18px;
+  top: 18px;
+  z-index: 50;
+  align-items: flex-start;
+  gap: 10px;
+  width: min(420px, calc(100vw - 36px));
   padding: 12px 14px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
   color: var(--muted);
   font-weight: 700;
+  box-shadow: var(--shadow);
 }
 
 .app-message.is-visible {
-  display: block;
+  display: flex;
+}
+
+.app-message .material-symbols-outlined {
+  flex: 0 0 auto;
+  margin-top: 1px;
 }
 
 .app-message.error {
   border-color: var(--danger-border);
   background: var(--danger-bg);
   color: var(--danger);
+}
+
+.app-message.warning {
+  border-color: var(--warning-border);
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.app-message.success {
+  border-color: var(--success-border);
+  background: var(--success-bg);
+  color: var(--accent-dark);
 }
 
 .message {

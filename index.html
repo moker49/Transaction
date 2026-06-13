@@ -65,7 +65,10 @@
     </nav>
 
     <main>
-      <div id="appMessage" class="app-message" role="status" aria-live="polite"></div>
+      <div id="appMessage" class="app-message" role="status" aria-live="polite">
+        <span id="appMessageIcon" class="material-symbols-outlined" aria-hidden="true">info</span>
+        <span id="appMessageText"></span>
+      </div>
 
       <section class="view is-active" id="overviewView">
         <div class="metric-grid">
@@ -248,17 +251,17 @@
             </div>
           </div>
           <div class="table-wrap raw-table">
-            <table>
+            <table id="rawRowsTableElement">
               <thead>
                 <tr>
-                  <th>Select</th>
-                  <th>Status</th>
-                  <th>Account</th>
-                  <th>Date</th>
-                  <th>Category</th>
-                  <th>Description</th>
-                  <th>Amount</th>
-                  <th>Notes</th>
+                  <th data-raw-column="select">Select</th>
+                  <th data-raw-column="status">Status</th>
+                  <th data-raw-column="account">Account</th>
+                  <th data-raw-column="date">Date</th>
+                  <th data-raw-column="category">Category</th>
+                  <th data-raw-column="description">Description</th>
+                  <th data-raw-column="amount">Amount</th>
+                  <th data-raw-column="notes">Notes</th>
                 </tr>
               </thead>
               <tbody id="rawRowsTable"></tbody>

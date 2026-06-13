@@ -659,6 +659,14 @@ def import_raw_rows(
     if unavailable_rows:
         raise CliError(f"Only new raw rows can be imported: {', '.join(unavailable_rows)}")
 
+    uncategorized_rows = []
+    for raw_row in raw_rows:
+        rule_result = apply_import_rules(conn, raw_row)
+        if rule_result["category_id"] is None:
+            uncategorized_rows.append(str(raw_row["id"]))
+    if uncategorized_rows:
+        raise CliError(f"Raw rows require a matched category before import: {', '.join(uncategorized_rows)}")
+
     results = []
     counts = {"imported": 0, "duplicate": 0, "error": 0}
     for raw_row in raw_rows:

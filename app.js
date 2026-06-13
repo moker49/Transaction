@@ -22,6 +22,7 @@
   let ruleDialogMode = "add";
   let confirmResolver = null;
   let textInputResolver = null;
+  let popupTimer = null;
   const importableRawRowStatuses = new Set(["new", "ready"]);
 
   const elements = {
@@ -29,6 +30,8 @@
     tabs: document.querySelectorAll(".tab"),
     views: document.querySelectorAll(".view"),
     appMessage: document.querySelector("#appMessage"),
+    appMessageIcon: document.querySelector("#appMessageIcon"),
+    appMessageText: document.querySelector("#appMessageText"),
     accountAddButton: document.querySelector("#accountAddButton"),
     accountForm: document.querySelector("#accountForm"),
     importForm: document.querySelector("#importForm"),
@@ -40,6 +43,7 @@
     importAccountSelect: document.querySelector("#importAccountSelect"),
     rawAccountFilter: document.querySelector("#rawAccountFilter"),
     rawStatusFilter: document.querySelector("#rawStatusFilter"),
+    rawRowsTableElement: document.querySelector("#rawRowsTableElement"),
     rawSearch: document.querySelector("#rawSearch"),
     selectVisibleRowsButton: document.querySelector("#selectVisibleRowsButton"),
     importSelectedRowsButton: document.querySelector("#importSelectedRowsButton"),
@@ -150,7 +154,7 @@
       state = normalizeState(await apiRequest("/api/state"));
       render();
     } catch (error) {
-      setMessage(error.message || "Could not load server data.", true);
+      showPopup(error.message || "Could not load server data.", "error");
       render();
     }
   }
@@ -176,7 +180,7 @@
 
   function applyStateFromPayload(payload) {
     state = normalizeState(payload.state || payload);
-    setAppMessage("");
+    hidePopup();
     const visibleIds = new Set(state.rawRows.map((row) => row.id));
     [...selectedRawRowIds].forEach((rowId) => {
       if (!visibleIds.has(rowId)) {
@@ -288,7 +292,7 @@
     const sourceType = clean(form.get("sourceType")) || "csv";
 
     if (!accountId || !(file instanceof File)) {
-      setMessage("Choose an account and CSV file.", true);
+      showPopup("Choose an account and CSV file.", "warning");
       return;
     }
 
@@ -305,12 +309,12 @@
       formElement.elements.sourceType.value = "csv";
       applyStateFromPayload(payload);
       if (payload.status === "already_imported") {
-        setMessage("File already imported for this account.");
+        showPopup("File already imported for this account.", "warning");
       } else {
         setMessage(`Imported ${payload.inserted_raw_row_count} raw rows from ${file.name}.`);
       }
     } catch (error) {
-      setMessage(error.message || "CSV import failed.", true);
+      showPopup(error.message || "CSV import failed.", "error");
     }
   }
 
@@ -330,7 +334,7 @@
       formElement.reset();
       applyStateFromPayload(payload);
     } catch (error) {
-      setAppMessage(error.message || "Could not add tag.", true);
+      showPopup(error.message || "Could not add tag.", "error");
     }
   }
 
@@ -350,7 +354,7 @@
       formElement.reset();
       applyStateFromPayload(payload);
     } catch (error) {
-      setAppMessage(error.message || "Could not add category.", true);
+      showPopup(error.message || "Could not add category.", "error");
     }
   }
 
@@ -445,7 +449,7 @@
       const payload = await apiRequest(`/api/accounts/${account.id}`, { method: "DELETE" });
       applyStateFromPayload(payload);
     } catch (error) {
-      setAppMessage(error.message || "Could not delete account.", true);
+      showPopup(error.message || "Could not delete account.", "error");
     }
   }
 
@@ -465,7 +469,7 @@
       });
       applyStateFromPayload(payload);
     } catch (error) {
-      setAppMessage(error.message || "Could not update category.", true);
+      showPopup(error.message || "Could not update category.", "error");
     }
   }
 
@@ -482,7 +486,7 @@
       const payload = await apiRequest(`/api/categories/${category.id}`, { method: "DELETE" });
       applyStateFromPayload(payload);
     } catch (error) {
-      setAppMessage(error.message || "Could not delete category.", true);
+      showPopup(error.message || "Could not delete category.", "error");
     }
   }
 
@@ -502,7 +506,7 @@
       });
       applyStateFromPayload(payload);
     } catch (error) {
-      setAppMessage(error.message || "Could not update tag.", true);
+      showPopup(error.message || "Could not update tag.", "error");
     }
   }
 
@@ -519,7 +523,7 @@
       const payload = await apiRequest(`/api/tags/${tag.id}`, { method: "DELETE" });
       applyStateFromPayload(payload);
     } catch (error) {
-      setAppMessage(error.message || "Could not delete tag.", true);
+      showPopup(error.message || "Could not delete tag.", "error");
     }
   }
 
@@ -536,7 +540,7 @@
       const payload = await apiRequest(`/api/rules/${rule.id}`, { method: "DELETE" });
       applyStateFromPayload(payload);
     } catch (error) {
-      setAppMessage(error.message || "Could not delete rule.", true);
+      showPopup(error.message || "Could not delete rule.", "error");
     }
   }
 
@@ -750,7 +754,23 @@
 
     const accountFilter = elements.rawAccountFilter.value;
     const statusFilter = elements.rawStatusFilter.value;
+    const hiddenColumns = new Set();
+    if (accountFilter !== "all") {
+      hiddenColumns.add("account");
+    }
+    if (statusFilter !== "all") {
+      hiddenColumns.add("status");
+    }
+    updateRawColumnHeaders(hiddenColumns);
+    const rawColumnCount = 8 - hiddenColumns.size;
     const search = elements.rawSearch.value.trim().toLowerCase();
+
+    [...selectedRawRowIds].forEach((rowId) => {
+      const rawRow = state.rawRows.find((candidate) => candidate.id === rowId);
+      if (!rawRow || !isImportableRawRow(rawRow)) {
+        selectedRawRowIds.delete(rowId);
+      }
+    });
 
     const rows = state.rawRows.filter((row) => {
       if (accountFilter !== "all" && String(row.account_id) !== accountFilter) {
@@ -769,7 +789,7 @@
     });
     visibleRawRows = rows;
     if (!rows.length) {
-      tbody.appendChild(emptyTableRow(8));
+      tbody.appendChild(emptyTableRow(rawColumnCount));
       updateImportSelectedButton();
       updateSelectVisibleButton();
       return;
@@ -810,16 +830,17 @@
         }
       });
 
-      tr.append(
-        cell(checkbox),
-        cell(statusBadge(rawRow), "status-cell"),
-        cell(account ? account.name : "Unknown", "muted-cell"),
-        cell(rawRow.raw_date || "-"),
-        cell(rawValueWithPreview(rawRow.raw_category, rawRow.preview_category)),
-        cell(rawValueWithPreview(rawRow.raw_description, rawRow.preview_clean_description)),
-        cell(rawRow.raw_amount || "-", "amount"),
-        cell(noteInput),
-      );
+      const cells = [
+        ["select", cell(checkbox)],
+        ["status", cell(statusBadge(rawRow), "status-cell")],
+        ["account", cell(account ? account.name : "Unknown", "muted-cell")],
+        ["date", cell(rawRow.raw_date || "-")],
+        ["category", cell(rawValueWithPreview(rawRow.raw_category, rawRow.preview_category))],
+        ["description", cell(rawValueWithPreview(rawRow.raw_description, rawRow.preview_clean_description))],
+        ["amount", cell(rawRow.raw_amount || "-", "amount")],
+        ["notes", cell(noteInput)],
+      ];
+      tr.append(...cells.filter(([column]) => !hiddenColumns.has(column)).map(([, node]) => node));
       tbody.appendChild(tr);
     });
     updateImportSelectedButton();
@@ -858,7 +879,7 @@
         counts.error > 0,
       );
     } catch (error) {
-      setMessage(error.message || "Could not import selected rows.", true);
+      showPopup(error.message || "Could not import selected rows.", "error");
     } finally {
       updateImportSelectedButton();
     }
@@ -887,7 +908,7 @@
       applyStateFromPayload(payload);
       setDevMessage("Database regenerated.");
     } catch (error) {
-      setDevMessage(error.message || "Could not regenerate database.", true);
+      showPopup(error.message || "Could not regenerate database.", "error");
     } finally {
       elements.regenerateDatabaseButton.disabled = false;
     }
@@ -925,6 +946,12 @@
     elements.selectVisibleRowsButton.textContent = allSelected ? "Clear visible" : "Select visible";
   }
 
+  function updateRawColumnHeaders(hiddenColumns) {
+    elements.rawRowsTableElement.querySelectorAll("th[data-raw-column]").forEach((header) => {
+      header.hidden = hiddenColumns.has(header.dataset.rawColumn);
+    });
+  }
+
   function statusBadge(rawRow) {
     const status = rawRow.import_status || "new";
     const badge = document.createElement("span");
@@ -947,7 +974,11 @@
   }
 
   function isImportableRawRow(rawRow) {
-    return importableRawRowStatuses.has(rawRow.import_status || "new");
+    return importableRawRowStatuses.has(rawRow.import_status || "new") && hasMatchedCategory(rawRow);
+  }
+
+  function hasMatchedCategory(rawRow) {
+    return Boolean(clean(rawRow.preview_category));
   }
 
   function isMatchedRawRow(rawRow) {
@@ -959,7 +990,7 @@
       return true;
     }
     if (filter === "new") {
-      return isImportableRawRow(rawRow);
+      return importableRawRowStatuses.has(rawRow.import_status || "new");
     }
     if (filter === "matched") {
       return isMatchedRawRow(rawRow);
@@ -1209,10 +1240,34 @@
     element.classList.toggle("error", isError);
   }
 
-  function setAppMessage(message, isError = false) {
-    elements.appMessage.textContent = message;
-    elements.appMessage.classList.toggle("error", isError);
+  function showPopup(message, severity = "info") {
+    if (popupTimer) {
+      window.clearTimeout(popupTimer);
+      popupTimer = null;
+    }
+    const icons = {
+      info: "info",
+      success: "check_circle",
+      warning: "warning",
+      error: "error",
+    };
+    elements.appMessageIcon.textContent = icons[severity] || icons.info;
+    elements.appMessageText.textContent = message;
+    elements.appMessage.classList.remove("info", "success", "warning", "error");
+    elements.appMessage.classList.add(severity);
     elements.appMessage.classList.toggle("is-visible", Boolean(message));
+    if (message) {
+      popupTimer = window.setTimeout(hidePopup, 6000);
+    }
+  }
+
+  function hidePopup() {
+    if (popupTimer) {
+      window.clearTimeout(popupTimer);
+      popupTimer = null;
+    }
+    elements.appMessage.classList.remove("is-visible", "info", "success", "warning", "error");
+    elements.appMessageText.textContent = "";
   }
 
   function setMessage(message, isError = false) {
