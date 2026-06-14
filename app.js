@@ -77,8 +77,8 @@
     appMessage: document.querySelector("#appMessage"),
     appMessageIcon: document.querySelector("#appMessageIcon"),
     appMessageText: document.querySelector("#appMessageText"),
-    dashboardTypePie: document.querySelector("#dashboardTypePie"),
-    dashboardTypeLegend: document.querySelector("#dashboardTypeLegend"),
+    dashboardTypeBar: document.querySelector("#dashboardTypeBar"),
+    dashboardTypeBarLegend: document.querySelector("#dashboardTypeBarLegend"),
     dashboardCategoryPie: document.querySelector("#dashboardCategoryPie"),
     dashboardCategoryLegend: document.querySelector("#dashboardCategoryLegend"),
     dashboardSplurgePie: document.querySelector("#dashboardSplurgePie"),
@@ -804,7 +804,7 @@
     setText("#dashboardBills", formatDollars(bills));
     setText("#dashboardSplurge", formatDollars(splurge));
     setText("#dashboardSaved", formatDollars(saved));
-    renderPieChart(elements.dashboardTypePie, elements.dashboardTypeLegend, [
+    renderStackedBar(elements.dashboardTypeBar, elements.dashboardTypeBarLegend, [
       { label: "Bills", value: bills, color: "#c85d5d" },
       { label: "Splurge", value: splurge, color: "#7c6bc2" },
       { label: "Saved", value: Math.max(saved, 0), color: "#2f8f2f" },
@@ -1703,15 +1703,12 @@
           color: parent.color || "#000000",
         });
       });
-    const total = [...totals.values()].reduce((sum, segment) => sum + segment.value, 0);
-    if (total <= 0) {
-      return [];
-    }
     const segments = [...totals.values()].sort((a, b) => b.value - a.value);
-    const visible = segments.filter((segment) => segment.value / total >= 0.02);
-    const otherValue = segments
-      .filter((segment) => segment.value / total < 0.02)
-      .reduce((sum, segment) => sum + segment.value, 0);
+    if (segments.length <= 6) {
+      return segments;
+    }
+    const visible = segments.slice(0, 5);
+    const otherValue = segments.slice(5).reduce((sum, segment) => sum + segment.value, 0);
     if (otherValue > 0) {
       visible.push({ label: "All others", value: otherValue, color: "#000000" });
     }
@@ -1745,6 +1742,31 @@
       return `${segment.color} ${start}% ${cursor}%`;
     });
     chart.style.background = `conic-gradient(${stops.join(", ")})`;
+    renderChartLegend(legend, segments, total);
+  }
+
+  function renderStackedBar(bar, legend, rawSegments) {
+    const segments = rawSegments.filter((segment) => segment.value > 0);
+    const total = segments.reduce((sum, segment) => sum + segment.value, 0);
+    clear(bar);
+    clear(legend);
+    if (total <= 0) {
+      bar.appendChild(el("span", "", "stacked-bar-empty"));
+      legend.appendChild(el("span", "No data", "list-meta"));
+      return;
+    }
+    segments.forEach((segment) => {
+      const piece = document.createElement("span");
+      piece.className = "stacked-bar-segment";
+      piece.style.width = `${(segment.value / total) * 100}%`;
+      piece.style.background = segment.color;
+      piece.title = `${segment.label}: ${formatDollars(segment.value)}`;
+      bar.appendChild(piece);
+    });
+    renderChartLegend(legend, segments, total);
+  }
+
+  function renderChartLegend(legend, segments, total) {
     segments.forEach((segment) => {
       const item = document.createElement("div");
       item.className = "chart-legend-item";

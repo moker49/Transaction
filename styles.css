@@ -334,7 +334,7 @@ h2 {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
-  margin-bottom: 18px;
+  margin-bottom: 12px;
 }
 
 .metric,
@@ -367,6 +367,34 @@ h2 {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+}
+
+.stacked-bar-panel {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 10px;
+  padding: 14px 18px;
+}
+
+.stacked-bar {
+  display: flex;
+  height: 18px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-muted);
+}
+
+.stacked-bar-segment {
+  min-width: 2px;
+}
+
+.stacked-bar-empty {
+  width: 100%;
+}
+
+.stacked-bar-legend {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .chart-panel {
@@ -1148,13 +1176,40 @@ tr.is-matched-row td {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .dashboard-chart-grid,
-  .chart-panel {
+  .dashboard-chart-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .chart-panel,
+  .stacked-bar-legend {
     grid-template-columns: 1fr;
   }
 
+  .chart-panel {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    padding: 12px;
+  }
+
   .pie-chart {
+    width: min(112px, 100%);
     justify-self: center;
+  }
+
+  .chart-legend {
+    gap: 6px;
+  }
+
+  .chart-legend-item {
+    grid-template-columns: 10px minmax(0, 1fr) auto;
+    gap: 6px;
+    font-size: 0.72rem;
+  }
+
+  .chart-legend-item span:nth-child(2) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .primary-nav {
