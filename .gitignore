@@ -3,4 +3,4 @@ data/*.sqlite-*
 __pycache__/
 *.pyc
 *.log
-.codex-tmp*
+.codex-*

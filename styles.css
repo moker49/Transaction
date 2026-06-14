@@ -10,6 +10,7 @@
   --border: #33403c;
   --accent: #2bbbad;
   --accent-dark: #76d6cb;
+  --accent-contrast: #071412;
   --danger: #ff8c80;
   --danger-bg: #311a18;
   --danger-border: #6d332d;
@@ -35,6 +36,7 @@
   --border: #d9dfdc;
   --accent: #0f766e;
   --accent-dark: #0b5e58;
+  --accent-contrast: #ffffff;
   --danger: #a33a32;
   --danger-bg: #fff0ee;
   --danger-border: #efc7c2;
@@ -739,18 +741,20 @@ td.amount {
   min-width: 0;
 }
 
-.dashboard-range-controls {
-  display: flex;
+.range-setting-button {
+  display: inline-flex;
   align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.custom-range-controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: min(330px, 100%);
+  min-height: 42px;
+  padding: 0 12px;
+  background: var(--surface-muted);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-weight: 720;
+  text-align: left;
 }
 
 .setting-note {
@@ -816,6 +820,8 @@ td.amount {
 }
 
 .material-symbols-outlined {
+  width: 1em;
+  overflow: hidden;
   font-family: "Material Symbols Outlined";
   font-weight: normal;
   font-style: normal;
@@ -865,6 +871,10 @@ td.amount {
   width: min(980px, calc(100vw - 28px));
 }
 
+.dashboard-range-modal {
+  width: min(1040px, calc(100vw - 28px));
+}
+
 .modal::backdrop {
   background: rgba(0, 0, 0, 0.56);
 }
@@ -898,6 +908,118 @@ td.amount {
 
 .modal-delete-button {
   max-width: max-content;
+}
+
+.dashboard-range-picker {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr);
+  gap: 18px;
+  padding: 18px;
+}
+
+.range-preset-list {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+}
+
+.range-preset-button {
+  min-height: 42px;
+  padding: 0 12px;
+  background: transparent;
+  color: var(--text);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-weight: 720;
+  text-align: left;
+}
+
+.range-preset-button.is-active {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  border-color: var(--accent);
+}
+
+.calendar-range-area {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.calendar-range-fields {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.calendar-range-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.calendar-month {
+  min-width: 0;
+}
+
+.calendar-month-header {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) 36px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  min-height: 36px;
+}
+
+.calendar-month-header strong {
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.calendar-nav-button {
+  width: 36px;
+  height: 36px;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
+}
+
+.calendar-weekday,
+.calendar-empty-day,
+.calendar-day {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 36px;
+  border: 1px solid transparent;
+}
+
+.calendar-weekday {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 720;
+}
+
+.calendar-day {
+  background: transparent;
+  color: var(--text);
+  border-radius: 0;
+  font-weight: 720;
+}
+
+.calendar-day.is-in-range {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.calendar-day.is-range-edge {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  border-radius: 999px;
 }
 
 .transaction-detail-grid {
@@ -1292,15 +1414,36 @@ tr.is-matched-row td {
     align-items: flex-start;
   }
 
-  .dashboard-range-controls {
-    justify-content: stretch;
+  .range-setting-button {
     width: 100%;
   }
 
-  .dashboard-range-controls select,
-  .custom-range-controls,
-  .custom-range-controls input {
-    width: 100%;
+  .dashboard-range-picker {
+    grid-template-columns: 1fr;
+    padding: 12px;
+  }
+
+  .range-preset-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .calendar-range-fields {
+    justify-content: stretch;
+  }
+
+  .calendar-range-fields input {
+    flex: 1 1 130px;
+    min-width: 0;
+  }
+
+  .calendar-range-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .calendar-weekday,
+  .calendar-empty-day,
+  .calendar-day {
+    min-height: 34px;
   }
 
   .setting-row {

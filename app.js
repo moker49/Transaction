@@ -5,6 +5,13 @@
   const DASHBOARD_CUSTOM_START_KEY = "transaction-dashboard-custom-start";
   const DASHBOARD_CUSTOM_END_KEY = "transaction-dashboard-custom-end";
   const DEFAULT_DASHBOARD_RANGE = "last-month";
+  const CUSTOM_DASHBOARD_RANGE = "custom";
+  const dashboardRangePresets = [
+    { value: "this-month", label: "This month" },
+    { value: "last-month", label: "Last month" },
+    { value: "this-year", label: "This year" },
+    { value: "last-year", label: "Last year" },
+  ];
 
   const defaultState = {
     accounts: [],
@@ -32,6 +39,7 @@
   let textInputResolver = null;
   let textInputDeleteHandler = null;
   let popupTimer = null;
+  let dashboardRangeDraft = null;
   const importableRawRowStatuses = new Set(["new", "ready"]);
   const transactionTypes = [
     { value: "income", label: "Income" },
@@ -117,8 +125,15 @@
     ruleDeleteButton: document.querySelector("#ruleDeleteButton"),
     profileButton: document.querySelector("#profileButton"),
     settingsThemeToggle: document.querySelector("#settingsThemeToggle"),
-    dashboardRangeSelect: document.querySelector("#dashboardRangeSelect"),
-    dashboardCustomRangeControls: document.querySelector("#dashboardCustomRangeControls"),
+    dashboardRangeButton: document.querySelector("#dashboardRangeButton"),
+    dashboardRangeLabel: document.querySelector("#dashboardRangeLabel"),
+    dashboardRangeDialog: document.querySelector("#dashboardRangeDialog"),
+    dashboardRangeForm: document.querySelector("#dashboardRangeForm"),
+    dashboardRangeCloseButton: document.querySelector("#dashboardRangeCloseButton"),
+    dashboardRangePresetList: document.querySelector("#dashboardRangePresetList"),
+    dashboardCalendarGrid: document.querySelector("#dashboardCalendarGrid"),
+    dashboardRangeClearButton: document.querySelector("#dashboardRangeClearButton"),
+    dashboardRangeApplyButton: document.querySelector("#dashboardRangeApplyButton"),
     dashboardCustomStart: document.querySelector("#dashboardCustomStart"),
     dashboardCustomEnd: document.querySelector("#dashboardCustomEnd"),
     accountDialog: document.querySelector("#accountDialog"),
@@ -201,9 +216,16 @@
   });
   elements.profileButton.addEventListener("click", () => activateView("settings"));
   elements.settingsThemeToggle.addEventListener("change", updateTheme);
-  elements.dashboardRangeSelect.addEventListener("change", updateDashboardRange);
+  elements.dashboardRangeButton.addEventListener("click", openDashboardRangeDialog);
+  elements.dashboardRangeForm.addEventListener("submit", applyDashboardRange);
+  elements.dashboardRangeCloseButton.addEventListener("click", closeDashboardRangeDialog);
+  elements.dashboardRangeClearButton.addEventListener("click", clearDashboardRangeDraft);
   elements.dashboardCustomStart.addEventListener("change", updateDashboardCustomRange);
   elements.dashboardCustomEnd.addEventListener("change", updateDashboardCustomRange);
+  elements.dashboardRangeDialog.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    closeDashboardRangeDialog();
+  });
   elements.accountCancelButton.addEventListener("click", closeAccountDialog);
   elements.accountDismissButton.addEventListener("click", closeAccountDialog);
   elements.accountDeleteButton.addEventListener("click", deleteEditingAccount);
@@ -277,30 +299,195 @@
   function initializeDashboardRange() {
     const savedRange = localStorage.getItem(DASHBOARD_RANGE_KEY) || DEFAULT_DASHBOARD_RANGE;
     const validRange = dashboardRangeValues().has(savedRange) ? savedRange : DEFAULT_DASHBOARD_RANGE;
-    elements.dashboardRangeSelect.value = validRange;
-    elements.dashboardCustomStart.value = localStorage.getItem(DASHBOARD_CUSTOM_START_KEY) || "";
-    elements.dashboardCustomEnd.value = localStorage.getItem(DASHBOARD_CUSTOM_END_KEY) || "";
-    renderDashboardRangeControls();
+    localStorage.setItem(DASHBOARD_RANGE_KEY, validRange);
+    renderDashboardRangeButton();
   }
 
   function dashboardRangeValues() {
-    return new Set([...elements.dashboardRangeSelect.options].map((option) => option.value));
+    return new Set([...dashboardRangePresets.map((preset) => preset.value), CUSTOM_DASHBOARD_RANGE]);
   }
 
-  function updateDashboardRange(event) {
-    localStorage.setItem(DASHBOARD_RANGE_KEY, event.currentTarget.value);
-    renderDashboardRangeControls();
+  function openDashboardRangeDialog() {
+    dashboardRangeDraft = currentDashboardRangeState();
+    elements.dashboardCustomStart.value = dashboardRangeDraft.start || "";
+    elements.dashboardCustomEnd.value = dashboardRangeDraft.end || "";
+    renderDashboardRangeDialog();
+    openModal(elements.dashboardRangeDialog);
+  }
+
+  function closeDashboardRangeDialog() {
+    dashboardRangeDraft = null;
+    elements.dashboardRangeDialog.close();
+  }
+
+  function applyDashboardRange(event) {
+    event.preventDefault();
+    if (!dashboardRangeDraft) {
+      return;
+    }
+    localStorage.setItem(DASHBOARD_RANGE_KEY, dashboardRangeDraft.range);
+    if (dashboardRangeDraft.range === CUSTOM_DASHBOARD_RANGE) {
+      localStorage.setItem(DASHBOARD_CUSTOM_START_KEY, dashboardRangeDraft.start || "");
+      localStorage.setItem(DASHBOARD_CUSTOM_END_KEY, dashboardRangeDraft.end || "");
+    }
+    renderDashboardRangeButton();
     renderDashboard();
+    closeDashboardRangeDialog();
+  }
+
+  function clearDashboardRangeDraft() {
+    dashboardRangeDraft = dashboardRangeState(DEFAULT_DASHBOARD_RANGE);
+    elements.dashboardCustomStart.value = "";
+    elements.dashboardCustomEnd.value = "";
+    renderDashboardRangeDialog();
   }
 
   function updateDashboardCustomRange() {
-    localStorage.setItem(DASHBOARD_CUSTOM_START_KEY, elements.dashboardCustomStart.value);
-    localStorage.setItem(DASHBOARD_CUSTOM_END_KEY, elements.dashboardCustomEnd.value);
-    renderDashboard();
+    if (!dashboardRangeDraft) {
+      return;
+    }
+    dashboardRangeDraft.range = CUSTOM_DASHBOARD_RANGE;
+    dashboardRangeDraft.start = elements.dashboardCustomStart.value;
+    dashboardRangeDraft.end = elements.dashboardCustomEnd.value;
+    dashboardRangeDraft.viewDate = dashboardRangeDraft.start ? firstOfMonth(parseDateKey(dashboardRangeDraft.start)) : dashboardRangeDraft.viewDate;
+    renderDashboardRangeDialog();
   }
 
-  function renderDashboardRangeControls() {
-    elements.dashboardCustomRangeControls.hidden = elements.dashboardRangeSelect.value !== "custom";
+  function currentDashboardRangeState() {
+    const savedRange = localStorage.getItem(DASHBOARD_RANGE_KEY) || DEFAULT_DASHBOARD_RANGE;
+    const range = dashboardRangeValues().has(savedRange) ? savedRange : DEFAULT_DASHBOARD_RANGE;
+    return dashboardRangeState(range);
+  }
+
+  function dashboardRangeState(range) {
+    const period = dashboardPeriodForRange(range);
+    const inclusiveEnd = formatDateKey(addDays(parseDateKey(period.end), -1));
+    const customStart = localStorage.getItem(DASHBOARD_CUSTOM_START_KEY) || "";
+    const customEnd = localStorage.getItem(DASHBOARD_CUSTOM_END_KEY) || "";
+    return {
+      range,
+      start: range === CUSTOM_DASHBOARD_RANGE ? customStart : period.start,
+      end: range === CUSTOM_DASHBOARD_RANGE ? customEnd : inclusiveEnd,
+      viewDate: firstOfMonth(rangeStartDate(range)),
+    };
+  }
+
+  function renderDashboardRangeButton() {
+    const period = dashboardPeriod();
+    elements.dashboardRangeLabel.textContent = formatDateRangeLabel(period.start, period.end);
+  }
+
+  function renderDashboardRangeDialog() {
+    renderDashboardRangePresets();
+    renderDashboardCalendars();
+    elements.dashboardRangeApplyButton.disabled =
+      dashboardRangeDraft?.range === CUSTOM_DASHBOARD_RANGE && (!dashboardRangeDraft.start || !dashboardRangeDraft.end);
+  }
+
+  function renderDashboardRangePresets() {
+    clear(elements.dashboardRangePresetList);
+    dashboardRangePresets.forEach((preset) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "range-preset-button";
+      button.classList.toggle("is-active", dashboardRangeDraft?.range === preset.value);
+      button.textContent = preset.label;
+      button.addEventListener("click", () => selectDashboardRangePreset(preset.value));
+      elements.dashboardRangePresetList.appendChild(button);
+    });
+  }
+
+  function selectDashboardRangePreset(range) {
+    dashboardRangeDraft.range = range;
+    const period = dashboardPeriodForRange(range);
+    dashboardRangeDraft.start = period.start;
+    dashboardRangeDraft.end = formatDateKey(addDays(parseDateKey(period.end), -1));
+    dashboardRangeDraft.viewDate = firstOfMonth(parseDateKey(period.start));
+    elements.dashboardCustomStart.value = dashboardRangeDraft.start || "";
+    elements.dashboardCustomEnd.value = dashboardRangeDraft.end || "";
+    renderDashboardRangeDialog();
+  }
+
+  function renderDashboardCalendars() {
+    clear(elements.dashboardCalendarGrid);
+    const viewDate = dashboardRangeDraft?.viewDate || firstOfMonth(new Date());
+    elements.dashboardCalendarGrid.append(
+      calendarMonthElement(viewDate, -1),
+      calendarMonthElement(addMonths(viewDate, 1), 1),
+    );
+  }
+
+  function calendarMonthElement(monthDate, direction) {
+    const container = document.createElement("section");
+    container.className = "calendar-month";
+    const header = document.createElement("div");
+    header.className = "calendar-month-header";
+    const previous = calendarNavButton("chevron_left", () => shiftDashboardCalendar(-1));
+    const next = calendarNavButton("chevron_right", () => shiftDashboardCalendar(1));
+    const title = el("strong", monthDate.toLocaleDateString(undefined, { month: "short", year: "numeric" }));
+    header.append(direction < 0 ? previous : document.createElement("span"), title, direction > 0 ? next : document.createElement("span"));
+
+    const grid = document.createElement("div");
+    grid.className = "calendar-grid";
+    ["S", "M", "T", "W", "T", "F", "S"].forEach((day) => grid.appendChild(el("span", day, "calendar-weekday")));
+    const firstDay = firstOfMonth(monthDate);
+    for (let index = 0; index < firstDay.getDay(); index += 1) {
+      grid.appendChild(el("span", "", "calendar-empty-day"));
+    }
+    const days = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0).getDate();
+    for (let day = 1; day <= days; day += 1) {
+      const date = new Date(monthDate.getFullYear(), monthDate.getMonth(), day);
+      const key = formatDateKey(date);
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "calendar-day";
+      button.textContent = String(day);
+      button.classList.toggle("is-in-range", isDraftDateInRange(key));
+      button.classList.toggle("is-range-edge", key === dashboardRangeDraft?.start || key === dashboardRangeDraft?.end);
+      button.addEventListener("click", () => selectDashboardCustomDay(key));
+      grid.appendChild(button);
+    }
+    container.append(header, grid);
+    return container;
+  }
+
+  function calendarNavButton(icon, handler) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "icon-only calendar-nav-button";
+    button.setAttribute("aria-label", icon === "chevron_left" ? "Previous month" : "Next month");
+    button.appendChild(el("span", icon, "material-symbols-outlined"));
+    button.addEventListener("click", handler);
+    return button;
+  }
+
+  function shiftDashboardCalendar(months) {
+    dashboardRangeDraft.viewDate = addMonths(dashboardRangeDraft.viewDate, months);
+    renderDashboardRangeDialog();
+  }
+
+  function selectDashboardCustomDay(key) {
+    dashboardRangeDraft.range = CUSTOM_DASHBOARD_RANGE;
+    if (!dashboardRangeDraft.start || dashboardRangeDraft.end) {
+      dashboardRangeDraft.start = key;
+      dashboardRangeDraft.end = "";
+    } else if (key < dashboardRangeDraft.start) {
+      dashboardRangeDraft.end = dashboardRangeDraft.start;
+      dashboardRangeDraft.start = key;
+    } else {
+      dashboardRangeDraft.end = key;
+    }
+    elements.dashboardCustomStart.value = dashboardRangeDraft.start;
+    elements.dashboardCustomEnd.value = dashboardRangeDraft.end;
+    renderDashboardRangeDialog();
+  }
+
+  function isDraftDateInRange(key) {
+    if (!dashboardRangeDraft?.start) {
+      return false;
+    }
+    const end = dashboardRangeDraft.end || dashboardRangeDraft.start;
+    return key >= dashboardRangeDraft.start && key <= end;
   }
 
   function initializeDatabaseMode() {
@@ -1700,35 +1887,57 @@
   }
 
   function dashboardPeriod() {
+    const savedRange = localStorage.getItem(DASHBOARD_RANGE_KEY) || DEFAULT_DASHBOARD_RANGE;
+    const range = dashboardRangeValues().has(savedRange) ? savedRange : DEFAULT_DASHBOARD_RANGE;
+    return dashboardPeriodForRange(range);
+  }
+
+  function dashboardPeriodForRange(range) {
     const today = startOfDay(new Date());
-    switch (elements.dashboardRangeSelect.value) {
-      case "last-30-days":
-        return {
-          start: formatDateKey(addDays(today, -29)),
-          end: formatDateKey(addDays(today, 1)),
-        };
-      case "last-year":
-        return {
-          start: formatDateKey(addDays(today, -364)),
-          end: formatDateKey(addDays(today, 1)),
-        };
-      case "custom":
-        return customDashboardPeriod() || lastFullMonthPeriod();
-      case "last-month":
-      default:
-        return lastFullMonthPeriod();
+    if (range === "this-month") {
+      return {
+        start: formatDateKey(new Date(today.getFullYear(), today.getMonth(), 1)),
+        end: formatDateKey(new Date(today.getFullYear(), today.getMonth() + 1, 1)),
+      };
     }
+    if (range === "this-year") {
+      return {
+        start: formatDateKey(new Date(today.getFullYear(), 0, 1)),
+        end: formatDateKey(new Date(today.getFullYear() + 1, 0, 1)),
+      };
+    }
+    if (range === "last-year") {
+      return lastFullYearPeriod();
+    }
+    if (range === CUSTOM_DASHBOARD_RANGE) {
+      return customDashboardPeriod() || lastFullMonthPeriod();
+    }
+    return lastFullMonthPeriod();
+  }
+
+  function rangeStartDate(range) {
+    return parseDateKey(dashboardPeriodForRange(range).start);
   }
 
   function customDashboardPeriod() {
-    const start = elements.dashboardCustomStart.value;
-    const end = elements.dashboardCustomEnd.value;
+    const start = localStorage.getItem(DASHBOARD_CUSTOM_START_KEY) || "";
+    const end = localStorage.getItem(DASHBOARD_CUSTOM_END_KEY) || "";
     if (!start || !end) {
       return null;
     }
     return {
       start,
       end: formatDateKey(addDays(parseDateKey(end), 1)),
+    };
+  }
+
+  function lastFullYearPeriod() {
+    const now = new Date();
+    const start = new Date(now.getFullYear() - 1, 0, 1);
+    const end = new Date(now.getFullYear(), 0, 1);
+    return {
+      start: formatDateKey(start),
+      end: formatDateKey(end),
     };
   }
 
@@ -1755,8 +1964,23 @@
     return new Date(year, month - 1, day);
   }
 
+  function formatDateRangeLabel(start, exclusiveEnd) {
+    const startDate = parseDateKey(start);
+    const endDate = addDays(parseDateKey(exclusiveEnd), -1);
+    const formatter = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" });
+    return `${formatter.format(startDate)} - ${formatter.format(endDate)}`;
+  }
+
+  function firstOfMonth(date) {
+    return new Date(date.getFullYear(), date.getMonth(), 1);
+  }
+
   function startOfDay(date) {
     return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  }
+
+  function addMonths(date, months) {
+    return new Date(date.getFullYear(), date.getMonth() + months, 1);
   }
 
   function addDays(date, days) {

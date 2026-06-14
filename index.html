@@ -285,18 +285,10 @@
               <div>
                 <strong>Dashboard range</strong>
               </div>
-              <div class="dashboard-range-controls">
-                <select id="dashboardRangeSelect" aria-label="Dashboard range">
-                  <option value="last-30-days">Last 30 days</option>
-                  <option value="last-month">Last month</option>
-                  <option value="last-year">Last year</option>
-                  <option value="custom">Custom</option>
-                </select>
-                <div class="custom-range-controls" id="dashboardCustomRangeControls" hidden>
-                  <input type="date" id="dashboardCustomStart" aria-label="Dashboard custom start date">
-                  <input type="date" id="dashboardCustomEnd" aria-label="Dashboard custom end date">
-                </div>
-              </div>
+              <button type="button" class="range-setting-button" id="dashboardRangeButton">
+                <span id="dashboardRangeLabel">Last month</span>
+                <span class="material-symbols-outlined" aria-hidden="true">calendar_month</span>
+              </button>
             </div>
           </div>
         </section>
@@ -595,6 +587,31 @@
       <div class="modal-actions">
         <button type="button" class="icon-button" id="confirmDismissButton">Cancel</button>
         <button type="submit" class="danger-button" id="confirmSubmitButton">Delete</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dashboardRangeDialog" class="modal dashboard-range-modal" tabindex="-1">
+    <form id="dashboardRangeForm" class="modal-panel">
+      <div class="panel-heading">
+        <h2>Dashboard range</h2>
+        <button class="icon-only" type="button" id="dashboardRangeCloseButton" aria-label="Close">
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <div class="dashboard-range-picker">
+        <div class="range-preset-list" id="dashboardRangePresetList" aria-label="Dashboard range presets"></div>
+        <div class="calendar-range-area">
+          <div class="calendar-range-fields">
+            <input type="date" id="dashboardCustomStart" aria-label="Custom start date">
+            <input type="date" id="dashboardCustomEnd" aria-label="Custom end date">
+          </div>
+          <div class="calendar-range-grid" id="dashboardCalendarGrid"></div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="icon-button" id="dashboardRangeClearButton">Clear</button>
+        <button type="submit" class="primary" id="dashboardRangeApplyButton">Apply</button>
       </div>
     </form>
   </dialog>
