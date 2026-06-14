@@ -77,6 +77,12 @@
     appMessage: document.querySelector("#appMessage"),
     appMessageIcon: document.querySelector("#appMessageIcon"),
     appMessageText: document.querySelector("#appMessageText"),
+    dashboardTypePie: document.querySelector("#dashboardTypePie"),
+    dashboardTypeLegend: document.querySelector("#dashboardTypeLegend"),
+    dashboardCategoryPie: document.querySelector("#dashboardCategoryPie"),
+    dashboardCategoryLegend: document.querySelector("#dashboardCategoryLegend"),
+    dashboardSplurgePie: document.querySelector("#dashboardSplurgePie"),
+    dashboardSplurgeLegend: document.querySelector("#dashboardSplurgeLegend"),
     accountAddButton: document.querySelector("#accountAddButton"),
     accountForm: document.querySelector("#accountForm"),
     importForm: document.querySelector("#importForm"),
@@ -798,6 +804,13 @@
     setText("#dashboardBills", formatDollars(bills));
     setText("#dashboardSplurge", formatDollars(splurge));
     setText("#dashboardSaved", formatDollars(saved));
+    renderPieChart(elements.dashboardTypePie, elements.dashboardTypeLegend, [
+      { label: "Bills", value: bills, color: "#c85d5d" },
+      { label: "Splurge", value: splurge, color: "#7c6bc2" },
+      { label: "Saved", value: Math.max(saved, 0), color: "#2f8f2f" },
+    ]);
+    renderPieChart(elements.dashboardCategoryPie, elements.dashboardCategoryLegend, categorySpendingSegments(transactions, ["bill", "splurge"]));
+    renderPieChart(elements.dashboardSplurgePie, elements.dashboardSplurgeLegend, categorySpendingSegments(transactions, ["splurge"]));
   }
 
   function renderAccounts() {
@@ -1671,6 +1684,80 @@
       const amount = Number(transaction.amount_cents) || 0;
       return total + (useAbsoluteValue ? Math.abs(amount) : amount);
     }, 0);
+  }
+
+  function categorySpendingSegments(transactions, transactionTypesToInclude) {
+    const includedTypes = new Set(transactionTypesToInclude);
+    const totals = new Map();
+    transactions
+      .filter((transaction) => includedTypes.has(transaction.transaction_type))
+      .forEach((transaction) => {
+        const parent = parentCategoryForTransaction(transaction);
+        if (!parent || parent.name === "Transfer") {
+          return;
+        }
+        const amount = Math.abs(Number(transaction.amount_cents) || 0);
+        totals.set(parent.id, {
+          label: parent.name,
+          value: (totals.get(parent.id)?.value || 0) + amount,
+          color: parent.color || "#000000",
+        });
+      });
+    const total = [...totals.values()].reduce((sum, segment) => sum + segment.value, 0);
+    if (total <= 0) {
+      return [];
+    }
+    const segments = [...totals.values()].sort((a, b) => b.value - a.value);
+    const visible = segments.filter((segment) => segment.value / total >= 0.02);
+    const otherValue = segments
+      .filter((segment) => segment.value / total < 0.02)
+      .reduce((sum, segment) => sum + segment.value, 0);
+    if (otherValue > 0) {
+      visible.push({ label: "All others", value: otherValue, color: "#000000" });
+    }
+    return visible;
+  }
+
+  function parentCategoryForTransaction(transaction) {
+    const category = state.categories.find((candidate) => candidate.id === transaction.category_id);
+    if (!category) {
+      return null;
+    }
+    if (category.parent_id === null) {
+      return category;
+    }
+    return state.categories.find((candidate) => candidate.id === category.parent_id) || category;
+  }
+
+  function renderPieChart(chart, legend, rawSegments) {
+    const segments = rawSegments.filter((segment) => segment.value > 0);
+    const total = segments.reduce((sum, segment) => sum + segment.value, 0);
+    clear(legend);
+    if (total <= 0) {
+      chart.style.background = "var(--surface-muted)";
+      legend.appendChild(el("span", "No data", "list-meta"));
+      return;
+    }
+    let cursor = 0;
+    const stops = segments.map((segment) => {
+      const start = cursor;
+      cursor += (segment.value / total) * 100;
+      return `${segment.color} ${start}% ${cursor}%`;
+    });
+    chart.style.background = `conic-gradient(${stops.join(", ")})`;
+    segments.forEach((segment) => {
+      const item = document.createElement("div");
+      item.className = "chart-legend-item";
+      const swatch = document.createElement("span");
+      swatch.className = "chart-legend-swatch";
+      swatch.style.background = segment.color;
+      item.append(
+        swatch,
+        el("span", segment.label),
+        el("strong", `${Math.round((segment.value / total) * 100)}%`),
+      );
+      legend.appendChild(item);
+    });
   }
 
   function formatDollars(cents) {
