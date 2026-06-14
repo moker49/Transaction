@@ -377,7 +377,8 @@ def create_rule():
     set_category_id = int(data["set_category_id"]) if data.get("set_category_id") is not None else None
     set_clean_description = optional_nonempty(data.get("set_clean_description"), "set_clean_description")
     set_transaction_type = validate_transaction_type(data.get("set_transaction_type"), allow_empty=True)
-    add_tag_id = int(data["add_tag_id"]) if data.get("add_tag_id") is not None else None
+    add_tag_ids = parse_rule_tag_ids(data)
+    add_tag_id = add_tag_ids[0] if add_tag_ids else None
     priority = int(data.get("priority", 100))
 
     validate_rule_actions(set_category_id, set_clean_description, set_transaction_type, add_tag_id)
@@ -385,8 +386,8 @@ def create_rule():
     with closing(connect(current_db_path())) as conn:
         if set_category_id is not None:
             require_category(conn, set_category_id)
-        if add_tag_id is not None:
-            fetch_tag_by_id(conn, add_tag_id)
+        for tag_id in add_tag_ids:
+            fetch_tag_by_id(conn, tag_id)
         cursor = conn.execute(
             """
             INSERT INTO transaction_import_rules (
@@ -414,7 +415,9 @@ def create_rule():
                 priority,
             ),
         )
-        rule = dict(fetch_transaction_rule(conn, int(cursor.lastrowid)))
+        rule_id = int(cursor.lastrowid)
+        replace_rule_tags(conn, rule_id, add_tag_ids)
+        rule = dict(fetch_transaction_rule(conn, rule_id))
         state = read_state(conn)
         conn.commit()
 
@@ -434,6 +437,7 @@ def update_rule(rule_id: int):
         next_set_clean_description = current["set_clean_description"]
         next_set_transaction_type = current["set_transaction_type"]
         next_add_tag_id = current["add_tag_id"]
+        next_add_tag_ids = fetch_rule_tag_ids(conn, rule_id)
 
         if "name" in data:
             updates.append("name = ?")
@@ -467,6 +471,14 @@ def update_rule(rule_id: int):
             next_add_tag_id = int(raw_tag_id) if raw_tag_id is not None else None
             if next_add_tag_id is not None:
                 fetch_tag_by_id(conn, next_add_tag_id)
+            next_add_tag_ids = [next_add_tag_id] if next_add_tag_id is not None else []
+            updates.append("add_tag_id = ?")
+            values.append(next_add_tag_id)
+        if "add_tag_ids" in data:
+            next_add_tag_ids = parse_rule_tag_ids(data)
+            next_add_tag_id = next_add_tag_ids[0] if next_add_tag_ids else None
+            for tag_id in next_add_tag_ids:
+                fetch_tag_by_id(conn, tag_id)
             updates.append("add_tag_id = ?")
             values.append(next_add_tag_id)
         if "priority" in data:
@@ -483,6 +495,8 @@ def update_rule(rule_id: int):
         updates.append("updated_at = datetime('now')")
         values.append(rule_id)
         conn.execute(f"UPDATE transaction_import_rules SET {', '.join(updates)} WHERE id = ?", values)
+        if "add_tag_ids" in data or "add_tag_id" in data:
+            replace_rule_tags(conn, rule_id, next_add_tag_ids)
         rule = dict(fetch_transaction_rule(conn, rule_id))
         state = read_state(conn)
         conn.commit()
@@ -933,6 +947,19 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
             """
         ).fetchall()
     )
+    rule_tags = rows_to_dicts(
+        conn.execute(
+            """
+            SELECT
+                rt.rule_id,
+                tags.id,
+                tags.name
+            FROM transaction_import_rule_tags rt
+            JOIN tags ON tags.id = rt.tag_id
+            ORDER BY tags.name, tags.id
+            """
+        ).fetchall()
+    )
     logs = rows_to_dicts(
         conn.execute(
             """
@@ -952,6 +979,10 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
         tags_by_transaction.setdefault(transaction_id, []).append(tag)
     for transaction in transactions:
         transaction["tags"] = tags_by_transaction.get(int(transaction["id"]), [])
+    tags_by_rule: dict[int, list[dict[str, Any]]] = {}
+    for tag in rule_tags:
+        rule_id = int(tag.pop("rule_id"))
+        tags_by_rule.setdefault(rule_id, []).append(tag)
     categories_by_id = {category["id"]: category["name"] for category in categories}
     for row in raw_rows:
         preview = apply_import_rules(conn, row) if row["import_status"] == "ready" else {}
@@ -961,6 +992,8 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
         row["preview_type"] = preview.get("transaction_type")
     for rule in rules:
         rule["is_active"] = bool(rule["is_active"])
+        rule["tags"] = tags_by_rule.get(int(rule["id"]), [])
+        rule["tag_ids"] = [tag["id"] for tag in rule["tags"]]
     for category in categories:
         category["is_default"] = category["name"] in DEFAULT_CATEGORY_NAMES
     for tag in tags:
@@ -1078,6 +1111,42 @@ def category_descendant_ids(conn: sqlite3.Connection, category_id: int) -> set[i
 
 def rows_to_dicts(rows) -> list[dict[str, Any]]:
     return [dict(row) for row in rows]
+
+
+def parse_rule_tag_ids(data: dict[str, Any]) -> list[int]:
+    if "add_tag_ids" in data:
+        raw_tag_ids = data.get("add_tag_ids")
+        if not isinstance(raw_tag_ids, list):
+            raise CliError("add_tag_ids must be a list.")
+        return sorted({int(tag_id) for tag_id in raw_tag_ids if tag_id not in (None, "")})
+    raw_tag_id = data.get("add_tag_id")
+    if raw_tag_id is None:
+        return []
+    return [int(raw_tag_id)]
+
+
+def fetch_rule_tag_ids(conn: sqlite3.Connection, rule_id: int) -> list[int]:
+    rows = conn.execute(
+        """
+        SELECT tag_id
+        FROM transaction_import_rule_tags
+        WHERE rule_id = ?
+        ORDER BY tag_id
+        """,
+        (rule_id,),
+    ).fetchall()
+    if rows:
+        return [int(row["tag_id"]) for row in rows]
+    rule = fetch_transaction_rule(conn, rule_id)
+    return [int(rule["add_tag_id"])] if rule["add_tag_id"] is not None else []
+
+
+def replace_rule_tags(conn: sqlite3.Connection, rule_id: int, tag_ids: list[int]) -> None:
+    conn.execute("DELETE FROM transaction_import_rule_tags WHERE rule_id = ?", (rule_id,))
+    conn.executemany(
+        "INSERT INTO transaction_import_rule_tags (rule_id, tag_id) VALUES (?, ?)",
+        [(rule_id, tag_id) for tag_id in tag_ids],
+    )
 
 
 def fetch_category(conn: sqlite3.Connection, category_id: int) -> sqlite3.Row:

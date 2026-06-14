@@ -132,10 +132,10 @@
             <div class="table-wrap">
               <table>
                 <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Institution</th>
-                    <th>Account type</th>
+                <tr>
+                  <th>Name</th>
+                  <th>Institution</th>
+                  <th>Account type</th>
                     <th>Records</th>
                   </tr>
                 </thead>
@@ -222,7 +222,7 @@
             <table id="rawRowsTableElement">
               <thead>
                 <tr>
-                  <th data-raw-column="select">Select</th>
+                  <th data-raw-column="select">Import</th>
                   <th data-raw-column="date">Date</th>
                   <th data-raw-column="category">Category</th>
                   <th data-raw-column="amount">Amount</th>
@@ -235,7 +235,7 @@
               <tbody id="rawRowsTable"></tbody>
             </table>
           </div>
-          <button type="button" class="primary fab-button import-fab" id="importSelectedRowsButton"
+          <button type="button" class="primary fab-button import-fab" id="importSelectedRowsButton" hidden
             aria-label="Import selected" title="Import selected">
             <span class="material-symbols-outlined" aria-hidden="true">download</span>
           </button>
@@ -248,10 +248,10 @@
             <div class="table-wrap">
               <table>
                 <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Match</th>
-                    <th>Effects</th>
+                <tr>
+                  <th>Name</th>
+                  <th>Match</th>
+                  <th>Effects</th>
                   </tr>
                 </thead>
                 <tbody id="rulesTable"></tbody>
@@ -425,10 +425,10 @@
           <span>Clean Category</span>
           <select name="setCategoryId" id="ruleCategorySelect"></select>
         </label>
-        <label>
+        <div class="form-field">
           <span>Tag</span>
-          <select name="addTagId" id="ruleTagSelect"></select>
-        </label>
+          <div id="ruleTags" class="tag-check-list"></div>
+        </div>
         <label>
           <span>Priority</span>
           <input name="priority" type="number" min="0" value="100">
@@ -515,6 +515,44 @@
         <button type="button" class="icon-button" id="transactionEditButton">Edit</button>
         <button type="button" class="icon-button" id="transactionCancelButton" hidden>Cancel</button>
         <button type="submit" class="primary" id="transactionSaveButton" hidden>Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="rawRowDialog" class="modal wide-modal" tabindex="-1">
+    <form id="rawRowForm" class="modal-panel">
+      <div class="panel-heading">
+        <h2 id="rawRowDialogTitle">Pending Row</h2>
+        <button class="icon-only" type="button" id="rawRowCloseButton" aria-label="Close">
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <div class="transaction-detail-grid raw-row-detail-grid">
+        <section>
+          <h3>Raw Values</h3>
+          <dl id="rawRowRawValues" class="detail-list readonly-details"></dl>
+        </section>
+        <section>
+          <h3>Matched Values</h3>
+          <dl id="rawRowMatchedValues" class="detail-list readonly-details"></dl>
+        </section>
+        <section>
+          <h3>Import</h3>
+          <dl id="rawRowImportValues" class="detail-list readonly-details"></dl>
+        </section>
+        <section>
+          <h3>Note</h3>
+          <div class="detail-list">
+            <label>
+              <span>Transaction note</span>
+              <textarea id="rawRowNoteInput" rows="5"></textarea>
+            </label>
+          </div>
+        </section>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="icon-button" id="rawRowDismissButton">Cancel</button>
+        <button type="submit" class="primary" id="rawRowSaveButton">Save</button>
       </div>
     </form>
   </dialog>

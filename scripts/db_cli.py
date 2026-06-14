@@ -571,9 +571,25 @@ def apply_import_rules(conn: sqlite3.Connection, raw_row: sqlite3.Row) -> dict[s
             result["clean_description"] = rule["set_clean_description"]
         if rule["set_transaction_type"] is not None:
             result["transaction_type"] = rule["set_transaction_type"]
-        if rule["add_tag_id"] is not None and int(rule["add_tag_id"]) not in result["tag_ids"]:
-            result["tag_ids"].append(int(rule["add_tag_id"]))
+        for tag_id in fetch_rule_tag_ids(conn, int(rule["id"]), rule["add_tag_id"]):
+            if tag_id not in result["tag_ids"]:
+                result["tag_ids"].append(tag_id)
     return result
+
+
+def fetch_rule_tag_ids(conn: sqlite3.Connection, rule_id: int, fallback_tag_id: int | None = None) -> list[int]:
+    rows = conn.execute(
+        """
+        SELECT tag_id
+        FROM transaction_import_rule_tags
+        WHERE rule_id = ?
+        ORDER BY tag_id
+        """,
+        (rule_id,),
+    ).fetchall()
+    if rows:
+        return [int(row["tag_id"]) for row in rows]
+    return [int(fallback_tag_id)] if fallback_tag_id is not None else []
 
 
 def raw_row_has_matching_rule(conn: sqlite3.Connection, raw_row: sqlite3.Row) -> bool:

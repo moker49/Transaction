@@ -85,6 +85,13 @@ CREATE TABLE IF NOT EXISTS transaction_tags (
     PRIMARY KEY (transaction_id, tag_id)
 );
 
+CREATE TABLE IF NOT EXISTS transaction_import_rule_tags (
+    rule_id INTEGER NOT NULL REFERENCES transaction_import_rules(id) ON DELETE CASCADE,
+    tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (rule_id, tag_id)
+);
+
 CREATE TABLE IF NOT EXISTS transaction_notes (
     id INTEGER PRIMARY KEY,
     transaction_id INTEGER NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
@@ -148,6 +155,7 @@ CREATE INDEX IF NOT EXISTS idx_transaction_import_rules_active_priority ON trans
 CREATE INDEX IF NOT EXISTS idx_transaction_import_rules_match ON transaction_import_rules(match_field, match_type);
 CREATE INDEX IF NOT EXISTS idx_transaction_import_rules_set_category_id ON transaction_import_rules(set_category_id);
 CREATE INDEX IF NOT EXISTS idx_transaction_import_rules_add_tag_id ON transaction_import_rules(add_tag_id);
+CREATE INDEX IF NOT EXISTS idx_transaction_import_rule_tags_tag_id ON transaction_import_rule_tags(tag_id);
 CREATE INDEX IF NOT EXISTS idx_transaction_tags_tag_id ON transaction_tags(tag_id);
 CREATE INDEX IF NOT EXISTS idx_transaction_notes_transaction_id ON transaction_notes(transaction_id);
 CREATE INDEX IF NOT EXISTS idx_imported_source_account_id ON imported_source(account_id);

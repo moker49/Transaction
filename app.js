@@ -32,6 +32,7 @@
   let editingRuleId = null;
   let editingCategoryId = null;
   let activeTransactionId = null;
+  let activeRawRowId = null;
   let transactionEditMode = false;
   let accountDialogMode = "add";
   let ruleDialogMode = "add";
@@ -116,7 +117,7 @@
     ruleAddButton: document.querySelector("#ruleAddButton"),
     ruleDialog: document.querySelector("#ruleDialog"),
     ruleCategorySelect: document.querySelector("#ruleCategorySelect"),
-    ruleTagSelect: document.querySelector("#ruleTagSelect"),
+    ruleTags: document.querySelector("#ruleTags"),
     ruleCancelButton: document.querySelector("#ruleCancelButton"),
     ruleDismissButton: document.querySelector("#ruleDismissButton"),
     ruleDialogTitle: document.querySelector("#ruleDialogTitle"),
@@ -172,6 +173,15 @@
     transactionEditButton: document.querySelector("#transactionEditButton"),
     transactionCancelButton: document.querySelector("#transactionCancelButton"),
     transactionSaveButton: document.querySelector("#transactionSaveButton"),
+    rawRowDialog: document.querySelector("#rawRowDialog"),
+    rawRowForm: document.querySelector("#rawRowForm"),
+    rawRowDialogTitle: document.querySelector("#rawRowDialogTitle"),
+    rawRowCloseButton: document.querySelector("#rawRowCloseButton"),
+    rawRowDismissButton: document.querySelector("#rawRowDismissButton"),
+    rawRowRawValues: document.querySelector("#rawRowRawValues"),
+    rawRowMatchedValues: document.querySelector("#rawRowMatchedValues"),
+    rawRowImportValues: document.querySelector("#rawRowImportValues"),
+    rawRowNoteInput: document.querySelector("#rawRowNoteInput"),
     categoryDialog: document.querySelector("#categoryDialog"),
     categoryDialogForm: document.querySelector("#categoryDialogForm"),
     categoryDialogTitle: document.querySelector("#categoryDialogTitle"),
@@ -255,6 +265,12 @@
   elements.transactionCloseButton.addEventListener("click", closeTransactionDialog);
   elements.transactionEditButton.addEventListener("click", () => setTransactionEditMode(true));
   elements.transactionCancelButton.addEventListener("click", cancelTransactionEdit);
+  elements.rawRowForm.addEventListener("submit", saveRawRowNote);
+  elements.rawRowCloseButton.addEventListener("click", closeRawRowDialog);
+  elements.rawRowDismissButton.addEventListener("click", closeRawRowDialog);
+  elements.rawRowDialog.addEventListener("close", () => {
+    activeRawRowId = null;
+  });
   elements.transactionCategoryFilter.addEventListener("change", renderTransactions);
   elements.transactionSearch.addEventListener("input", renderTransactions);
   elements.transactionDialog.addEventListener("close", () => {
@@ -802,6 +818,7 @@
     elements.ruleForm.elements.matchField.value = "description";
     elements.ruleForm.elements.matchType.value = "contains";
     elements.ruleForm.elements.priority.value = "100";
+    renderRuleTags([]);
     openModal(elements.ruleDialog);
   }
 
@@ -821,7 +838,7 @@
     form.elements.setCleanDescription.value = rule.set_clean_description || "";
     form.elements.setTransactionType.value = rule.set_transaction_type || "";
     form.elements.setCategoryId.value = rule.set_category_id === null ? "" : String(rule.set_category_id);
-    form.elements.addTagId.value = rule.add_tag_id === null ? "" : String(rule.add_tag_id);
+    renderRuleTags(rule.tag_ids || (rule.add_tag_id === null ? [] : [rule.add_tag_id]));
     form.elements.priority.value = String(rule.priority ?? 100);
     openModal(elements.ruleDialog);
   }
@@ -837,9 +854,11 @@
     const setCleanDescription = clean(form.get("setCleanDescription"));
     const setTransactionType = clean(form.get("setTransactionType"));
     const setCategoryId = Number(form.get("setCategoryId")) || null;
-    const addTagId = Number(form.get("addTagId")) || null;
+    const addTagIds = [...elements.ruleTags.querySelectorAll("input[type='checkbox']:checked")]
+      .map((checkbox) => Number(checkbox.value))
+      .filter((tagId) => Number.isInteger(tagId) && tagId > 0);
 
-    if (!setCategoryId && !setCleanDescription && !setTransactionType && !addTagId) {
+    if (!setCategoryId && !setCleanDescription && !setTransactionType && !addTagIds.length) {
       setModalMessage(elements.ruleMessage, "Set a category, description, type, or tag.", true);
       return;
     }
@@ -856,7 +875,7 @@
           set_category_id: setCategoryId,
           set_clean_description: setCleanDescription || null,
           set_transaction_type: setTransactionType || null,
-          add_tag_id: addTagId,
+          add_tag_ids: addTagIds,
           priority: Number(form.get("priority")) || 100,
         }),
       });
@@ -1090,14 +1109,17 @@
     }
 
     transactions.forEach((transaction) => {
+      const category = state.categories.find((candidate) => candidate.id === transaction.category_id)
+        || state.categories.find((candidate) => candidate.name === transaction.category);
       const row = tableRow([
-        transaction.posted_date || "-",
-        transaction.category || "-",
+        displayDateCell(transaction.posted_date),
+        category ? displayCategoryChip(category) : transaction.category || "-",
         transaction.amount || formatCents(transaction.amount_cents),
         transaction.clean_description || "-",
         transaction.account || "-",
         transaction.notes || "-",
       ]);
+      row.children[0]?.classList.add("date-cell");
       row.children[2]?.classList.add("amount");
       row.classList.add("clickable-row");
       row.tabIndex = 0;
@@ -1262,6 +1284,67 @@
     }
   }
 
+  function openRawRowDialog(rawRow) {
+    activeRawRowId = rawRow.id;
+    populateRawRowDialog(rawRow);
+    openModal(elements.rawRowDialog);
+  }
+
+  function closeRawRowDialog() {
+    elements.rawRowDialog.close();
+  }
+
+  function activeRawRow() {
+    return state.rawRows.find((row) => row.id === activeRawRowId) || null;
+  }
+
+  function populateRawRowDialog(rawRow) {
+    const account = state.accounts.find((candidate) => candidate.id === rawRow.account_id);
+    elements.rawRowDialogTitle.textContent = `Pending Row ${rawRow.id}`;
+    elements.rawRowNoteInput.value = rawRowNotes.get(rawRow.id) || "";
+    elements.rawRowNoteInput.disabled = false;
+    renderDefinitionList(elements.rawRowRawValues, [
+      ["Date", formatDisplayDate(rawRow.raw_date)],
+      ["Category", rawRow.raw_category],
+      ["Description", rawRow.raw_description],
+      ["Amount", rawRow.raw_amount],
+      ["Hash", rawRow.raw_row_hash],
+    ]);
+    renderDefinitionList(elements.rawRowMatchedValues, [
+      ["Matched", isMatchedRawRow(rawRow) ? "Yes" : "No"],
+      ["Importable", isImportableRawRow(rawRow) ? "Yes" : "No"],
+      ["Category", rawRow.preview_category],
+      ["Description", rawRow.preview_clean_description],
+      ["Type", transactionTypeLabel(rawRow.preview_type)],
+    ]);
+    renderDefinitionList(elements.rawRowImportValues, [
+      ["Account", account ? accountLabel(account) : "Unknown"],
+      ["Status", rawRow.import_status],
+      ["Error", rawRow.import_error],
+      ["Source ID", rawRow.imported_source_id],
+      ["Parsed transaction ID", rawRow.parsed_transaction_id],
+      ["Created", formatMaybeDateTime(rawRow.created_at)],
+      ["Updated", formatMaybeDateTime(rawRow.updated_at)],
+    ]);
+  }
+
+  function saveRawRowNote(event) {
+    event.preventDefault();
+    const rawRow = activeRawRow();
+    if (!rawRow) {
+      closeRawRowDialog();
+      return;
+    }
+    const note = clean(elements.rawRowNoteInput.value);
+    if (note) {
+      rawRowNotes.set(rawRow.id, note);
+    } else {
+      rawRowNotes.delete(rawRow.id);
+    }
+    renderRawRows();
+    closeRawRowDialog();
+  }
+
   function renderAccountSelects() {
     const options = state.accounts.map((account) => {
       return { value: String(account.id), label: accountLabel(account) };
@@ -1311,10 +1394,26 @@
       });
     }
 
-    fillSelect(
-      elements.ruleTagSelect,
-      [{ value: "", label: "No tag" }, ...state.tags.map((tag) => ({ value: String(tag.id), label: tag.name }))],
-    );
+  }
+
+  function renderRuleTags(selectedTagIds) {
+    clear(elements.ruleTags);
+    const selected = new Set(selectedTagIds.map((tagId) => Number(tagId)));
+    if (!state.tags.length) {
+      elements.ruleTags.appendChild(el("span", "No tags available.", "list-meta"));
+      return;
+    }
+    state.tags.forEach((tag) => {
+      const label = document.createElement("label");
+      label.className = "tag-check";
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.name = "addTagIds";
+      checkbox.value = String(tag.id);
+      checkbox.checked = selected.has(Number(tag.id));
+      label.append(checkbox, el("span", tag.name));
+      elements.ruleTags.appendChild(label);
+    });
   }
 
   function renderCategories() {
@@ -1394,6 +1493,12 @@
     const chip = category.is_default
       ? el("span", category.name, "chip category-chip")
       : manageableChip(category.name, () => editCategory(category), "category-chip");
+    chip.style.setProperty("--category-color", effectiveCategoryColor(category));
+    return chip;
+  }
+
+  function displayCategoryChip(category) {
+    const chip = el("span", category.name, "chip category-chip");
     chip.style.setProperty("--category-color", effectiveCategoryColor(category));
     return chip;
   }
@@ -1530,12 +1635,14 @@
       const account = state.accounts.find((candidate) => candidate.id === rawRow.account_id);
       const tr = document.createElement("tr");
       tr.classList.toggle("is-matched-row", isMatchedRawRow(rawRow));
+      makeEditableRow(tr, `View pending row ${rawRow.id}`, () => openRawRowDialog(rawRow));
       const checkbox = document.createElement("input");
       checkbox.className = "row-checkbox";
       checkbox.type = "checkbox";
       checkbox.checked = selectedRawRowIds.has(rawRow.id);
       checkbox.disabled = !isImportableRawRow(rawRow);
       checkbox.setAttribute("aria-label", `Select row ${rawRow.id}`);
+      checkbox.addEventListener("click", (event) => event.stopPropagation());
       checkbox.addEventListener("change", () => {
         if (checkbox.checked) {
           selectedRawRowIds.add(rawRow.id);
@@ -1552,6 +1659,8 @@
       noteInput.disabled = !isImportableRawRow(rawRow);
       noteInput.placeholder = isImportableRawRow(rawRow) ? "Transaction note" : "";
       noteInput.setAttribute("aria-label", `Note for row ${rawRow.id}`);
+      noteInput.addEventListener("click", (event) => event.stopPropagation());
+      noteInput.addEventListener("keydown", (event) => event.stopPropagation());
       noteInput.addEventListener("input", () => {
         const note = clean(noteInput.value);
         if (note) {
@@ -1563,7 +1672,7 @@
 
       const cells = [
         ["select", cell(checkbox)],
-        ["date", cell(rawRow.raw_date || "-")],
+        ["date", cell(displayDateCell(rawRow.raw_date), "date-cell")],
         ["category", cell(rawValueWithPreview(rawRow.raw_category, rawRow.preview_category))],
         ["amount", cell(rawRow.raw_amount || "-", "amount")],
         ["description", cell(rawValueWithPreview(rawRow.raw_description, rawRow.preview_clean_description))],
@@ -1571,7 +1680,12 @@
         ["notes", cell(noteInput)],
         ["status", cell(statusBadge(rawRow), "status-cell")],
       ];
-      tr.append(...cells.filter(([column]) => !hiddenColumns.has(column)).map(([, node]) => node));
+      tr.append(...cells
+        .filter(([column]) => !hiddenColumns.has(column))
+        .map(([column, node]) => {
+          node.dataset.rawColumn = column;
+          return node;
+        }));
       tbody.appendChild(tr);
     });
     updateImportSelectedButton();
@@ -1664,6 +1778,7 @@
       return rawRow && isImportableRawRow(rawRow);
     }).length;
     elements.importSelectedRowsButton.disabled = importableCount === 0;
+    elements.importSelectedRowsButton.hidden = importableCount === 0;
     elements.importSelectedRowsButton.title =
       importableCount === 0 ? "Import selected" : `Import selected (${importableCount})`;
     elements.importSelectedRowsButton.setAttribute("aria-label", elements.importSelectedRowsButton.title);
@@ -2125,10 +2240,18 @@
     if (rule.set_transaction_type) {
       actions.push(`type: ${transactionTypeLabel(rule.set_transaction_type)}`);
     }
-    if (tag) {
+    if (rule.tags?.length) {
+      actions.push(`tags: ${rule.tags.map((item) => item.name).join(", ")}`);
+    } else if (tag) {
       actions.push(`tag: ${tag.name}`);
     }
-    return actions.join(" | ");
+    if (!actions.length) {
+      return "";
+    }
+    const list = document.createElement("div");
+    list.className = "effects-list";
+    actions.forEach((action) => list.appendChild(el("span", action)));
+    return list;
   }
 
   function transactionTypeLabel(value) {
@@ -2295,6 +2418,11 @@
 
   function openModal(dialog, { focusSingleTextField } = {}) {
     dialog.showModal();
+    dialog.scrollTop = 0;
+    const panel = dialog.querySelector(".modal-panel");
+    if (panel) {
+      panel.scrollTop = 0;
+    }
     updateModalScrollLock();
     if (focusSingleTextField) {
       const input = dialog.querySelector("input[type='text']");
@@ -2396,6 +2524,40 @@
       dateStyle: "medium",
       timeStyle: "short",
     }).format(new Date(value));
+  }
+
+  function formatDisplayDate(value) {
+    if (!value) {
+      return "-";
+    }
+    const text = String(value);
+    const isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (isoMatch) {
+      return `${isoMatch[3]}-${isoMatch[2]}-${isoMatch[1]}`;
+    }
+    const date = new Date(text);
+    if (Number.isNaN(date.getTime())) {
+      return text;
+    }
+    return [
+      String(date.getDate()).padStart(2, "0"),
+      String(date.getMonth() + 1).padStart(2, "0"),
+      date.getFullYear(),
+    ].join("-");
+  }
+
+  function displayDateCell(value) {
+    const formatted = formatDisplayDate(value);
+    if (formatted === "-" || !/^\d{2}-\d{2}-\d{4}$/.test(formatted)) {
+      return formatted;
+    }
+    const wrapper = document.createElement("span");
+    wrapper.className = "date-stack";
+    wrapper.append(
+      el("span", formatted.slice(0, 5)),
+      el("span", formatted.slice(6)),
+    );
+    return wrapper;
   }
 
   function formatMaybeDateTime(value) {

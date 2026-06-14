@@ -21,6 +21,7 @@ EXPECTED_TABLES = {
     "raw_imported_rows",
     "tags",
     "transaction_import_rules",
+    "transaction_import_rule_tags",
     "transaction_notes",
     "transaction_tags",
     "transactions",
@@ -174,6 +175,30 @@ def migrate_existing_schema(conn: sqlite3.Connection, tables: Iterable[str]) -> 
                     CHECK (set_transaction_type IS NULL OR set_transaction_type IN ('income', 'bill', 'splurge'))
                 """
             )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS transaction_import_rule_tags (
+                rule_id INTEGER NOT NULL REFERENCES transaction_import_rules(id) ON DELETE CASCADE,
+                tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                PRIMARY KEY (rule_id, tag_id)
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO transaction_import_rule_tags (rule_id, tag_id)
+            SELECT id, add_tag_id
+            FROM transaction_import_rules
+            WHERE add_tag_id IS NOT NULL
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_transaction_import_rule_tags_tag_id
+            ON transaction_import_rule_tags(tag_id)
+            """
+        )
     if "categories" in table_set:
         category_columns = {row[1] for row in conn.execute("PRAGMA table_info(categories)").fetchall()}
         if "color" not in category_columns:
