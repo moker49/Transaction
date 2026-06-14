@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Transaction History</title>
+  <title>Personal Finances</title>
   <script>
     document.documentElement.dataset.theme = localStorage.getItem("transaction-theme") || "dark";
   </script>
@@ -16,11 +16,12 @@
   <div class="app-shell">
     <header class="topbar">
       <div>
-        <h1>Transaction History</h1>
-        <p class="subtle">Local first-version workspace</p>
+        <h1>Personal Finaces</h1>
+        <p class="subtle">Self-hosted finances tracker</p>
       </div>
       <div class="topbar-actions">
-        <button class="profile-button" type="button" id="profileButton" aria-label="Profile and settings" title="Profile and settings">
+        <button class="profile-button" type="button" id="profileButton" aria-label="Profile and settings"
+          title="Profile and settings">
           <span class="material-symbols-outlined" aria-hidden="true">account_circle</span>
         </button>
       </div>
@@ -103,7 +104,8 @@
           <div class="panel-heading with-controls">
             <div class="controls transaction-controls">
               <select id="transactionCategoryFilter" aria-label="Filter transactions by category"></select>
-              <input id="transactionSearch" type="search" placeholder="Search transactions" aria-label="Search transactions">
+              <input id="transactionSearch" type="search" placeholder="Search transactions"
+                aria-label="Search transactions">
             </div>
           </div>
           <div class="table-wrap">
@@ -142,7 +144,8 @@
             </div>
           </section>
         </div>
-        <button type="button" class="primary fab-button manage-fab" id="accountAddButton" aria-label="Add Account" title="Add Account">
+        <button type="button" class="primary fab-button manage-fab" id="accountAddButton" aria-label="Add Account"
+          title="Add Account">
           <span class="material-symbols-outlined" aria-hidden="true">add</span>
         </button>
       </section>
@@ -153,7 +156,8 @@
             <div id="categoryList" class="chip-list empty-target"></div>
           </section>
         </div>
-        <button type="button" class="primary fab-button manage-fab" id="categoryAddButton" aria-label="Add Category" title="Add Category">
+        <button type="button" class="primary fab-button manage-fab" id="categoryAddButton" aria-label="Add Category"
+          title="Add Category">
           <span class="material-symbols-outlined" aria-hidden="true">add</span>
         </button>
       </section>
@@ -164,7 +168,8 @@
             <div id="tagList" class="chip-list empty-target"></div>
           </section>
         </div>
-        <button type="button" class="primary fab-button manage-fab" id="tagAddButton" aria-label="Add Tag" title="Add Tag">
+        <button type="button" class="primary fab-button manage-fab" id="tagAddButton" aria-label="Add Tag"
+          title="Add Tag">
           <span class="material-symbols-outlined" aria-hidden="true">add</span>
         </button>
       </section>
@@ -197,7 +202,8 @@
         <section class="panel">
           <div class="panel-heading with-controls raw-controls-heading">
             <div class="controls raw-controls">
-              <button type="button" class="icon-button icon-only" id="selectVisibleRowsButton" aria-label="Select visible" title="Select visible">
+              <button type="button" class="icon-button icon-only" id="selectVisibleRowsButton"
+                aria-label="Select visible" title="Select visible">
                 <span class="material-symbols-outlined" aria-hidden="true">select_all</span>
               </button>
               <select id="rawAccountFilter" aria-label="Filter by account"></select>
@@ -229,7 +235,8 @@
               <tbody id="rawRowsTable"></tbody>
             </table>
           </div>
-          <button type="button" class="primary fab-button import-fab" id="importSelectedRowsButton" aria-label="Import selected" title="Import selected">
+          <button type="button" class="primary fab-button import-fab" id="importSelectedRowsButton"
+            aria-label="Import selected" title="Import selected">
             <span class="material-symbols-outlined" aria-hidden="true">download</span>
           </button>
         </section>
@@ -252,7 +259,8 @@
             </div>
           </section>
         </div>
-        <button type="button" class="primary fab-button manage-fab" id="ruleAddButton" aria-label="Add Rule" title="Add Rule">
+        <button type="button" class="primary fab-button manage-fab" id="ruleAddButton" aria-label="Add Rule"
+          title="Add Rule">
           <span class="material-symbols-outlined" aria-hidden="true">add</span>
         </button>
       </section>
@@ -283,7 +291,8 @@
             <div class="setting-row">
               <div>
                 <strong id="dummyDatabaseLabel">Use dummy database</strong>
-                <span class="setting-note" id="dummyDatabaseDescription">Route all reads, writes, imports, and dev actions to a separate dummy SQLite file.</span>
+                <span class="setting-note" id="dummyDatabaseDescription">Route all reads, writes, imports, and dev
+                  actions to a separate dummy SQLite file.</span>
               </div>
               <label class="theme-toggle" title="Use dummy database">
                 <input type="checkbox" id="dummyDatabaseToggle" aria-label="Use dummy database">
@@ -549,7 +558,8 @@
         </label>
       </div>
       <div class="modal-actions">
-        <button type="button" class="danger-button modal-delete-button" id="textInputDeleteButton" hidden>Delete</button>
+        <button type="button" class="danger-button modal-delete-button" id="textInputDeleteButton"
+          hidden>Delete</button>
         <button type="button" class="icon-button" id="textInputDismissButton">Cancel</button>
         <button type="submit" class="primary">Save</button>
       </div>

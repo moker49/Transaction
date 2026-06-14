@@ -79,7 +79,7 @@ button {
 .app-shell {
   width: min(1240px, calc(100% - 32px));
   margin: 0 auto;
-  padding: 24px 0 40px;
+  padding: 24px 0 14px;
 }
 
 .topbar {
@@ -1132,7 +1132,7 @@ tr.is-matched-row td {
 
 @media (max-width: 860px) {
   body {
-    padding-bottom: 78px;
+    padding-bottom: 70px;
   }
 
   .app-shell {
