@@ -53,6 +53,23 @@ from init_db import init_db  # noqa: E402
 app = Flask(__name__, static_folder=str(ROOT), static_url_path="")
 DUMMY_DB_PATH = DEFAULT_DB_PATH.with_name("transactions.dummy.sqlite")
 TRANSACTION_TYPES = ("income", "bill", "splurge")
+COMFORTABLE_CATEGORY_COLORS = (
+    "#2f8f2f",
+    "#d27da8",
+    "#91a82f",
+    "#3f7fc2",
+    "#d07b2f",
+    "#3f9f72",
+    "#c85d5d",
+    "#7c6bc2",
+    "#239f9f",
+    "#b68b2e",
+    "#a8adb3",
+    "#4f93a8",
+    "#7a5234",
+    "#6f944f",
+    "#5f666d",
+)
 DEFAULT_CATEGORY_TREE = {
     "Income": ["Salary", "Bonus", "Interest", "Dividend", "Refund", "Gift Received"],
     "Housing": ["Rent", "Mortgage", "Property Tax", "HOA", "Home Insurance", "Home Maintenance"],
@@ -69,6 +86,23 @@ DEFAULT_CATEGORY_TREE = {
     "Family & Personal": ["Childcare", "Pet Expense", "Gift Given", "Personal Care"],
     "Business": ["Software", "Equipment", "Service", "Office Expense"],
     "Transfer": ["Brokerage Transfer", "Internal Transfer", "Credit Card Payment"],
+}
+DEFAULT_CATEGORY_COLORS = {
+    "Income": "#2f8f2f",
+    "Housing": "#d27da8",
+    "Utility": "#91a82f",
+    "Transportation": "#3f7fc2",
+    "Food & Dining": "#d07b2f",
+    "Shopping": "#3f9f72",
+    "Health": "#c85d5d",
+    "Entertainment": "#7c6bc2",
+    "Travel": "#239f9f",
+    "Financial": "#b68b2e",
+    "Insurance": "#a8adb3",
+    "Education": "#4f93a8",
+    "Family & Personal": "#7a5234",
+    "Business": "#6f944f",
+    "Transfer": "#5f666d",
 }
 CATEGORY_RENAMES = {
     "Dividends": "Dividend",
@@ -266,6 +300,7 @@ def create_category():
     data = request.get_json(silent=True) or {}
     name = nonempty(str(data.get("name", "")), "name")
     parent_id = int(data["parent_id"]) if data.get("parent_id") is not None else None
+    color = validate_category_color(data.get("color")) if parent_id is None else None
 
     with closing(connect(current_db_path())) as conn:
         if parent_id is not None:
@@ -278,7 +313,7 @@ def create_category():
         ).fetchone()
         if existing is not None:
             raise CliError(f"Category already exists: {name}")
-        cursor = conn.execute("INSERT INTO categories (name, parent_id) VALUES (?, ?)", (name, parent_id))
+        cursor = conn.execute("INSERT INTO categories (name, parent_id, color) VALUES (?, ?, ?)", (name, parent_id, color))
         category = dict(fetch_category(conn, int(cursor.lastrowid)))
         state = read_state(conn)
         conn.commit()
@@ -292,6 +327,7 @@ def update_category(category_id: int):
     data = request.get_json(silent=True) or {}
     name = nonempty(str(data.get("name", "")), "name")
     parent_id = int(data["parent_id"]) if data.get("parent_id") is not None else None
+    color = validate_category_color(data.get("color")) if parent_id is None else None
 
     with closing(connect(current_db_path())) as conn:
         category = dict(fetch_category(conn, category_id))
@@ -307,7 +343,7 @@ def update_category(category_id: int):
                 raise CliError("Category parent must be a top-level category.")
             if parent_id in category_descendant_ids(conn, category_id):
                 raise CliError("Category cannot use a descendant as its parent.")
-        conn.execute("UPDATE categories SET name = ?, parent_id = ? WHERE id = ?", (name, parent_id, category_id))
+        conn.execute("UPDATE categories SET name = ?, parent_id = ?, color = ? WHERE id = ?", (name, parent_id, color, category_id))
         category = dict(fetch_category(conn, category_id))
         state = read_state(conn)
         conn.commit()
@@ -855,7 +891,7 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
         ).fetchall()
     )
     categories = rows_to_dicts(
-        conn.execute("SELECT id, name, parent_id, created_at FROM categories ORDER BY name, id").fetchall()
+        conn.execute("SELECT id, name, parent_id, color, created_at FROM categories ORDER BY name, id").fetchall()
     )
     tags = rows_to_dicts(conn.execute("SELECT id, name, created_at FROM tags ORDER BY name, id").fetchall())
     transaction_tags = rows_to_dicts(
@@ -975,12 +1011,21 @@ def migrate_finance_tags_to_transaction_type(conn: sqlite3.Connection) -> None:
         conn.execute("DELETE FROM tags WHERE id = ?", (tag_id,))
 
 
+def validate_category_color(value: Any) -> str:
+    color = str(value or "").strip()
+    if not color:
+        return COMFORTABLE_CATEGORY_COLORS[0]
+    if len(color) == 7 and color.startswith("#") and all(char in "0123456789abcdefABCDEF" for char in color[1:]):
+        return color.lower()
+    raise CliError("color must be a hex color like #4f9f6e.")
+
+
 def ensure_default_categories(conn: sqlite3.Connection) -> None:
     normalize_default_category_names(conn)
     for parent_name, child_names in DEFAULT_CATEGORY_TREE.items():
-        parent_id = ensure_category(conn, parent_name, None)
+        parent_id = ensure_category(conn, parent_name, None, DEFAULT_CATEGORY_COLORS[parent_name])
         for child_name in child_names:
-            ensure_category(conn, child_name, parent_id)
+            ensure_category(conn, child_name, parent_id, None)
 
 
 def normalize_default_category_names(conn: sqlite3.Connection) -> None:
@@ -1003,13 +1048,17 @@ def normalize_default_category_names(conn: sqlite3.Connection) -> None:
         conn.execute("DELETE FROM categories WHERE id = ?", (old_id,))
 
 
-def ensure_category(conn: sqlite3.Connection, name: str, parent_id: int | None) -> int:
-    row = conn.execute("SELECT id, parent_id FROM categories WHERE name = ?", (name,)).fetchone()
+def ensure_category(conn: sqlite3.Connection, name: str, parent_id: int | None, color: str | None) -> int:
+    row = conn.execute("SELECT id, parent_id, color FROM categories WHERE name = ?", (name,)).fetchone()
     if row is not None:
         if row["parent_id"] != parent_id:
             conn.execute("UPDATE categories SET parent_id = ? WHERE id = ?", (parent_id, row["id"]))
+        if parent_id is None and row["color"] != color:
+            conn.execute("UPDATE categories SET color = ? WHERE id = ?", (color, row["id"]))
+        if parent_id is not None and row["color"] is not None:
+            conn.execute("UPDATE categories SET color = NULL WHERE id = ?", (row["id"],))
         return int(row["id"])
-    cursor = conn.execute("INSERT INTO categories (name, parent_id) VALUES (?, ?)", (name, parent_id))
+    cursor = conn.execute("INSERT INTO categories (name, parent_id, color) VALUES (?, ?, ?)", (name, parent_id, color))
     return int(cursor.lastrowid)
 
 
@@ -1034,7 +1083,7 @@ def rows_to_dicts(rows) -> list[dict[str, Any]]:
 def fetch_category(conn: sqlite3.Connection, category_id: int) -> sqlite3.Row:
     row = conn.execute(
         """
-        SELECT id, name, parent_id, created_at
+        SELECT id, name, parent_id, color, created_at
         FROM categories
         WHERE id = ?
         """,

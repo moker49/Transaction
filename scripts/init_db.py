@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DB_PATH = ROOT / "data" / "transactions.sqlite"
 SCHEMA_PATH = ROOT / "db" / "schema.sql"
 EXPECTED_ACCOUNT_COLUMNS = {"id", "institution_id", "name", "account_type", "currency", "external_account_id", "created_at", "updated_at"}
+EXPECTED_CATEGORY_COLUMNS = {"id", "name", "parent_id", "color", "created_at"}
 EXPECTED_TABLES = {
     "accounts",
     "categories",
@@ -173,6 +174,10 @@ def migrate_existing_schema(conn: sqlite3.Connection, tables: Iterable[str]) -> 
                     CHECK (set_transaction_type IS NULL OR set_transaction_type IN ('income', 'bill', 'splurge'))
                 """
             )
+    if "categories" in table_set:
+        category_columns = {row[1] for row in conn.execute("PRAGMA table_info(categories)").fetchall()}
+        if "color" not in category_columns:
+            conn.execute("ALTER TABLE categories ADD COLUMN color TEXT")
     conn.commit()
 
 
@@ -255,6 +260,7 @@ def schema_is_compatible(conn: sqlite3.Connection) -> bool:
         return False
 
     account_columns = {row[1] for row in conn.execute("PRAGMA table_info(accounts)").fetchall()}
+    category_columns = {row[1] for row in conn.execute("PRAGMA table_info(categories)").fetchall()}
     transaction_columns = {row[1] for row in conn.execute("PRAGMA table_info(transactions)").fetchall()}
     transaction_column_info = {row[1]: row for row in conn.execute("PRAGMA table_info(transactions)").fetchall()}
     transaction_rule_columns = {row[1] for row in conn.execute("PRAGMA table_info(transaction_import_rules)").fetchall()}
@@ -270,6 +276,7 @@ def schema_is_compatible(conn: sqlite3.Connection) -> bool:
     raw_imported_rows_ddl = raw_imported_rows_sql[0] if raw_imported_rows_sql else ""
     return (
         EXPECTED_ACCOUNT_COLUMNS.issubset(account_columns)
+        and EXPECTED_CATEGORY_COLUMNS.issubset(category_columns)
         and EXPECTED_TRANSACTION_COLUMNS.issubset(transaction_columns)
         and int(transaction_column_info["transaction_type"][3]) == 1
         and "payee" not in transaction_columns

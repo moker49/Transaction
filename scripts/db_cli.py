@@ -181,7 +181,7 @@ def require_tag_id(conn: sqlite3.Connection, tag_id: int) -> None:
 def fetch_category_by_id(conn: sqlite3.Connection, category_id: int) -> sqlite3.Row:
     row = conn.execute(
         """
-        SELECT id, name, parent_id, created_at
+        SELECT id, name, parent_id, color, created_at
         FROM categories
         WHERE id = ?
         """,

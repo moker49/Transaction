@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS categories (
     id INTEGER PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
     parent_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
+    color TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

@@ -504,6 +504,12 @@
           <span>Parent category</span>
           <select name="parentId" id="categoryParentSelect"></select>
         </label>
+        <div class="category-color-control" id="categoryColorControl">
+          <span>Color</span>
+          <input name="color" type="hidden" id="categoryColorInput">
+          <span class="category-color-swatch" id="categoryColorSwatch" aria-hidden="true"></span>
+          <button type="button" class="icon-button" id="categoryColorRandomizeButton">Randomize</button>
+        </div>
       </div>
       <div id="categoryMessage" class="modal-message" role="status" aria-live="polite"></div>
       <div class="modal-actions">

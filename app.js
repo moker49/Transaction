@@ -34,6 +34,23 @@
     { value: "bill", label: "Bill" },
     { value: "splurge", label: "Splurge" },
   ];
+  const comfortableCategoryColors = [
+    "#2f8f2f",
+    "#d27da8",
+    "#91a82f",
+    "#3f7fc2",
+    "#d07b2f",
+    "#3f9f72",
+    "#c85d5d",
+    "#7c6bc2",
+    "#239f9f",
+    "#b68b2e",
+    "#a8adb3",
+    "#4f93a8",
+    "#7a5234",
+    "#6f944f",
+    "#5f666d",
+  ];
   const defaultCategoryOrder = [
     "Income", "Salary", "Bonus", "Interest", "Dividend", "Refund", "Gift Received",
     "Housing", "Rent", "Mortgage", "Property Tax", "HOA", "Home Insurance", "Home Maintenance",
@@ -134,6 +151,10 @@
     categoryDeleteButton: document.querySelector("#categoryDeleteButton"),
     categorySubmitButton: document.querySelector("#categorySubmitButton"),
     categoryParentSelect: document.querySelector("#categoryParentSelect"),
+    categoryColorControl: document.querySelector("#categoryColorControl"),
+    categoryColorInput: document.querySelector("#categoryColorInput"),
+    categoryColorSwatch: document.querySelector("#categoryColorSwatch"),
+    categoryColorRandomizeButton: document.querySelector("#categoryColorRandomizeButton"),
     categoryMessage: document.querySelector("#categoryMessage"),
   };
 
@@ -205,6 +226,8 @@
   elements.categoryCloseButton.addEventListener("click", closeCategoryDialog);
   elements.categoryCancelButton.addEventListener("click", closeCategoryDialog);
   elements.categoryDeleteButton.addEventListener("click", deleteEditingCategory);
+  elements.categoryParentSelect.addEventListener("change", updateCategoryColorControl);
+  elements.categoryColorRandomizeButton.addEventListener("click", () => setCategoryDialogColor(randomComfortableColor()));
   elements.categoryDialog.addEventListener("close", () => {
     editingCategoryId = null;
   });
@@ -475,6 +498,8 @@
     elements.categoryMessage.classList.remove("error");
     elements.categoryDialogForm.reset();
     populateCategoryParentSelect();
+    setCategoryDialogColor(randomComfortableColor());
+    updateCategoryColorControl();
     openModal(elements.categoryDialog);
   }
 
@@ -488,6 +513,8 @@
     elements.categoryDialogForm.elements.name.value = category.name || "";
     populateCategoryParentSelect(category);
     elements.categoryDialogForm.elements.parentId.value = category.parent_id === null ? "" : String(category.parent_id);
+    setCategoryDialogColor(category.color || randomComfortableColor());
+    updateCategoryColorControl();
     openModal(elements.categoryDialog);
   }
 
@@ -501,6 +528,7 @@
     const payload = {
       name: clean(form.get("name")),
       parent_id: Number(form.get("parentId")) || null,
+      color: clean(form.get("parentId")) ? null : clean(form.get("color")),
     };
     try {
       const response = await apiRequest(editingCategoryId ? `/api/categories/${editingCategoryId}` : "/api/categories", {
@@ -512,6 +540,20 @@
     } catch (error) {
       setModalMessage(elements.categoryMessage, error.message || "Could not save category.", true);
     }
+  }
+
+  function setCategoryDialogColor(color) {
+    elements.categoryColorInput.value = color;
+    elements.categoryColorSwatch.style.setProperty("--category-color", color);
+  }
+
+  function updateCategoryColorControl() {
+    const isParent = !clean(elements.categoryParentSelect.value);
+    elements.categoryColorControl.hidden = !isParent;
+  }
+
+  function randomComfortableColor() {
+    return comfortableCategoryColors[Math.floor(Math.random() * comfortableCategoryColors.length)];
   }
 
   function openRuleAddDialog() {
@@ -1108,10 +1150,19 @@
   }
 
   function categoryChip(category) {
-    if (category.is_default) {
-      return el("span", category.name, "chip category-chip");
+    const chip = category.is_default
+      ? el("span", category.name, "chip category-chip")
+      : manageableChip(category.name, () => editCategory(category), "category-chip");
+    chip.style.setProperty("--category-color", effectiveCategoryColor(category));
+    return chip;
+  }
+
+  function effectiveCategoryColor(category) {
+    if (category.color) {
+      return category.color;
     }
-    return manageableChip(category.name, () => editCategory(category), "category-chip");
+    const parent = state.categories.find((candidate) => candidate.id === category.parent_id);
+    return parent?.color || comfortableCategoryColors[0];
   }
 
   function orderedCategories() {
