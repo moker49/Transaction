@@ -363,6 +363,14 @@ h2 {
   line-height: 1;
 }
 
+.metric-income strong {
+  color: #2f8f2f;
+}
+
+.metric-outflow strong {
+  color: #c85d5d;
+}
+
 .dashboard-chart-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -729,6 +737,20 @@ td.amount {
   display: grid;
   gap: 3px;
   min-width: 0;
+}
+
+.dashboard-range-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.custom-range-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .setting-note {
@@ -1264,6 +1286,21 @@ tr.is-matched-row td {
 
   .settings-list {
     padding: 12px;
+  }
+
+  .dashboard-range-row {
+    align-items: flex-start;
+  }
+
+  .dashboard-range-controls {
+    justify-content: stretch;
+    width: 100%;
+  }
+
+  .dashboard-range-controls select,
+  .custom-range-controls,
+  .custom-range-controls input {
+    width: 100%;
   }
 
   .setting-row {

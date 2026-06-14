@@ -1,6 +1,10 @@
 (function () {
   const API_BASE = window.location.protocol === "file:" ? "http://127.0.0.1:5050" : "";
   const DUMMY_DATABASE_KEY = "transaction-use-dummy-database";
+  const DASHBOARD_RANGE_KEY = "transaction-dashboard-range";
+  const DASHBOARD_CUSTOM_START_KEY = "transaction-dashboard-custom-start";
+  const DASHBOARD_CUSTOM_END_KEY = "transaction-dashboard-custom-end";
+  const DEFAULT_DASHBOARD_RANGE = "last-month";
 
   const defaultState = {
     accounts: [],
@@ -113,6 +117,10 @@
     ruleDeleteButton: document.querySelector("#ruleDeleteButton"),
     profileButton: document.querySelector("#profileButton"),
     settingsThemeToggle: document.querySelector("#settingsThemeToggle"),
+    dashboardRangeSelect: document.querySelector("#dashboardRangeSelect"),
+    dashboardCustomRangeControls: document.querySelector("#dashboardCustomRangeControls"),
+    dashboardCustomStart: document.querySelector("#dashboardCustomStart"),
+    dashboardCustomEnd: document.querySelector("#dashboardCustomEnd"),
     accountDialog: document.querySelector("#accountDialog"),
     accountDialogTitle: document.querySelector("#accountDialogTitle"),
     accountCancelButton: document.querySelector("#accountCancelButton"),
@@ -193,6 +201,9 @@
   });
   elements.profileButton.addEventListener("click", () => activateView("settings"));
   elements.settingsThemeToggle.addEventListener("change", updateTheme);
+  elements.dashboardRangeSelect.addEventListener("change", updateDashboardRange);
+  elements.dashboardCustomStart.addEventListener("change", updateDashboardCustomRange);
+  elements.dashboardCustomEnd.addEventListener("change", updateDashboardCustomRange);
   elements.accountCancelButton.addEventListener("click", closeAccountDialog);
   elements.accountDismissButton.addEventListener("click", closeAccountDialog);
   elements.accountDeleteButton.addEventListener("click", deleteEditingAccount);
@@ -242,6 +253,7 @@
   });
 
   initializeTheme();
+  initializeDashboardRange();
   initializeDatabaseMode();
   activateView("overview");
   loadInitialState();
@@ -260,6 +272,35 @@
 
   function updateTheme(event) {
     setTheme(event.currentTarget.checked ? "dark" : "light");
+  }
+
+  function initializeDashboardRange() {
+    const savedRange = localStorage.getItem(DASHBOARD_RANGE_KEY) || DEFAULT_DASHBOARD_RANGE;
+    const validRange = dashboardRangeValues().has(savedRange) ? savedRange : DEFAULT_DASHBOARD_RANGE;
+    elements.dashboardRangeSelect.value = validRange;
+    elements.dashboardCustomStart.value = localStorage.getItem(DASHBOARD_CUSTOM_START_KEY) || "";
+    elements.dashboardCustomEnd.value = localStorage.getItem(DASHBOARD_CUSTOM_END_KEY) || "";
+    renderDashboardRangeControls();
+  }
+
+  function dashboardRangeValues() {
+    return new Set([...elements.dashboardRangeSelect.options].map((option) => option.value));
+  }
+
+  function updateDashboardRange(event) {
+    localStorage.setItem(DASHBOARD_RANGE_KEY, event.currentTarget.value);
+    renderDashboardRangeControls();
+    renderDashboard();
+  }
+
+  function updateDashboardCustomRange() {
+    localStorage.setItem(DASHBOARD_CUSTOM_START_KEY, elements.dashboardCustomStart.value);
+    localStorage.setItem(DASHBOARD_CUSTOM_END_KEY, elements.dashboardCustomEnd.value);
+    renderDashboard();
+  }
+
+  function renderDashboardRangeControls() {
+    elements.dashboardCustomRangeControls.hidden = elements.dashboardRangeSelect.value !== "custom";
   }
 
   function initializeDatabaseMode() {
@@ -792,7 +833,7 @@
   }
 
   function renderDashboard() {
-    const period = lastFullMonthPeriod();
+    const period = dashboardPeriod();
     const transactions = state.transactions.filter((transaction) => {
       return transaction.posted_date >= period.start && transaction.posted_date < period.end;
     });
@@ -1658,6 +1699,39 @@
     return account.institution ? `${account.name} - ${account.institution}` : account.name;
   }
 
+  function dashboardPeriod() {
+    const today = startOfDay(new Date());
+    switch (elements.dashboardRangeSelect.value) {
+      case "last-30-days":
+        return {
+          start: formatDateKey(addDays(today, -29)),
+          end: formatDateKey(addDays(today, 1)),
+        };
+      case "last-year":
+        return {
+          start: formatDateKey(addDays(today, -364)),
+          end: formatDateKey(addDays(today, 1)),
+        };
+      case "custom":
+        return customDashboardPeriod() || lastFullMonthPeriod();
+      case "last-month":
+      default:
+        return lastFullMonthPeriod();
+    }
+  }
+
+  function customDashboardPeriod() {
+    const start = elements.dashboardCustomStart.value;
+    const end = elements.dashboardCustomEnd.value;
+    if (!start || !end) {
+      return null;
+    }
+    return {
+      start,
+      end: formatDateKey(addDays(parseDateKey(end), 1)),
+    };
+  }
+
   function lastFullMonthPeriod() {
     const now = new Date();
     const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -1674,6 +1748,21 @@
       String(date.getMonth() + 1).padStart(2, "0"),
       String(date.getDate()).padStart(2, "0"),
     ].join("-");
+  }
+
+  function parseDateKey(value) {
+    const [year, month, day] = value.split("-").map(Number);
+    return new Date(year, month - 1, day);
+  }
+
+  function startOfDay(date) {
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  }
+
+  function addDays(date, days) {
+    const next = new Date(date);
+    next.setDate(next.getDate() + days);
+    return next;
   }
 
   function sumTypedTransactions(transactions, transactionType, useAbsoluteValue) {

@@ -66,19 +66,19 @@
 
       <section class="view is-active" id="overviewView">
         <div class="metric-grid dashboard-grid">
-          <div class="metric">
+          <div class="metric metric-income">
             <span class="metric-label">Income</span>
             <strong id="dashboardIncome">$0.00</strong>
           </div>
-          <div class="metric">
+          <div class="metric metric-outflow">
             <span class="metric-label">Bills</span>
             <strong id="dashboardBills">$0.00</strong>
           </div>
-          <div class="metric">
+          <div class="metric metric-outflow">
             <span class="metric-label">Splurge</span>
             <strong id="dashboardSplurge">$0.00</strong>
           </div>
-          <div class="metric">
+          <div class="metric metric-income">
             <span class="metric-label">Saved</span>
             <strong id="dashboardSaved">$0.00</strong>
           </div>
@@ -280,6 +280,23 @@
                   <span class="theme-icon theme-icon-dark material-symbols-outlined">dark_mode</span>
                 </span>
               </label>
+            </div>
+            <div class="setting-row dashboard-range-row">
+              <div>
+                <strong>Dashboard range</strong>
+              </div>
+              <div class="dashboard-range-controls">
+                <select id="dashboardRangeSelect" aria-label="Dashboard range">
+                  <option value="last-30-days">Last 30 days</option>
+                  <option value="last-month">Last month</option>
+                  <option value="last-year">Last year</option>
+                  <option value="custom">Custom</option>
+                </select>
+                <div class="custom-range-controls" id="dashboardCustomRangeControls" hidden>
+                  <input type="date" id="dashboardCustomStart" aria-label="Dashboard custom start date">
+                  <input type="date" id="dashboardCustomEnd" aria-label="Dashboard custom end date">
+                </div>
+              </div>
             </div>
           </div>
         </section>
