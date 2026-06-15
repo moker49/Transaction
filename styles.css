@@ -1300,7 +1300,7 @@ button.category-chip.manageable-chip {
   box-shadow: var(--shadow);
 }
 
-.account-modal {
+.small-modal {
   width: 360px;
 }
 
@@ -2177,7 +2177,7 @@ tr.is-matched-row td {
     min-height: 48px;
   }
 
-  .account-modal,
+  .small-modal,
   .category-modal {
     width: calc(100vw - 28px);
   }
