@@ -193,6 +193,7 @@
     rawRowCloseButton: document.querySelector("#rawRowCloseButton"),
     rawRowDismissButton: document.querySelector("#rawRowDismissButton"),
     rawRowDeleteButton: document.querySelector("#rawRowDeleteButton"),
+    rawRowRuleButton: document.querySelector("#rawRowRuleButton"),
     rawRowSaveButton: document.querySelector("#rawRowSaveButton"),
     rawRowRawValues: document.querySelector("#rawRowRawValues"),
     rawRowMatchedValues: document.querySelector("#rawRowMatchedValues"),
@@ -322,6 +323,8 @@
   elements.rawRowCloseButton.addEventListener("click", closeRawRowDialog);
   elements.rawRowDismissButton.addEventListener("click", closeRawRowDialog);
   elements.rawRowDeleteButton.addEventListener("click", deleteActiveRawRow);
+  elements.rawRowRuleButton.addEventListener("click", openTopRawRowRule);
+  elements.rawRowNoteInput.addEventListener("input", updateRawRowModalActions);
   elements.rawRowDialog.addEventListener("close", () => {
     activeRawRowId = null;
   });
@@ -1600,11 +1603,10 @@
 
   function populateRawRowDialog(rawRow) {
     const account = state.accounts.find((candidate) => candidate.id === rawRow.account_id);
-    const shouldCreateRule = shouldOfferRuleCreation(rawRow);
     elements.rawRowDialogTitle.textContent = `Raw Transaction ${rawRow.id}`;
-    elements.rawRowNoteInput.value = rawRowNotes.get(rawRow.id) || "";
+    elements.rawRowNoteInput.value = rawRowStoredNote(rawRow);
     elements.rawRowNoteInput.disabled = false;
-    elements.rawRowSaveButton.textContent = shouldCreateRule ? "Create Rule" : "Save";
+    elements.rawRowSaveButton.textContent = "Save";
     renderDefinitionList(elements.rawRowRawValues, [
       ["Date", formatDisplayDate(rawRow.raw_date)],
       ["Category", rawRow.raw_category],
@@ -1628,10 +1630,58 @@
       ["Created", formatMaybeDateTime(rawRow.created_at)],
       ["Updated", formatMaybeDateTime(rawRow.updated_at)],
     ]);
+    updateRawRowModalActions();
+  }
+
+  function rawRowStoredNote(rawRow) {
+    return rawRowNotes.get(rawRow.id) || "";
+  }
+
+  function isRawRowNoteDirty(rawRow) {
+    return clean(elements.rawRowNoteInput.value) !== clean(rawRowStoredNote(rawRow));
+  }
+
+  function updateRawRowModalActions() {
+    const rawRow = activeRawRow();
+    if (!rawRow) {
+      elements.rawRowSaveButton.hidden = true;
+      elements.rawRowRuleButton.hidden = true;
+      return;
+    }
+    const noteDirty = isRawRowNoteDirty(rawRow);
+    elements.rawRowSaveButton.hidden = !noteDirty;
+    if (noteDirty) {
+      elements.rawRowRuleButton.hidden = true;
+      return;
+    }
+    const topRule = topPriorityRuleForRawRow(rawRow);
+    const canEditRule = isImportableRawRow(rawRow) && topRule;
+    const canCreateRule = shouldOfferRuleCreation(rawRow);
+    elements.rawRowRuleButton.hidden = !canEditRule && !canCreateRule;
+    elements.rawRowRuleButton.textContent = canCreateRule ? "Create Rule" : "Rule";
   }
 
   function shouldOfferRuleCreation(rawRow) {
     return rawRow.import_status !== "imported" && !isImportableRawRow(rawRow);
+  }
+
+  function openTopRawRowRule() {
+    const rawRow = activeRawRow();
+    if (rawRow && shouldOfferRuleCreation(rawRow)) {
+      closeRawRowDialog();
+      openRuleAddDialog({
+        matchDescription: rawRow.raw_description,
+        matchCategory: rawRow.raw_category,
+      });
+      return;
+    }
+    const rule = rawRow ? topPriorityRuleForRawRow(rawRow) : null;
+    if (!rule) {
+      updateRawRowModalActions();
+      return;
+    }
+    closeRawRowDialog();
+    openRuleEditDialog(rule);
   }
 
   function saveRawRowNote(event) {
@@ -1639,14 +1689,6 @@
     const rawRow = activeRawRow();
     if (!rawRow) {
       closeRawRowDialog();
-      return;
-    }
-    if (shouldOfferRuleCreation(rawRow)) {
-      closeRawRowDialog();
-      openRuleAddDialog({
-        matchDescription: rawRow.raw_description,
-        matchCategory: rawRow.raw_category,
-      });
       return;
     }
     const note = clean(elements.rawRowNoteInput.value);
@@ -2360,6 +2402,34 @@
 
   function isMatchedRawRow(rawRow) {
     return rawRow.import_status === "ready";
+  }
+
+  function topPriorityRuleForRawRow(rawRow) {
+    return state.rules
+      .filter((rule) => rule.is_active !== false && ruleMatchesRawRow(rule, rawRow))
+      .sort((a, b) => (a.priority ?? 100) - (b.priority ?? 100) || a.id - b.id)[0] || null;
+  }
+
+  function ruleMatchesRawRow(rule, rawRow) {
+    const matches = ruleMatchValues(rule);
+    const matchDescription = normalizeMatchText(matches.description);
+    const matchCategory = normalizeMatchText(matches.category);
+    if (matchDescription || matchCategory) {
+      if (matchDescription && !normalizeMatchText(rawRow.raw_description).includes(matchDescription)) {
+        return false;
+      }
+      if (matchCategory && !normalizeMatchText(rawRow.raw_category).includes(matchCategory)) {
+        return false;
+      }
+      return true;
+    }
+    const fieldValue = rule.match_field === "category" ? rawRow.raw_category : rawRow.raw_description;
+    const needle = normalizeMatchText(rule.match_value);
+    return Boolean(needle) && normalizeMatchText(fieldValue).includes(needle);
+  }
+
+  function normalizeMatchText(value) {
+    return clean(value).toLowerCase();
   }
 
   function rawRowMatchesStatusFilter(rawRow, filter) {
