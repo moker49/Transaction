@@ -51,20 +51,20 @@
   ];
   const comfortableCategoryColors = [
     "#2f8f2f",
-    "#d27da8",
+    "#c4457c",
     "#91a82f",
-    "#3f7fc2",
+    "#3a67c2",
     "#d07b2f",
     "#3f9f72",
     "#c85d5d",
     "#7c6bc2",
     "#239f9f",
     "#b68b2e",
-    "#a8adb3",
-    "#4f93a8",
+    "#d27da8",
+    "#4f83a8",
     "#7a5234",
     "#6f944f",
-    "#5f666d",
+    "#909499",
   ];
   const defaultCategoryOrder = [
     "Income", "Salary", "Bonus", "Interest", "Dividend", "Refund", "Gift Received",
@@ -76,12 +76,12 @@
     "Health", "Medical", "Dental", "Vision", "Pharmacy", "Fitness",
     "Entertainment", "Activity", "Streaming", "Gaming", "Movie", "Music", "Hobby",
     "Travel", "Hotel", "Flight", "Rental",
-    "Financial", "Fee", "Loan Payment", "Investment Contribution", "Tax Payment",
+    "Financial", "Fee", "Loan Payment", "Investment", "Tax Payment",
     "Insurance", "Life Insurance", "Umbrella Insurance",
     "Education", "Tuition", "Books", "Courses", "Certifications",
     "Family & Personal", "Childcare", "Pet Expense", "Gift Given", "Personal Care",
     "Business", "Software", "Equipment", "Service", "Office Expense",
-    "Transfer", "Brokerage Transfer", "Internal Transfer", "Credit Card Payment",
+    "Transfer", "Internal Transfer", "Card Payment",
   ];
 
   const elements = {

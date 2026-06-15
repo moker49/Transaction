@@ -52,23 +52,6 @@ app = Flask(__name__, static_folder=str(ROOT), static_url_path="")
 DUMMY_DB_PATH = DEFAULT_DB_PATH.with_name("transactions.dummy.sqlite")
 DUMMY_RESTORE_DB_PATH = DEFAULT_DB_PATH.with_name("transactions.dummy.restore.sqlite")
 TRANSACTION_TYPES = ("income", "bill", "splurge")
-COMFORTABLE_CATEGORY_COLORS = (
-    "#2f8f2f",
-    "#d27da8",
-    "#91a82f",
-    "#3f7fc2",
-    "#d07b2f",
-    "#3f9f72",
-    "#c85d5d",
-    "#7c6bc2",
-    "#239f9f",
-    "#b68b2e",
-    "#a8adb3",
-    "#4f93a8",
-    "#7a5234",
-    "#6f944f",
-    "#5f666d",
-)
 DEFAULT_CATEGORY_TREE = {
     "Income": ["Salary", "Bonus", "Interest", "Dividend", "Refund", "Gift Received"],
     "Housing": ["Rent", "Mortgage", "Property Tax", "HOA", "Home Insurance", "Home Maintenance"],
@@ -79,51 +62,29 @@ DEFAULT_CATEGORY_TREE = {
     "Health": ["Medical", "Dental", "Vision", "Pharmacy", "Fitness"],
     "Entertainment": ["Activity", "Streaming", "Gaming", "Movie", "Music", "Hobby"],
     "Travel": ["Hotel", "Flight", "Rental"],
-    "Financial": ["Fee", "Loan Payment", "Investment Contribution", "Tax Payment"],
+    "Financial": ["Fee", "Loan Payment", "Investment", "Tax Payment"],
     "Insurance": ["Life Insurance", "Umbrella Insurance"],
     "Education": ["Tuition", "Books", "Courses", "Certifications"],
     "Family & Personal": ["Childcare", "Pet Expense", "Gift Given", "Personal Care"],
     "Business": ["Software", "Equipment", "Service", "Office Expense"],
-    "Transfer": ["Brokerage Transfer", "Internal Transfer", "Credit Card Payment"],
+    "Transfer": ["Internal Transfer", "Card Payment"],
 }
 DEFAULT_CATEGORY_COLORS = {
-    "Income": "#2f8f2f",
-    "Housing": "#d27da8",
+    "Income": "#208020",
+    "Housing": "#c4588e",
     "Utility": "#91a82f",
-    "Transportation": "#3f7fc2",
-    "Food & Dining": "#d07b2f",
-    "Shopping": "#3f9f72",
-    "Health": "#c85d5d",
+    "Transportation": "#3a67c2",
+    "Food & Dining": "#d16630",
+    "Shopping": "#36b36a",
+    "Health": "#ad3131",
     "Entertainment": "#7c6bc2",
-    "Travel": "#239f9f",
+    "Travel": "#109e9e",
     "Financial": "#b68b2e",
-    "Insurance": "#a8adb3",
-    "Education": "#4f93a8",
+    "Insurance": "#d18eb0",
+    "Education": "#4d8fbf",
     "Family & Personal": "#7a5234",
-    "Business": "#6f944f",
-    "Transfer": "#5f666d",
-}
-CATEGORY_RENAMES = {
-    "Dividends": "Dividend",
-    "Refunds": "Refund",
-    "Gifts Received": "Gift Received",
-    "Utilities": "Utility",
-    "Tolls": "Toll",
-    "Restaurants": "Restaurant",
-    "Electronics": "Electronic",
-    "Movies": "Movie",
-    "Hobbies": "Hobby",
-    "Hotels": "Hotel",
-    "Flights": "Flight",
-    "Fees": "Fee",
-    "Loan Payments": "Loan Payment",
-    "Investment Contributions": "Investment Contribution",
-    "Tax Payments": "Tax Payment",
-    "Pet Expenses": "Pet Expense",
-    "Gifts Given": "Gift Given",
-    "Services": "Service",
-    "Office Expenses": "Office Expense",
-    "Transfers": "Transfer",
+    "Business": "#60943b",
+    "Transfer": "#909499",
 }
 DEFAULT_CATEGORY_NAMES = frozenset(
     [parent for parent in DEFAULT_CATEGORY_TREE]
@@ -1123,31 +1084,10 @@ def validate_category_color(value: Any) -> str:
 
 
 def ensure_default_categories(conn: sqlite3.Connection) -> None:
-    normalize_default_category_names(conn)
     for parent_name, child_names in DEFAULT_CATEGORY_TREE.items():
         parent_id = ensure_category(conn, parent_name, None, DEFAULT_CATEGORY_COLORS[parent_name])
         for child_name in child_names:
             ensure_category(conn, child_name, parent_id, None)
-
-
-def normalize_default_category_names(conn: sqlite3.Connection) -> None:
-    for old_name, new_name in CATEGORY_RENAMES.items():
-        old_row = conn.execute("SELECT id FROM categories WHERE name = ?", (old_name,)).fetchone()
-        if old_row is None:
-            continue
-        old_id = int(old_row["id"])
-        new_row = conn.execute("SELECT id FROM categories WHERE name = ?", (new_name,)).fetchone()
-        if new_row is None:
-            conn.execute("UPDATE categories SET name = ? WHERE id = ?", (new_name, old_id))
-            continue
-        new_id = int(new_row["id"])
-        conn.execute("UPDATE transactions SET category_id = ? WHERE category_id = ?", (new_id, old_id))
-        conn.execute(
-            "UPDATE transaction_import_rules SET set_category_id = ? WHERE set_category_id = ?",
-            (new_id, old_id),
-        )
-        conn.execute("UPDATE categories SET parent_id = ? WHERE parent_id = ?", (new_id, old_id))
-        conn.execute("DELETE FROM categories WHERE id = ?", (old_id,))
 
 
 def ensure_category(conn: sqlite3.Connection, name: str, parent_id: int | None, color: str | None) -> int:
