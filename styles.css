@@ -314,9 +314,9 @@ h2 {
 }
 
 .connected-button-group {
-  display: inline-flex;
-  width: fit-content;
-  max-width: 100%;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 100%;
   gap: 3px;
   padding: 0;
   background: transparent;
@@ -1546,17 +1546,6 @@ button.category-chip.manageable-chip {
   min-width: 0;
 }
 
-.rule-form-column .connected-button-group {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  width: 100%;
-}
-
-.rule-form-column .connected-button {
-  min-width: 0;
-  padding: 0 10px;
-}
-
 .rule-clean-row .category-picker-button {
   min-height: 38px;
   align-items: center;
@@ -1588,6 +1577,7 @@ button.category-chip.manageable-chip {
 .type-button-row {
   display: flex;
   justify-content: center;
+  padding-bottom: 10px;
 }
 
 .detail-row-date-category {
