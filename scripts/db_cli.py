@@ -1021,7 +1021,6 @@ def command_transaction(args: argparse.Namespace) -> None:
                 t.amount_cents,
                 printf('%.2f', t.amount_cents / 100.0) AS amount,
                 t.currency,
-                t.status,
                 c.name AS category,
                 t.external_transaction_id,
                 rr.id AS raw_imported_row_id,

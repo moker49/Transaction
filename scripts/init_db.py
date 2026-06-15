@@ -36,7 +36,6 @@ EXPECTED_TRANSACTION_COLUMNS = {
     "clean_description",
     "amount_cents",
     "currency",
-    "status",
     "external_transaction_id",
     "raw_imported_row_id",
     "transaction_hash",
@@ -163,7 +162,10 @@ def migrate_existing_schema(conn: sqlite3.Connection, tables: Iterable[str]) -> 
         )
         transaction_columns = conn.execute("PRAGMA table_info(transactions)").fetchall()
         transaction_type_column = next((row for row in transaction_columns if row[1] == "transaction_type"), None)
-        if transaction_type_column is not None and not int(transaction_type_column[3]):
+        if (
+            transaction_type_column is not None
+            and not int(transaction_type_column[3])
+        ) or "status" in {row[1] for row in transaction_columns}:
             conn.commit()
             rebuild_transactions_with_required_type(conn)
             conn.commit()
@@ -241,14 +243,12 @@ def rebuild_transactions_with_required_type(conn: sqlite3.Connection) -> None:
                 clean_description TEXT,
                 amount_cents INTEGER NOT NULL,
                 currency TEXT NOT NULL DEFAULT 'USD',
-                status TEXT NOT NULL DEFAULT 'posted',
                 external_transaction_id TEXT,
                 raw_imported_row_id INTEGER REFERENCES raw_imported_rows(id) ON DELETE SET NULL,
                 transaction_hash TEXT NOT NULL,
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 updated_at TEXT NOT NULL DEFAULT (datetime('now')),
                 CHECK (transaction_type IN ('income', 'bill', 'splurge')),
-                CHECK (status IN ('pending', 'posted', 'void')),
                 UNIQUE (account_id, external_transaction_id),
                 UNIQUE (account_id, transaction_hash)
             )
@@ -266,7 +266,6 @@ def rebuild_transactions_with_required_type(conn: sqlite3.Connection) -> None:
                 clean_description,
                 amount_cents,
                 currency,
-                status,
                 external_transaction_id,
                 raw_imported_row_id,
                 transaction_hash,
@@ -283,7 +282,6 @@ def rebuild_transactions_with_required_type(conn: sqlite3.Connection) -> None:
                 clean_description,
                 amount_cents,
                 currency,
-                status,
                 external_transaction_id,
                 raw_imported_row_id,
                 transaction_hash,
@@ -323,6 +321,7 @@ def schema_is_compatible(conn: sqlite3.Connection) -> bool:
         and EXPECTED_CATEGORY_COLUMNS.issubset(category_columns)
         and EXPECTED_TRANSACTION_COLUMNS.issubset(transaction_columns)
         and int(transaction_column_info["transaction_type"][3]) == 1
+        and "status" not in transaction_columns
         and "payee" not in transaction_columns
         and "description" not in transaction_columns
         and EXPECTED_TRANSACTION_RULE_COLUMNS.issubset(transaction_rule_columns)

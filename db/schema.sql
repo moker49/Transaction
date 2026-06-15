@@ -39,14 +39,12 @@ CREATE TABLE IF NOT EXISTS transactions (
     clean_description TEXT,
     amount_cents INTEGER NOT NULL,
     currency TEXT NOT NULL DEFAULT 'USD',
-    status TEXT NOT NULL DEFAULT 'posted',
     external_transaction_id TEXT,
     raw_imported_row_id INTEGER REFERENCES raw_imported_rows(id) ON DELETE SET NULL,
     transaction_hash TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     CHECK (transaction_type IN ('income', 'bill', 'splurge')),
-    CHECK (status IN ('pending', 'posted', 'void')),
     UNIQUE (account_id, external_transaction_id),
     UNIQUE (account_id, transaction_hash)
 );

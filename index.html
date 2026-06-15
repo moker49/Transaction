@@ -406,8 +406,7 @@
           </span>
         </label>
         <div class="form-divider" aria-hidden="true"></div>
-        <label>
-          <span>Type</span>
+        <div class="type-button-row">
           <input name="setTransactionType" type="hidden" id="ruleTypeInput" value="splurge">
           <div class="connected-button-group" id="ruleTypeGroup" role="radiogroup" aria-label="Rule type">
             <button type="button" class="connected-button" data-type-value="income" role="radio">
@@ -423,7 +422,7 @@
               <span>Splurge</span>
             </button>
           </div>
-        </label>
+        </div>
         <label>
           <span>Clean Category</span>
           <input name="setCategoryId" type="hidden" id="ruleCategoryInput">
@@ -433,10 +432,10 @@
           <span>Clean description</span>
           <input name="setCleanDescription" type="text" autocomplete="off">
         </label>
-        <div class="form-field">
+        <label class="tag-field">
           <span>Tags</span>
           <div id="ruleTags" class="tag-check-list"></div>
-        </div>
+        </label>
       </div>
       <div id="ruleMessage" class="modal-message" role="status" aria-live="polite"></div>
       <div class="modal-actions">
@@ -455,16 +454,10 @@
           <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
-      <div class="transaction-detail-grid">
+      <div class="transaction-detail-grid transaction-modal-grid">
         <section>
-          <h3>Clean Values</h3>
           <div class="detail-list">
-            <label>
-              <span>Date</span>
-              <input name="postedDate" type="date" data-editable-field readonly>
-            </label>
-            <label>
-              <span>Type</span>
+            <div class="type-button-row">
               <input name="transactionType" type="hidden" id="transactionTypeInput" value="splurge">
               <div class="connected-button-group" id="transactionTypeGroup" role="radiogroup" aria-label="Transaction type">
                 <button type="button" class="connected-button" data-type-value="income" role="radio" disabled>
@@ -480,31 +473,31 @@
                   <span>Splurge</span>
                 </button>
               </div>
-            </label>
-            <label>
-              <span>Category</span>
-              <input name="categoryId" type="hidden" id="transactionCategoryInput">
-              <button type="button" class="category-picker-button" id="transactionCategoryButton" disabled></button>
-            </label>
-            <label>
-              <span>Account</span>
-              <select name="accountId" id="transactionAccountSelect" data-editable-field disabled></select>
-            </label>
-            <label>
-              <span>Amount</span>
-              <input name="amount" type="text" inputmode="decimal" data-editable-field readonly>
-            </label>
-            <label>
-              <span>Description</span>
-              <input name="cleanDescription" type="text" data-editable-field readonly>
-            </label>
-            <label>
-              <span>Status</span>
-              <select name="status" data-editable-field disabled>
-                <option value="pending">Pending</option>
-                <option value="posted">Posted</option>
-                <option value="void">Void</option>
-              </select>
+            </div>
+            <div class="detail-row detail-row-date-category">
+              <label>
+                <span>Category</span>
+                <input name="categoryId" type="hidden" id="transactionCategoryInput">
+                <button type="button" class="category-picker-button" id="transactionCategoryButton" disabled></button>
+              </label>
+              <label>
+                <span>Date</span>
+                <input name="postedDate" type="date" data-editable-field readonly>
+              </label>
+            </div>
+            <div class="detail-row detail-row-amount-description">
+              <label>
+                <span>Amount</span>
+                <input name="amount" type="text" inputmode="decimal" data-editable-field readonly>
+              </label>
+              <label>
+                <span>Description</span>
+                <input name="cleanDescription" type="text" data-editable-field readonly>
+              </label>
+            </div>
+            <label class="tag-field">
+              <span>Tags</span>
+              <div id="transactionTags" class="tag-check-list"></div>
             </label>
             <label>
               <span>Notes</span>
@@ -513,15 +506,9 @@
           </div>
         </section>
         <section>
-          <h3>Tags</h3>
-          <div id="transactionTags" class="tag-check-list"></div>
-        </section>
-        <section>
-          <h3>Raw Values</h3>
           <dl id="transactionRawValues" class="detail-list readonly-details"></dl>
         </section>
         <section>
-          <h3>Metadata</h3>
           <dl id="transactionMetadata" class="detail-list readonly-details"></dl>
         </section>
       </div>
@@ -685,7 +672,7 @@
         </div>
       </div>
       <div class="modal-actions">
-        <button type="button" class="icon-button" id="dashboardRangeClearButton">Clear</button>
+        <button type="button" class="icon-button" id="dashboardRangeCancelButton">Cancel</button>
         <button type="submit" class="primary" id="dashboardRangeApplyButton">Apply</button>
       </div>
     </form>

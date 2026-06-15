@@ -137,7 +137,7 @@
     dashboardRangeCloseButton: document.querySelector("#dashboardRangeCloseButton"),
     dashboardRangePresetList: document.querySelector("#dashboardRangePresetList"),
     dashboardCalendarGrid: document.querySelector("#dashboardCalendarGrid"),
-    dashboardRangeClearButton: document.querySelector("#dashboardRangeClearButton"),
+    dashboardRangeCancelButton: document.querySelector("#dashboardRangeCancelButton"),
     dashboardRangeApplyButton: document.querySelector("#dashboardRangeApplyButton"),
     dashboardCustomStart: document.querySelector("#dashboardCustomStart"),
     dashboardCustomEnd: document.querySelector("#dashboardCustomEnd"),
@@ -169,7 +169,6 @@
     transactionForm: document.querySelector("#transactionForm"),
     transactionDialogTitle: document.querySelector("#transactionDialogTitle"),
     transactionCloseButton: document.querySelector("#transactionCloseButton"),
-    transactionAccountSelect: document.querySelector("#transactionAccountSelect"),
     transactionCategoryInput: document.querySelector("#transactionCategoryInput"),
     transactionCategoryButton: document.querySelector("#transactionCategoryButton"),
     transactionCategoryFilterButton: document.querySelector("#transactionCategoryFilterButton"),
@@ -254,7 +253,7 @@
   elements.dashboardRangeButton.addEventListener("click", openDashboardRangeDialog);
   elements.dashboardRangeForm.addEventListener("submit", applyDashboardRange);
   elements.dashboardRangeCloseButton.addEventListener("click", closeDashboardRangeDialog);
-  elements.dashboardRangeClearButton.addEventListener("click", clearDashboardRangeDraft);
+  elements.dashboardRangeCancelButton.addEventListener("click", closeDashboardRangeDialog);
   elements.dashboardCustomStart.addEventListener("change", updateDashboardCustomRange);
   elements.dashboardCustomEnd.addEventListener("change", updateDashboardCustomRange);
   elements.dashboardRangeDialog.addEventListener("cancel", (event) => {
@@ -398,13 +397,6 @@
     renderDashboardRangeButton();
     renderDashboard();
     closeDashboardRangeDialog();
-  }
-
-  function clearDashboardRangeDraft() {
-    dashboardRangeDraft = dashboardRangeState(DEFAULT_DASHBOARD_RANGE);
-    elements.dashboardCustomStart.value = "";
-    elements.dashboardCustomEnd.value = "";
-    renderDashboardRangeDialog();
   }
 
   function updateDashboardCustomRange() {
@@ -1283,12 +1275,10 @@
     elements.transactionMessage.textContent = "";
     elements.transactionMessage.classList.remove("error");
     form.elements.postedDate.value = transaction.posted_date || "";
-    form.elements.accountId.value = String(transaction.account_id);
     setTypeGroupValue(elements.transactionTypeInput, elements.transactionTypeGroup, transaction.transaction_type || "splurge");
     setTransactionCategoryValue(transaction.category_id);
     form.elements.amount.value = transaction.amount || formatCents(transaction.amount_cents);
     form.elements.cleanDescription.value = transaction.clean_description || "";
-    form.elements.status.value = transaction.status || "posted";
     form.elements.notes.value = transaction.notes || "";
     renderTransactionTags(transaction);
     renderDefinitionList(elements.transactionRawValues, [
@@ -1342,7 +1332,7 @@
     const selectedTagIds = new Set((transaction.tags || []).map((tag) => Number(tag.id)));
     if (!transactionEditMode) {
       if (!transaction.tags?.length) {
-        elements.transactionTags.appendChild(el("span", "No tags.", "list-meta"));
+        elements.transactionTags.appendChild(el("span", "-", "list-meta"));
         return;
       }
       transaction.tags.forEach((tag) => {
@@ -1371,9 +1361,18 @@
   function cancelTransactionDialogAction() {
     if (transactionEditMode) {
       cancelTransactionEdit();
+      suppressButtonState(elements.transactionCancelButton);
       return;
     }
     closeTransactionDialog();
+  }
+
+  function suppressButtonState(button) {
+    button.blur();
+    button.classList.add("suppress-button-state");
+    button.addEventListener("pointerleave", () => {
+      button.classList.remove("suppress-button-state");
+    }, { once: true });
   }
 
   async function saveTransaction(event) {
@@ -1391,12 +1390,10 @@
         method: "PATCH",
         body: JSON.stringify({
           posted_date: clean(form.get("postedDate")),
-          account_id: Number(form.get("accountId")),
           category_id: Number(form.get("categoryId")),
           transaction_type: clean(form.get("transactionType")) || null,
           amount: clean(form.get("amount")),
           clean_description: clean(form.get("cleanDescription")) || null,
-          status: clean(form.get("status")),
           notes: clean(form.get("notes")),
           tag_ids: tagIds,
         }),
@@ -1547,7 +1544,6 @@
 
     fillSelect(elements.importAccountSelect, options, "Select account");
     fillSelect(elements.rawAccountFilter, [{ value: "all", label: "All accounts" }, ...options]);
-    fillSelect(elements.transactionAccountSelect, options);
   }
 
   function renderImports() {

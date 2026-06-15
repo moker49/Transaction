@@ -194,6 +194,10 @@ h2 {
   opacity: 0.12;
 }
 
+.suppress-button-state::before {
+  opacity: 0 !important;
+}
+
 .icon-button:disabled,
 .primary:disabled,
 .danger-button:disabled {
@@ -885,6 +889,14 @@ button:focus-visible {
 
 .transaction-controls .category-picker-button {
   flex: 0 0 auto;
+  min-height: 38px;
+  align-items: center;
+}
+
+.transaction-controls .category-picker-button > .category-chip,
+#transactionCategoryButton > .category-chip {
+  display: inline-flex;
+  align-items: center;
 }
 
 .transaction-controls #transactionSearch {
@@ -975,6 +987,7 @@ td.amount {
 .list-meta {
   color: var(--muted);
   font-size: 0.85rem;
+  font-weight: 400;
 }
 
 .chip-list {
@@ -1475,6 +1488,43 @@ td.amount {
   gap: 10px;
 }
 
+.detail-row {
+  display: grid;
+  gap: 10px;
+  align-items: end;
+}
+
+.type-button-row {
+  display: flex;
+  justify-content: center;
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.detail-row-date-category {
+  grid-template-columns: fit-content(62%) minmax(0, 1fr);
+}
+
+.detail-row-amount-description {
+  grid-template-columns: 132px minmax(0, 1fr);
+}
+
+.detail-row > label,
+.detail-row .category-picker-button {
+  min-width: 0;
+}
+
+#transactionCategoryButton {
+  min-height: 38px;
+  align-items: center;
+}
+
+.tag-field {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 8px;
+}
+
 .tag-check-list {
   display: flex;
   flex-wrap: wrap;
@@ -1838,6 +1888,19 @@ tr.is-matched-row td {
   .transaction-detail-grid,
   .raw-row-detail-grid {
     grid-template-columns: 1fr;
+  }
+
+  .detail-row-date-category,
+  .detail-row-amount-description {
+    gap: 8px;
+  }
+
+  .detail-row-date-category {
+    grid-template-columns: fit-content(58%) minmax(0, 1fr);
+  }
+
+  .detail-row-amount-description {
+    grid-template-columns: 112px minmax(0, 1fr);
   }
 
   .transaction-detail-grid > section + section {

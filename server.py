@@ -622,11 +622,6 @@ def update_transaction(transaction_id: int):
         next_amount_cents = int(transaction["amount_cents"])
         next_clean_description = transaction["clean_description"]
 
-        if "account_id" in data:
-            next_account_id = int(data.get("account_id"))
-            fetch_account(conn, next_account_id)
-            updates.append("account_id = ?")
-            values.append(next_account_id)
         if "posted_date" in data:
             next_posted_date = nonempty(str(data.get("posted_date", "")), "posted_date")
             updates.append("posted_date = ?")
@@ -652,12 +647,6 @@ def update_transaction(transaction_id: int):
             next_clean_description = optional_nonempty(data.get("clean_description"), "clean_description")
             updates.append("clean_description = ?")
             values.append(next_clean_description)
-        if "status" in data:
-            status = nonempty(str(data.get("status", "")), "status")
-            if status not in {"pending", "posted", "void"}:
-                raise CliError("status must be pending, posted, or void.")
-            updates.append("status = ?")
-            values.append(status)
         notes_requested = "notes" in data
         notes = optional_nonempty(data.get("notes"), "notes") if notes_requested else None
         tag_ids_requested = "tag_ids" in data
@@ -964,7 +953,6 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
                 t.amount_cents,
                 printf('%.2f', t.amount_cents / 100.0) AS amount,
                 t.currency,
-                t.status,
                 t.transaction_hash,
                 t.raw_imported_row_id,
                 rr.raw_date,
