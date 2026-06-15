@@ -249,15 +249,68 @@ h2 {
 }
 
 .fab-button {
+  position: relative;
+  isolation: isolate;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 46px;
-  height: 46px;
-  min-height: 46px;
-  border-radius: 50%;
+  gap: 12px;
+  width: 56px;
+  min-width: 56px;
+  height: 56px;
+  min-height: 56px;
+  padding: 0 16px;
+  border-radius: 16px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 0.9rem;
+  font-weight: 760;
+  line-height: 1;
+  box-shadow: 0 6px 10px rgba(0, 0, 0, 0.18), 0 1px 3px rgba(0, 0, 0, 0.18);
+  transition: background-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+
+.fab-button::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: currentColor;
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+
+.fab-button:hover {
+  background: var(--accent);
+  box-shadow: 0 8px 12px rgba(0, 0, 0, 0.2), 0 2px 4px rgba(0, 0, 0, 0.18);
+}
+
+.fab-button:hover::before {
+  opacity: 0.08;
+}
+
+.fab-button:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.fab-button:active {
+  transform: translateY(1px);
+  box-shadow: 0 6px 10px rgba(0, 0, 0, 0.18), 0 1px 3px rgba(0, 0, 0, 0.18);
+}
+
+.fab-button:active::before {
+  opacity: 0.12;
+}
+
+.fab-button:disabled {
+  cursor: progress;
+  opacity: 0.68;
+}
+
+.manage-fab {
   padding: 0;
-  box-shadow: var(--shadow);
 }
 
 .fab-button[hidden] {
@@ -266,6 +319,22 @@ h2 {
 
 .fab-button .material-symbols-outlined {
   font-size: 24px;
+  font-variation-settings: "FILL" 0, "wght" 500, "GRAD" 0, "opsz" 24;
+}
+
+.fab-label {
+  white-space: nowrap;
+}
+
+.manage-fab .fab-label {
+  display: none;
+}
+
+.import-fab {
+  width: auto;
+  min-width: 80px;
+  padding-right: 20px;
+  border-radius: 16px;
 }
 
 .primary-nav {
