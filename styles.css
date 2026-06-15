@@ -25,6 +25,10 @@
   --connected-bg: #24312f;
   --connected-selected-bg: #b8e7de;
   --connected-selected-text: #061f1c;
+  --tag-chip-bg: #25332f;
+  --tag-chip-selected-bg: #284b45;
+  --tag-chip-selected-text: #d8f2ec;
+  --tag-chip-outline: #50625d;
 }
 
 [data-theme="light"] {
@@ -54,6 +58,10 @@
   --connected-bg: #e1e7e5;
   --connected-selected-bg: #c9e7e1;
   --connected-selected-text: #10211e;
+  --tag-chip-bg: #e8efec;
+  --tag-chip-selected-bg: #d4ebe5;
+  --tag-chip-selected-text: #10211e;
+  --tag-chip-outline: #bacbc6;
 }
 
 * {
@@ -1434,23 +1442,89 @@ td.amount {
   gap: 8px;
 }
 
-.tag-check {
+.tag-chip {
+  position: relative;
   display: inline-flex;
-  grid-template-columns: none;
   align-items: center;
-  gap: 6px;
-  min-height: 30px;
-  padding: 0 10px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--surface-muted);
+  gap: 8px;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 32px;
+  margin: 0;
+  padding: 0 16px;
+  border: 1px solid var(--tag-chip-outline);
+  border-radius: 8px;
+  background: transparent;
   color: var(--text);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 720;
+  line-height: 1;
+  text-align: left;
 }
 
-.tag-check input {
-  width: 16px;
-  min-height: 16px;
+.tag-chip-filled {
+  border-color: transparent;
+  background: var(--tag-chip-selected-bg);
+  color: var(--tag-chip-selected-text);
+}
+
+.tag-chip-action,
+.tag-chip-select {
+  cursor: pointer;
+}
+
+.tag-chip-action .material-symbols-outlined,
+.tag-chip-select .material-symbols-outlined {
+  order: -1;
+  flex: 0 0 auto;
+  width: 18px;
+  font-size: 18px;
+  font-variation-settings: "FILL" 0, "wght" 500, "GRAD" 0, "opsz" 20;
+}
+
+.tag-chip-select {
+  color: color-mix(in srgb, var(--accent) 18%, var(--text));
+}
+
+.tag-chip-select.is-selected {
+  padding-left: 42px;
+}
+
+.tag-chip-select input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  min-height: 1px;
+  margin: 0;
   padding: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tag-chip-select .tag-chip-check {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  display: inline-flex;
+  opacity: 0;
+  transform: translateY(-50%);
+}
+
+.tag-chip-select.is-selected {
+  border-color: transparent;
+  background: var(--tag-chip-selected-bg);
+  color: var(--tag-chip-selected-text);
+}
+
+.tag-chip-select.is-selected .tag-chip-check {
+  opacity: 1;
+}
+
+.tag-chip:focus-visible,
+.tag-chip-select:has(input:focus-visible) {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
 }
 
 textarea {

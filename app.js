@@ -1346,7 +1346,7 @@
         return;
       }
       transaction.tags.forEach((tag) => {
-        elements.transactionTags.appendChild(el("span", tag.name, "chip"));
+        elements.transactionTags.appendChild(staticTagChip(tag.name));
       });
       return;
     }
@@ -1355,16 +1355,7 @@
       return;
     }
     state.tags.forEach((tag) => {
-      const label = document.createElement("label");
-      label.className = "tag-check";
-      const checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.name = "tagIds";
-      checkbox.value = String(tag.id);
-      checkbox.checked = selectedTagIds.has(Number(tag.id));
-      checkbox.disabled = !transactionEditMode;
-      label.append(checkbox, el("span", tag.name));
-      elements.transactionTags.appendChild(label);
+      elements.transactionTags.appendChild(selectableTagChip(tag, selectedTagIds.has(Number(tag.id)), "tagIds"));
     });
   }
 
@@ -1591,9 +1582,9 @@
     } else {
       state.tags.forEach((tag) => {
         if (tag.is_protected) {
-          tagList.appendChild(el("span", tag.name, "chip"));
+          tagList.appendChild(staticTagChip(tag.name));
         } else {
-          tagList.appendChild(manageableChip(tag.name, () => editTag(tag)));
+          tagList.appendChild(editableTagChip(tag, () => editTag(tag)));
         }
       });
     }
@@ -1608,15 +1599,7 @@
       return;
     }
     state.tags.forEach((tag) => {
-      const label = document.createElement("label");
-      label.className = "tag-check";
-      const checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.name = "addTagIds";
-      checkbox.value = String(tag.id);
-      checkbox.checked = selected.has(Number(tag.id));
-      label.append(checkbox, el("span", tag.name));
-      elements.ruleTags.appendChild(label);
+      elements.ruleTags.appendChild(selectableTagChip(tag, selected.has(Number(tag.id)), "addTagIds"));
     });
   }
 
@@ -1799,6 +1782,36 @@
     const chip = el("span", category.name, "chip category-chip");
     chip.style.setProperty("--category-color", effectiveCategoryColor(category));
     return chip;
+  }
+
+  function staticTagChip(label) {
+    return el("span", label, "tag-chip tag-chip-filled");
+  }
+
+  function editableTagChip(tag, onEdit) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "tag-chip tag-chip-filled tag-chip-action";
+    button.append(materialIcon("edit"), el("span", tag.name));
+    button.addEventListener("click", onEdit);
+    return button;
+  }
+
+  function selectableTagChip(tag, isSelected, inputName) {
+    const label = document.createElement("label");
+    label.className = `tag-chip tag-chip-select${isSelected ? " is-selected" : ""}`;
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.name = inputName;
+    checkbox.value = String(tag.id);
+    checkbox.checked = isSelected;
+    const icon = materialIcon("check");
+    icon.classList.add("tag-chip-check");
+    label.append(checkbox, icon, el("span", tag.name));
+    checkbox.addEventListener("change", () => {
+      label.classList.toggle("is-selected", checkbox.checked);
+    });
+    return label;
   }
 
   function displayCategoryChip(category) {
@@ -2833,6 +2846,14 @@
       td.textContent = content;
     }
     return td;
+  }
+
+  function materialIcon(name) {
+    const icon = document.createElement("span");
+    icon.className = "material-symbols-outlined";
+    icon.setAttribute("aria-hidden", "true");
+    icon.textContent = name;
+    return icon;
   }
 
   function actionButtons(actions) {
