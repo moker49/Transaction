@@ -36,6 +36,10 @@
   let transactionEditMode = false;
   let accountDialogMode = "add";
   let ruleDialogMode = "add";
+  let accountEditSnapshot = null;
+  let categoryEditSnapshot = null;
+  let ruleEditSnapshot = null;
+  let transactionEditSnapshot = null;
   let confirmResolver = null;
   let textInputResolver = null;
   let textInputDeleteHandler = null;
@@ -687,6 +691,7 @@
   function openAccountAddDialog() {
     accountDialogMode = "add";
     editingAccountId = null;
+    accountEditSnapshot = null;
     elements.accountDialogTitle.textContent = "Create Account";
     elements.accountSubmitButton.textContent = "Create Account";
     elements.accountDeleteButton.hidden = true;
@@ -709,6 +714,7 @@
     form.elements.name.value = account.name || "";
     form.elements.institution.value = account.institution || "";
     setTypeGroupValue(elements.accountTypeInput, elements.accountTypeGroup, accountTypeValues().has(account.account_type) ? account.account_type : "checking");
+    accountEditSnapshot = buildAccountPayload();
     openModal(elements.accountDialog);
   }
 
@@ -719,20 +725,21 @@
   async function saveAccount(event) {
     event.preventDefault();
     const formElement = event.currentTarget;
-    const form = new FormData(formElement);
+    const payload = buildAccountPayload(formElement);
+
+    const isEdit = accountDialogMode === "edit";
+    if (isEdit && payloadMatchesSnapshot(payload, accountEditSnapshot)) {
+      closeAccountDialog();
+      return;
+    }
 
     try {
-      const isEdit = accountDialogMode === "edit";
-      const payload = await apiRequest(isEdit ? `/api/accounts/${editingAccountId}` : "/api/accounts", {
+      const response = await apiRequest(isEdit ? `/api/accounts/${editingAccountId}` : "/api/accounts", {
         method: isEdit ? "PATCH" : "POST",
-        body: JSON.stringify({
-          name: clean(form.get("name")),
-          institution: clean(form.get("institution")) || null,
-          account_type: clean(form.get("accountType")) || null,
-        }),
+        body: JSON.stringify(payload),
       });
       closeAccountDialog();
-      applyStateFromPayload(payload);
+      applyStateFromPayload(response);
     } catch (error) {
       setModalMessage(
         elements.accountMessage,
@@ -800,6 +807,7 @@
 
   function openCategoryAddDialog() {
     editingCategoryId = null;
+    categoryEditSnapshot = null;
     elements.categoryDialogTitle.textContent = "Create Category";
     elements.categorySubmitButton.textContent = "Create Category";
     elements.categoryDeleteButton.hidden = true;
@@ -825,6 +833,7 @@
     elements.categoryParentButton.disabled = categoryDescendantIds(category.id).size > 0;
     setCategoryDialogColor(category.color || randomComfortableColor());
     updateCategoryColorControl();
+    categoryEditSnapshot = buildCategoryPayload();
     openModal(elements.categoryDialog);
   }
 
@@ -834,12 +843,11 @@
 
   async function saveCategory(event) {
     event.preventDefault();
-    const form = new FormData(elements.categoryDialogForm);
-    const payload = {
-      name: clean(form.get("name")),
-      parent_id: Number(form.get("parentId")) || null,
-      color: clean(form.get("parentId")) ? null : clean(form.get("color")),
-    };
+    const payload = buildCategoryPayload();
+    if (editingCategoryId && payloadMatchesSnapshot(payload, categoryEditSnapshot)) {
+      closeCategoryDialog();
+      return;
+    }
     try {
       const response = await apiRequest(editingCategoryId ? `/api/categories/${editingCategoryId}` : "/api/categories", {
         method: editingCategoryId ? "PATCH" : "POST",
@@ -1067,6 +1075,7 @@
   function openRuleAddDialog(prefill = {}) {
     ruleDialogMode = "add";
     editingRuleId = null;
+    ruleEditSnapshot = null;
     elements.ruleMessage.textContent = "";
     elements.ruleMessage.classList.remove("error");
     elements.ruleDialogTitle.textContent = "Create Rule";
@@ -1102,6 +1111,7 @@
     setRuleCategoryValue(rule.set_category_id);
     renderRuleTags(rule.tag_ids || (rule.add_tag_id === null ? [] : [rule.add_tag_id]));
     form.elements.priority.value = String(rule.priority ?? 100);
+    ruleEditSnapshot = buildRulePayload();
     openModal(elements.ruleDialog);
   }
 
@@ -1112,43 +1122,30 @@
   async function saveRule(event) {
     event.preventDefault();
     const formElement = event.currentTarget;
-    const form = new FormData(formElement);
-    const setCleanDescription = clean(form.get("setCleanDescription"));
-    const setTransactionType = clean(form.get("setTransactionType"));
-    const setCategoryId = Number(form.get("setCategoryId")) || null;
-    const matchDescription = clean(form.get("matchDescription"));
-    const matchCategory = clean(form.get("matchCategory"));
-    const addTagIds = [...elements.ruleTags.querySelectorAll("input[type='checkbox']:checked")]
-      .map((checkbox) => Number(checkbox.value))
-      .filter((tagId) => Number.isInteger(tagId) && tagId > 0);
+    const payload = buildRulePayload(formElement);
 
-    if (!matchDescription && !matchCategory) {
+    if (!payload.match_description && !payload.match_category) {
       setModalMessage(elements.ruleMessage, "Match description, category, or both.", true);
       return;
     }
 
-    if (!setCategoryId && !setCleanDescription && !setTransactionType && !addTagIds.length) {
+    if (!payload.set_category_id && !payload.set_clean_description && !payload.set_transaction_type && !payload.add_tag_ids.length) {
       setModalMessage(elements.ruleMessage, "Set a category, description, type, or tag.", true);
       return;
     }
 
     try {
       const isEdit = ruleDialogMode === "edit";
-      const payload = await apiRequest(isEdit ? `/api/rules/${editingRuleId}` : "/api/rules", {
+      if (isEdit && payloadMatchesSnapshot(payload, ruleEditSnapshot)) {
+        closeRuleDialog();
+        return;
+      }
+      const response = await apiRequest(isEdit ? `/api/rules/${editingRuleId}` : "/api/rules", {
         method: isEdit ? "PATCH" : "POST",
-        body: JSON.stringify({
-          name: clean(form.get("name")),
-          match_description: matchDescription || null,
-          match_category: matchCategory || null,
-          set_category_id: setCategoryId,
-          set_clean_description: setCleanDescription || null,
-          set_transaction_type: setTransactionType || null,
-          add_tag_ids: addTagIds,
-          priority: Number(form.get("priority")) || 100,
-        }),
+        body: JSON.stringify(payload),
       });
       closeRuleDialog();
-      applyStateFromPayload(payload);
+      applyStateFromPayload(response);
     } catch (error) {
       setModalMessage(
         elements.ruleMessage,
@@ -1232,6 +1229,9 @@
       },
     });
     if (name === null) {
+      return;
+    }
+    if (clean(name) === clean(tag.name)) {
       return;
     }
     try {
@@ -1407,6 +1407,7 @@
   function openTransactionDialog(transaction) {
     activeTransactionId = transaction.id;
     transactionEditMode = false;
+    transactionEditSnapshot = null;
     populateTransactionDialog(transaction);
     setTransactionEditMode(false);
     openModal(elements.transactionDialog);
@@ -1475,6 +1476,7 @@
     elements.transactionEditButton.hidden = isEditing;
     elements.transactionCancelButton.hidden = false;
     elements.transactionSaveButton.hidden = !isEditing;
+    transactionEditSnapshot = isEditing ? buildTransactionPayload() : null;
   }
 
   function renderTransactionTags(transaction) {
@@ -1521,6 +1523,74 @@
     return new Set(["credit", "checking", "savings"]);
   }
 
+  function buildAccountPayload(formElement = elements.accountForm) {
+    const form = new FormData(formElement);
+    return {
+      name: clean(form.get("name")),
+      institution: clean(form.get("institution")) || null,
+      account_type: clean(form.get("accountType")) || null,
+    };
+  }
+
+  function buildCategoryPayload() {
+    const form = new FormData(elements.categoryDialogForm);
+    return {
+      name: clean(form.get("name")),
+      parent_id: Number(form.get("parentId")) || null,
+      color: clean(form.get("parentId")) ? null : clean(form.get("color")),
+    };
+  }
+
+  function buildRulePayload(formElement = elements.ruleForm) {
+    const form = new FormData(formElement);
+    const addTagIds = [...elements.ruleTags.querySelectorAll("input[type='checkbox']:checked")]
+      .map((checkbox) => Number(checkbox.value))
+      .filter((tagId) => Number.isInteger(tagId) && tagId > 0);
+    return {
+      name: clean(form.get("name")),
+      match_description: clean(form.get("matchDescription")) || null,
+      match_category: clean(form.get("matchCategory")) || null,
+      set_category_id: Number(form.get("setCategoryId")) || null,
+      set_clean_description: clean(form.get("setCleanDescription")) || null,
+      set_transaction_type: clean(form.get("setTransactionType")) || null,
+      add_tag_ids: addTagIds,
+      priority: Number(form.get("priority")) || 100,
+    };
+  }
+
+  function buildTransactionPayload() {
+    const form = new FormData(elements.transactionForm);
+    const tagIds = [...elements.transactionTags.querySelectorAll("input[type='checkbox']:checked")]
+      .map((checkbox) => Number(checkbox.value))
+      .filter((tagId) => Number.isInteger(tagId) && tagId > 0);
+    return {
+      posted_date: clean(form.get("postedDate")),
+      category_id: Number(form.get("categoryId")),
+      transaction_type: clean(form.get("transactionType")) || null,
+      amount: clean(form.get("amount")),
+      clean_description: clean(form.get("cleanDescription")) || null,
+      notes: clean(form.get("notes")),
+      tag_ids: tagIds,
+    };
+  }
+
+  function payloadMatchesSnapshot(payload, snapshot) {
+    return Boolean(snapshot) && JSON.stringify(normalizePayloadForComparison(payload)) === JSON.stringify(normalizePayloadForComparison(snapshot));
+  }
+
+  function normalizePayloadForComparison(value) {
+    if (Array.isArray(value)) {
+      return value.map((item) => Number(item)).filter((item) => Number.isInteger(item)).sort((a, b) => a - b);
+    }
+    if (value && typeof value === "object") {
+      return Object.keys(value).sort().reduce((record, key) => {
+        record[key] = normalizePayloadForComparison(value[key]);
+        return record;
+      }, {});
+    }
+    return value ?? null;
+  }
+
   function suppressButtonState(button) {
     button.blur();
     button.classList.add("suppress-button-state");
@@ -1535,26 +1605,19 @@
     if (!transaction || !transactionEditMode) {
       return;
     }
-    const form = new FormData(elements.transactionForm);
-    const tagIds = [...elements.transactionTags.querySelectorAll("input[type='checkbox']:checked")]
-      .map((checkbox) => Number(checkbox.value))
-      .filter((tagId) => Number.isInteger(tagId) && tagId > 0);
+    const payload = buildTransactionPayload();
+    if (payloadMatchesSnapshot(payload, transactionEditSnapshot)) {
+      closeTransactionDialog();
+      return;
+    }
     try {
-      const payload = await apiRequest(`/api/transactions/${transaction.id}`, {
+      const response = await apiRequest(`/api/transactions/${transaction.id}`, {
         method: "PATCH",
-        body: JSON.stringify({
-          posted_date: clean(form.get("postedDate")),
-          category_id: Number(form.get("categoryId")),
-          transaction_type: clean(form.get("transactionType")) || null,
-          amount: clean(form.get("amount")),
-          clean_description: clean(form.get("cleanDescription")) || null,
-          notes: clean(form.get("notes")),
-          tag_ids: tagIds,
-        }),
+        body: JSON.stringify(payload),
       });
-      applyStateFromPayload(payload);
-      activeTransactionId = payload.transaction.id;
-      populateTransactionDialog(payload.transaction);
+      applyStateFromPayload(response);
+      activeTransactionId = response.transaction.id;
+      populateTransactionDialog(response.transaction);
       setTransactionEditMode(false);
     } catch (error) {
       setModalMessage(elements.transactionMessage, error.message || "Could not update transaction.", true);
@@ -1688,6 +1751,10 @@
     event.preventDefault();
     const rawRow = activeRawRow();
     if (!rawRow) {
+      closeRawRowDialog();
+      return;
+    }
+    if (!isRawRowNoteDirty(rawRow)) {
       closeRawRowDialog();
       return;
     }
