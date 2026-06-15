@@ -926,7 +926,7 @@ td {
   padding: 11px 12px;
   border-bottom: 1px solid var(--border);
   text-align: left;
-  vertical-align: top;
+  vertical-align: center;
 }
 
 th {
@@ -1827,6 +1827,17 @@ select:disabled {
 .row-checkbox {
   width: 18px;
   min-height: 18px;
+  vertical-align: middle;
+}
+
+th[data-raw-column="select"],
+.raw-select-cell {
+  text-align: center;
+  vertical-align: middle;
+}
+
+.raw-select-cell {
+  cursor: pointer;
 }
 
 .status-cell {

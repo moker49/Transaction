@@ -2158,6 +2158,7 @@
       checkbox.disabled = !isImportableRawRow(rawRow);
       checkbox.setAttribute("aria-label", `Select row ${rawRow.id}`);
       checkbox.addEventListener("click", (event) => event.stopPropagation());
+      checkbox.addEventListener("keydown", (event) => event.stopPropagation());
       checkbox.addEventListener("change", () => {
         if (checkbox.checked) {
           selectedRawRowIds.add(rawRow.id);
@@ -2184,9 +2185,14 @@
           rawRowNotes.delete(rawRow.id);
         }
       });
+      const selectCell = cell(checkbox, "raw-select-cell");
+      selectCell.addEventListener("click", (event) => {
+        event.stopPropagation();
+        checkbox.click();
+      });
 
       const cells = [
-        ["select", cell(checkbox)],
+        ["select", selectCell],
         ["date", cell(displayDateCell(rawRow.raw_date), "date-cell")],
         ["category", cell(rawValueWithPreview(rawRow.raw_category, rawRow.preview_category))],
         ["description", cell(rawValueWithPreview(rawRow.raw_description, rawRow.preview_clean_description))],
