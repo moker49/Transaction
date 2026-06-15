@@ -752,6 +752,11 @@ td.amount {
   gap: 14px;
 }
 
+#categoryPickerList {
+  display: grid;
+  gap: 14px;
+}
+
 .category-section {
   display: grid;
   gap: 8px;
@@ -780,6 +785,51 @@ td.amount {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.category-picker-button,
+.category-picker-chip {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.category-picker-button {
+  cursor: pointer;
+}
+
+.category-picker-button:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.category-picker-chip {
+  cursor: pointer;
+  border-radius: 9px;
+}
+
+.category-picker-chip.is-selected {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.category-picker-chip:focus-visible,
+.category-picker-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.empty-category-chip {
+  border-style: dashed;
+  color: var(--muted);
 }
 
 .settings-list {
@@ -961,6 +1011,10 @@ td.amount {
 
 .dashboard-range-modal {
   width: min(1040px, calc(100vw - 28px));
+}
+
+.category-picker-modal {
+  width: min(820px, calc(100vw - 28px));
 }
 
 .modal::backdrop {

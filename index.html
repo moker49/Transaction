@@ -406,7 +406,6 @@
         <label>
           <span>Type</span>
           <select name="setTransactionType">
-            <option value="">No type</option>
             <option value="income">Income</option>
             <option value="bill">Bill</option>
             <option value="splurge">Splurge</option>
@@ -414,7 +413,8 @@
         </label>
         <label>
           <span>Clean Category</span>
-          <select name="setCategoryId" id="ruleCategorySelect"></select>
+          <input name="setCategoryId" type="hidden" id="ruleCategoryInput">
+          <button type="button" class="category-picker-button" id="ruleCategoryButton"></button>
         </label>
         <label>
           <span>Clean description</span>
@@ -460,7 +460,8 @@
             </label>
             <label>
               <span>Category</span>
-              <select name="categoryId" id="transactionCategorySelect" data-editable-field disabled required></select>
+              <input name="categoryId" type="hidden" id="transactionCategoryInput">
+              <button type="button" class="category-picker-button" id="transactionCategoryButton" disabled></button>
             </label>
             <label>
               <span>Account</span>
@@ -581,6 +582,22 @@
         <button type="submit" class="primary" id="categorySubmitButton">Create Category</button>
       </div>
     </form>
+  </dialog>
+
+  <dialog id="categoryPickerDialog" class="modal category-picker-modal" tabindex="-1">
+    <div class="modal-panel">
+      <div class="panel-heading">
+        <h2 id="categoryPickerTitle">Select Category</h2>
+        <button class="icon-only" type="button" id="categoryPickerCloseButton" aria-label="Close">
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <div id="categoryPickerList" class="chip-list category-picker-list empty-target"></div>
+      <div class="modal-actions">
+        <button type="button" class="icon-button" id="categoryPickerClearButton">No Category</button>
+        <button type="button" class="primary" id="categoryPickerCancelButton">Done</button>
+      </div>
+    </div>
   </dialog>
 
   <dialog id="textInputDialog" class="modal" tabindex="-1">

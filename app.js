@@ -39,6 +39,7 @@
   let confirmResolver = null;
   let textInputResolver = null;
   let textInputDeleteHandler = null;
+  let categoryPickerTarget = null;
   let popupTimer = null;
   let dashboardRangeDraft = null;
   const importableRawRowStatuses = new Set(["new", "ready"]);
@@ -116,7 +117,8 @@
     regenerateDatabaseButton: document.querySelector("#regenerateDatabaseButton"),
     ruleAddButton: document.querySelector("#ruleAddButton"),
     ruleDialog: document.querySelector("#ruleDialog"),
-    ruleCategorySelect: document.querySelector("#ruleCategorySelect"),
+    ruleCategoryInput: document.querySelector("#ruleCategoryInput"),
+    ruleCategoryButton: document.querySelector("#ruleCategoryButton"),
     ruleTags: document.querySelector("#ruleTags"),
     ruleCancelButton: document.querySelector("#ruleCancelButton"),
     ruleDismissButton: document.querySelector("#ruleDismissButton"),
@@ -166,7 +168,8 @@
     transactionDialogTitle: document.querySelector("#transactionDialogTitle"),
     transactionCloseButton: document.querySelector("#transactionCloseButton"),
     transactionAccountSelect: document.querySelector("#transactionAccountSelect"),
-    transactionCategorySelect: document.querySelector("#transactionCategorySelect"),
+    transactionCategoryInput: document.querySelector("#transactionCategoryInput"),
+    transactionCategoryButton: document.querySelector("#transactionCategoryButton"),
     transactionCategoryFilter: document.querySelector("#transactionCategoryFilter"),
     transactionSearch: document.querySelector("#transactionSearch"),
     transactionTags: document.querySelector("#transactionTags"),
@@ -201,6 +204,12 @@
     categoryColorSwatch: document.querySelector("#categoryColorSwatch"),
     categoryColorRandomizeButton: document.querySelector("#categoryColorRandomizeButton"),
     categoryMessage: document.querySelector("#categoryMessage"),
+    categoryPickerDialog: document.querySelector("#categoryPickerDialog"),
+    categoryPickerTitle: document.querySelector("#categoryPickerTitle"),
+    categoryPickerCloseButton: document.querySelector("#categoryPickerCloseButton"),
+    categoryPickerCancelButton: document.querySelector("#categoryPickerCancelButton"),
+    categoryPickerClearButton: document.querySelector("#categoryPickerClearButton"),
+    categoryPickerList: document.querySelector("#categoryPickerList"),
   };
 
   elements.navItems.forEach((navItem) => {
@@ -229,6 +238,7 @@
   elements.ruleDeleteButton.addEventListener("click", deleteEditingRule);
   elements.ruleForm.elements.matchDescriptionEnabled.addEventListener("change", updateRuleMatchInputs);
   elements.ruleForm.elements.matchCategoryEnabled.addEventListener("change", updateRuleMatchInputs);
+  elements.ruleCategoryButton.addEventListener("click", () => openCategoryPicker("rule"));
   elements.ruleDialog.addEventListener("close", () => {
     editingRuleId = null;
   });
@@ -274,6 +284,11 @@
   elements.transactionEditButton.addEventListener("click", () => setTransactionEditMode(true));
   elements.transactionCancelButton.addEventListener("click", cancelTransactionEdit);
   elements.transactionDeleteButton.addEventListener("click", deleteActiveTransaction);
+  elements.transactionCategoryButton.addEventListener("click", () => {
+    if (transactionEditMode) {
+      openCategoryPicker("transaction");
+    }
+  });
   elements.rawRowForm.addEventListener("submit", saveRawRowNote);
   elements.rawRowCloseButton.addEventListener("click", closeRawRowDialog);
   elements.rawRowDismissButton.addEventListener("click", closeRawRowDialog);
@@ -295,6 +310,13 @@
   elements.categoryColorRandomizeButton.addEventListener("click", () => setCategoryDialogColor(randomComfortableColor()));
   elements.categoryDialog.addEventListener("close", () => {
     editingCategoryId = null;
+  });
+  elements.categoryPickerCloseButton.addEventListener("click", closeCategoryPicker);
+  elements.categoryPickerCancelButton.addEventListener("click", closeCategoryPicker);
+  elements.categoryPickerClearButton.addEventListener("click", () => selectPickedCategory(null));
+  elements.categoryPickerDialog.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    closeCategoryPicker();
   });
   document.querySelectorAll("dialog.modal").forEach((dialog) => {
     dialog.addEventListener("close", updateModalScrollLock);
@@ -846,6 +868,7 @@
     elements.ruleForm.elements.matchDescriptionEnabled.checked = Boolean(matchDescription) || !matchCategory;
     elements.ruleForm.elements.matchCategoryEnabled.checked = Boolean(matchCategory);
     elements.ruleForm.elements.priority.value = "100";
+    setRuleCategoryValue(null);
     updateRuleMatchInputs();
     renderRuleTags([]);
     openModal(elements.ruleDialog);
@@ -868,7 +891,7 @@
     form.elements.matchCategory.value = matches.category;
     form.elements.setCleanDescription.value = rule.set_clean_description || "";
     form.elements.setTransactionType.value = rule.set_transaction_type || "";
-    form.elements.setCategoryId.value = rule.set_category_id === null ? "" : String(rule.set_category_id);
+    setRuleCategoryValue(rule.set_category_id);
     renderRuleTags(rule.tag_ids || (rule.add_tag_id === null ? [] : [rule.add_tag_id]));
     form.elements.priority.value = String(rule.priority ?? 100);
     updateRuleMatchInputs();
@@ -1198,7 +1221,7 @@
     form.elements.postedDate.value = transaction.posted_date || "";
     form.elements.accountId.value = String(transaction.account_id);
     form.elements.transactionType.value = transaction.transaction_type || "";
-    form.elements.categoryId.value = transaction.category_id === null ? "" : String(transaction.category_id);
+    setTransactionCategoryValue(transaction.category_id);
     form.elements.amount.value = transaction.amount || formatCents(transaction.amount_cents);
     form.elements.cleanDescription.value = transaction.clean_description || "";
     form.elements.status.value = transaction.status || "posted";
@@ -1243,6 +1266,7 @@
     elements.transactionTags.querySelectorAll("input[type='checkbox']").forEach((checkbox) => {
       checkbox.disabled = !isEditing;
     });
+    elements.transactionCategoryButton.disabled = !isEditing;
     elements.transactionEditButton.hidden = isEditing;
     elements.transactionCancelButton.hidden = !isEditing;
     elements.transactionSaveButton.hidden = !isEditing;
@@ -1523,6 +1547,33 @@
     });
   }
 
+  function selectedCategory(categoryId) {
+    const id = Number(categoryId);
+    return Number.isInteger(id) && id > 0
+      ? state.categories.find((category) => category.id === id) || null
+      : null;
+  }
+
+  function renderCategoryButton(button, categoryId, fallbackLabel = "No category") {
+    clear(button);
+    const category = selectedCategory(categoryId);
+    if (category) {
+      button.appendChild(plainCategoryChip(category));
+    } else {
+      button.appendChild(el("span", fallbackLabel, "chip category-chip empty-category-chip"));
+    }
+  }
+
+  function setRuleCategoryValue(categoryId) {
+    elements.ruleCategoryInput.value = categoryId === null || categoryId === undefined ? "" : String(categoryId);
+    renderCategoryButton(elements.ruleCategoryButton, elements.ruleCategoryInput.value);
+  }
+
+  function setTransactionCategoryValue(categoryId) {
+    elements.transactionCategoryInput.value = categoryId === null || categoryId === undefined ? "" : String(categoryId);
+    renderCategoryButton(elements.transactionCategoryButton, elements.transactionCategoryInput.value, "Select category");
+  }
+
   function renderCategories() {
     const categoryList = document.querySelector("#categoryList");
     clear(categoryList);
@@ -1533,20 +1584,14 @@
     }
 
     fillSelect(
-      elements.ruleCategorySelect,
-      [
-        { value: "", label: "No category" },
-        ...categoryOptions(),
-      ],
-    );
-    fillSelect(
       elements.transactionCategoryFilter,
       [
         { value: "", label: "All categories" },
         ...categoryOptions(),
       ],
     );
-    fillSelect(elements.transactionCategorySelect, categoryOptions());
+    renderCategoryButton(elements.ruleCategoryButton, elements.ruleCategoryInput.value);
+    renderCategoryButton(elements.transactionCategoryButton, elements.transactionCategoryInput.value, "Select category");
   }
 
   function populateCategoryParentSelect(category = null) {
@@ -1564,7 +1609,50 @@
     return orderedCategories().map((category) => ({ value: String(category.id), label: categoryLabel(category) }));
   }
 
-  function renderCategorySections(categoryList) {
+  function openCategoryPicker(target) {
+    categoryPickerTarget = target;
+    const isRule = target === "rule";
+    elements.categoryPickerTitle.textContent = isRule ? "Select Clean Category" : "Select Category";
+    elements.categoryPickerClearButton.hidden = !isRule;
+    renderCategoryPicker();
+    openModal(elements.categoryPickerDialog);
+  }
+
+  function closeCategoryPicker() {
+    categoryPickerTarget = null;
+    elements.categoryPickerDialog.close();
+  }
+
+  function renderCategoryPicker() {
+    clear(elements.categoryPickerList);
+    if (!state.categories.length) {
+      appendEmpty(elements.categoryPickerList);
+      return;
+    }
+    const selectedId = categoryPickerTarget === "transaction"
+      ? Number(elements.transactionCategoryInput.value) || null
+      : Number(elements.ruleCategoryInput.value) || null;
+    renderCategorySections(elements.categoryPickerList, {
+      selectable: true,
+      selectedId,
+      onSelect: (category) => selectPickedCategory(category.id),
+    });
+  }
+
+  function selectPickedCategory(categoryId) {
+    if (categoryPickerTarget === "transaction") {
+      if (categoryId === null) {
+        return;
+      }
+      setTransactionCategoryValue(categoryId);
+    } else if (categoryPickerTarget === "rule") {
+      setRuleCategoryValue(categoryId);
+    }
+    closeCategoryPicker();
+  }
+
+  function renderCategorySections(categoryList, options = {}) {
+    const selectable = Boolean(options.selectable);
     const roots = orderedCategories().filter((category) => category.parent_id === null);
     const rendered = new Set();
     roots.forEach((root) => {
@@ -1579,12 +1667,20 @@
       const chips = document.createElement("div");
       chips.className = "category-section-chips";
       const children = orderedCategories().filter((category) => category.parent_id === root.id);
-      if (!children.length && !root.is_default) {
-        chips.appendChild(categoryChip(root));
+      if (selectable) {
+        chips.appendChild(selectableCategoryChip(root, options.selectedId === root.id, options.onSelect));
+        rendered.add(root.id);
+      }
+      if (!selectable && !children.length && !root.is_default) {
+        chips.appendChild(selectable
+          ? selectableCategoryChip(root, options.selectedId === root.id, options.onSelect)
+          : categoryChip(root));
         rendered.add(root.id);
       }
       children.forEach((child) => {
-        chips.appendChild(categoryChip(child));
+        chips.appendChild(selectable
+          ? selectableCategoryChip(child, options.selectedId === child.id, options.onSelect)
+          : categoryChip(child));
         rendered.add(child.id);
       });
       section.append(header, chips);
@@ -1593,13 +1689,32 @@
     });
     orderedCategories()
       .filter((category) => !rendered.has(category.id))
-      .forEach((category) => categoryList.appendChild(categoryChip(category)));
+      .forEach((category) => categoryList.appendChild(selectable
+        ? selectableCategoryChip(category, options.selectedId === category.id, options.onSelect)
+        : categoryChip(category)));
+  }
+
+  function selectableCategoryChip(category, isSelected, onSelect) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "category-picker-chip";
+    button.setAttribute("aria-pressed", isSelected ? "true" : "false");
+    if (isSelected) {
+      button.classList.add("is-selected");
+    }
+    button.appendChild(plainCategoryChip(category));
+    button.addEventListener("click", () => onSelect?.(category));
+    return button;
   }
 
   function categoryChip(category) {
-    const chip = category.is_default
-      ? el("span", category.name, "chip category-chip")
-      : manageableChip(category.name, () => editCategory(category), "category-chip");
+    const chip = category.is_default ? plainCategoryChip(category) : manageableChip(category.name, () => editCategory(category), "category-chip");
+    chip.style.setProperty("--category-color", effectiveCategoryColor(category));
+    return chip;
+  }
+
+  function plainCategoryChip(category) {
+    const chip = el("span", category.name, "chip category-chip");
     chip.style.setProperty("--category-color", effectiveCategoryColor(category));
     return chip;
   }
