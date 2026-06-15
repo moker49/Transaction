@@ -10,7 +10,7 @@ from typing import Iterable
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DB_PATH = ROOT / "data" / "transactions.sqlite"
 SCHEMA_PATH = ROOT / "db" / "schema.sql"
-EXPECTED_ACCOUNT_COLUMNS = {"id", "institution_id", "name", "account_type", "currency", "external_account_id", "created_at", "updated_at"}
+EXPECTED_ACCOUNT_COLUMNS = {"id", "institution_id", "name", "account_type", "external_account_id", "created_at", "updated_at"}
 EXPECTED_CATEGORY_COLUMNS = {"id", "name", "parent_id", "color", "created_at"}
 EXPECTED_TABLES = {
     "accounts",
@@ -35,7 +35,6 @@ EXPECTED_TRANSACTION_COLUMNS = {
     "transaction_type",
     "clean_description",
     "amount_cents",
-    "currency",
     "external_transaction_id",
     "raw_imported_row_id",
     "transaction_hash",
@@ -140,6 +139,12 @@ def drop_user_tables(conn: sqlite3.Connection, tables: Iterable[str]) -> None:
 
 def migrate_existing_schema(conn: sqlite3.Connection, tables: Iterable[str]) -> None:
     table_set = set(tables)
+    if "accounts" in table_set:
+        account_columns = {row[1] for row in conn.execute("PRAGMA table_info(accounts)").fetchall()}
+        if "currency" in account_columns:
+            conn.commit()
+            rebuild_accounts_without_currency(conn)
+            conn.commit()
     if "transactions" in table_set:
         transaction_columns = {row[1] for row in conn.execute("PRAGMA table_info(transactions)").fetchall()}
         if "transaction_type" not in transaction_columns:
@@ -165,7 +170,7 @@ def migrate_existing_schema(conn: sqlite3.Connection, tables: Iterable[str]) -> 
         if (
             transaction_type_column is not None
             and not int(transaction_type_column[3])
-        ) or "status" in {row[1] for row in transaction_columns}:
+        ) or "status" in {row[1] for row in transaction_columns} or "currency" in {row[1] for row in transaction_columns}:
             conn.commit()
             rebuild_transactions_with_required_type(conn)
             conn.commit()
@@ -227,6 +232,52 @@ def migrate_existing_schema(conn: sqlite3.Connection, tables: Iterable[str]) -> 
     conn.commit()
 
 
+def rebuild_accounts_without_currency(conn: sqlite3.Connection) -> None:
+    conn.execute("PRAGMA foreign_keys = OFF")
+    try:
+        conn.execute("DROP TABLE IF EXISTS accounts_rebuild")
+        conn.execute(
+            """
+            CREATE TABLE accounts_rebuild (
+                id INTEGER PRIMARY KEY,
+                institution_id INTEGER REFERENCES institutions(id) ON DELETE SET NULL,
+                name TEXT NOT NULL,
+                account_type TEXT,
+                external_account_id TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE (name, institution_id)
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO accounts_rebuild (
+                id,
+                institution_id,
+                name,
+                account_type,
+                external_account_id,
+                created_at,
+                updated_at
+            )
+            SELECT
+                id,
+                institution_id,
+                name,
+                account_type,
+                external_account_id,
+                created_at,
+                updated_at
+            FROM accounts
+            """
+        )
+        conn.execute("DROP TABLE accounts")
+        conn.execute("ALTER TABLE accounts_rebuild RENAME TO accounts")
+    finally:
+        conn.execute("PRAGMA foreign_keys = ON")
+
+
 def rebuild_transactions_with_required_type(conn: sqlite3.Connection) -> None:
     conn.execute("PRAGMA foreign_keys = OFF")
     try:
@@ -242,7 +293,6 @@ def rebuild_transactions_with_required_type(conn: sqlite3.Connection) -> None:
                 transaction_type TEXT NOT NULL,
                 clean_description TEXT,
                 amount_cents INTEGER NOT NULL,
-                currency TEXT NOT NULL DEFAULT 'USD',
                 external_transaction_id TEXT,
                 raw_imported_row_id INTEGER REFERENCES raw_imported_rows(id) ON DELETE SET NULL,
                 transaction_hash TEXT NOT NULL,
@@ -265,7 +315,6 @@ def rebuild_transactions_with_required_type(conn: sqlite3.Connection) -> None:
                 transaction_type,
                 clean_description,
                 amount_cents,
-                currency,
                 external_transaction_id,
                 raw_imported_row_id,
                 transaction_hash,
@@ -281,7 +330,6 @@ def rebuild_transactions_with_required_type(conn: sqlite3.Connection) -> None:
                 COALESCE(transaction_type, CASE WHEN amount_cents > 0 THEN 'income' ELSE 'splurge' END),
                 clean_description,
                 amount_cents,
-                currency,
                 external_transaction_id,
                 raw_imported_row_id,
                 transaction_hash,
@@ -321,6 +369,8 @@ def schema_is_compatible(conn: sqlite3.Connection) -> bool:
         and EXPECTED_CATEGORY_COLUMNS.issubset(category_columns)
         and EXPECTED_TRANSACTION_COLUMNS.issubset(transaction_columns)
         and int(transaction_column_info["transaction_type"][3]) == 1
+        and "currency" not in account_columns
+        and "currency" not in transaction_columns
         and "status" not in transaction_columns
         and "payee" not in transaction_columns
         and "description" not in transaction_columns

@@ -116,7 +116,7 @@ python scripts/db_cli.py query-readonly "SELECT COUNT(*) AS transaction_count FR
 Safe write commands validate inputs and print the changed row as JSON. `tag-transaction` expects the tag to already exist; create it first with `add-tag`.
 
 ```powershell
-python scripts/db_cli.py add-account --name Checking --institution "Example Bank" --account-type checking --currency USD
+python scripts/db_cli.py add-account --name Checking --institution "Example Bank" --account-type checking
 ```
 
 ```json
@@ -124,7 +124,6 @@ python scripts/db_cli.py add-account --name Checking --institution "Example Bank
   "account": {
     "account_type": "checking",
     "created_at": "2026-06-08 15:45:00",
-    "currency": "USD",
     "external_account_id": null,
     "id": 1,
     "institution": "Example Bank",

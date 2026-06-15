@@ -30,7 +30,6 @@ FORBIDDEN_SQL_WORDS = {
     "detach",
     "reindex",
 }
-VALID_CURRENCY_RE = re.compile(r"^[A-Z]{3}$")
 MATCH_FIELDS = {"category", "description"}
 MATCH_TYPES = {"contains", "equals", "starts_with", "regex"}
 IMPORTABLE_RAW_ROW_STATUSES = {"new", "ready"}
@@ -93,13 +92,6 @@ def optional_nonempty(value: str | None, field_name: str) -> str | None:
     if value is None:
         return None
     return nonempty(value, field_name)
-
-
-def normalize_currency(value: str) -> str:
-    currency = nonempty(value, "currency").upper()
-    if not VALID_CURRENCY_RE.match(currency):
-        raise CliError("currency must be a three-letter ISO code such as USD.")
-    return currency
 
 
 def positive_int(value: str) -> int:
@@ -238,7 +230,6 @@ def fetch_account(conn: sqlite3.Connection, account_id: int) -> sqlite3.Row:
             a.institution_id,
             i.name AS institution,
             a.account_type,
-            a.currency,
             a.external_account_id,
             a.created_at,
             a.updated_at
@@ -700,7 +691,6 @@ def fetch_raw_rows_for_import(conn: sqlite3.Connection, row_ids: list[int]) -> l
             rr.id,
             rr.imported_source_id,
             src.account_id,
-            a.currency,
             rr.raw_date,
             rr.raw_category,
             rr.raw_description,
@@ -710,7 +700,6 @@ def fetch_raw_rows_for_import(conn: sqlite3.Connection, row_ids: list[int]) -> l
             rr.raw_row_hash
         FROM raw_imported_rows rr
         JOIN imported_source src ON src.id = rr.imported_source_id
-        JOIN accounts a ON a.id = src.account_id
         WHERE rr.id IN ({placeholders})
         ORDER BY rr.id
         """,
@@ -818,11 +807,10 @@ def import_raw_rows(
                     transaction_type,
                     clean_description,
                     amount_cents,
-                    currency,
                     raw_imported_row_id,
                     transaction_hash
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     raw_row["account_id"],
@@ -832,7 +820,6 @@ def import_raw_rows(
                     rule_result["transaction_type"],
                     clean_description,
                     amount_cents,
-                    raw_row["currency"],
                     raw_row["id"],
                     transaction_hash,
                 ),
@@ -973,7 +960,6 @@ def command_recent(args: argparse.Namespace) -> None:
                 t.clean_description,
                 t.amount_cents,
                 printf('%.2f', t.amount_cents / 100.0) AS amount,
-                t.currency,
                 c.name AS category
             FROM transactions t
             JOIN accounts a ON a.id = t.account_id
@@ -995,7 +981,6 @@ def command_accounts(args: argparse.Namespace) -> None:
                 a.name,
                 i.name AS institution,
                 a.account_type,
-                a.currency,
                 COUNT(t.id) AS transaction_count
             FROM accounts a
             LEFT JOIN institutions i ON i.id = a.institution_id
@@ -1020,7 +1005,6 @@ def command_transaction(args: argparse.Namespace) -> None:
                 t.clean_description,
                 t.amount_cents,
                 printf('%.2f', t.amount_cents / 100.0) AS amount,
-                t.currency,
                 c.name AS category,
                 t.external_transaction_id,
                 rr.id AS raw_imported_row_id,
@@ -1167,7 +1151,6 @@ def command_add_account(args: argparse.Namespace) -> None:
     name = nonempty(args.name, "name")
     institution = optional_nonempty(args.institution, "institution")
     account_type = optional_nonempty(args.account_type, "account_type")
-    currency = normalize_currency(args.currency)
     external_account_id = optional_nonempty(args.external_account_id, "external_account_id")
 
     with connect(args.db) as conn:
@@ -1175,10 +1158,10 @@ def command_add_account(args: argparse.Namespace) -> None:
         try:
             cursor = conn.execute(
                 """
-                INSERT INTO accounts (institution_id, name, account_type, currency, external_account_id)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO accounts (institution_id, name, account_type, external_account_id)
+                VALUES (?, ?, ?, ?)
                 """,
-                (institution_id, name, account_type, currency, external_account_id),
+                (institution_id, name, account_type, external_account_id),
             )
         except sqlite3.IntegrityError as exc:
             raise CliError(f"Could not add account: {exc}") from exc
@@ -1223,9 +1206,6 @@ def command_update_account(args: argparse.Namespace) -> None:
         if args.account_type is not None:
             updates.append("account_type = ?")
             values.append(optional_nonempty(args.account_type, "account_type"))
-        if args.currency is not None:
-            updates.append("currency = ?")
-            values.append(normalize_currency(args.currency))
         if args.external_account_id is not None:
             updates.append("external_account_id = ?")
             values.append(optional_nonempty(args.external_account_id, "external_account_id"))
@@ -1684,7 +1664,6 @@ def build_parser() -> argparse.ArgumentParser:
     add_account_parser.add_argument("--name", required=True)
     add_account_parser.add_argument("--institution")
     add_account_parser.add_argument("--account-type")
-    add_account_parser.add_argument("--currency", default="USD")
     add_account_parser.add_argument("--external-account-id")
     add_account_parser.set_defaults(func=command_add_account)
 
@@ -1698,7 +1677,6 @@ def build_parser() -> argparse.ArgumentParser:
     update_account_parser.add_argument("--name")
     update_account_parser.add_argument("--institution")
     update_account_parser.add_argument("--account-type")
-    update_account_parser.add_argument("--currency")
     update_account_parser.add_argument("--external-account-id")
     update_account_parser.set_defaults(func=command_update_account)
 

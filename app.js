@@ -143,6 +143,8 @@
     dashboardCustomEnd: document.querySelector("#dashboardCustomEnd"),
     accountDialog: document.querySelector("#accountDialog"),
     accountDialogTitle: document.querySelector("#accountDialogTitle"),
+    accountTypeInput: document.querySelector("#accountTypeInput"),
+    accountTypeGroup: document.querySelector("#accountTypeGroup"),
     accountCancelButton: document.querySelector("#accountCancelButton"),
     accountDismissButton: document.querySelector("#accountDismissButton"),
     accountSubmitButton: document.querySelector("#accountSubmitButton"),
@@ -263,6 +265,8 @@
   elements.accountCancelButton.addEventListener("click", closeAccountDialog);
   elements.accountDismissButton.addEventListener("click", closeAccountDialog);
   elements.accountDeleteButton.addEventListener("click", deleteEditingAccount);
+  elements.accountTypeGroup.addEventListener("click", (event) => selectTypeFromGroup(event, elements.accountTypeInput, elements.accountTypeGroup));
+  elements.accountTypeGroup.addEventListener("keydown", (event) => navigateTypeGroup(event, elements.accountTypeInput, elements.accountTypeGroup));
   elements.accountDialog.addEventListener("close", () => {
     editingAccountId = null;
   });
@@ -662,8 +666,7 @@
     elements.accountMessage.textContent = "";
     elements.accountMessage.classList.remove("error");
     elements.accountForm.reset();
-    elements.accountForm.elements.accountType.value = "checking";
-    elements.accountForm.elements.currency.value = "USD";
+    setTypeGroupValue(elements.accountTypeInput, elements.accountTypeGroup, "credit");
     openModal(elements.accountDialog);
   }
 
@@ -678,8 +681,7 @@
     const form = elements.accountForm;
     form.elements.name.value = account.name || "";
     form.elements.institution.value = account.institution || "";
-    form.elements.accountType.value = account.account_type || "checking";
-    form.elements.currency.value = account.currency || "USD";
+    setTypeGroupValue(elements.accountTypeInput, elements.accountTypeGroup, accountTypeValues().has(account.account_type) ? account.account_type : "checking");
     openModal(elements.accountDialog);
   }
 
@@ -691,12 +693,6 @@
     event.preventDefault();
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
-    const currency = clean(form.get("currency")).toUpperCase();
-
-    if (!/^[A-Z]{3}$/.test(currency)) {
-      setModalMessage(elements.accountMessage, "Currency must be a three-letter code.", true);
-      return;
-    }
 
     try {
       const isEdit = accountDialogMode === "edit";
@@ -706,7 +702,6 @@
           name: clean(form.get("name")),
           institution: clean(form.get("institution")) || null,
           account_type: clean(form.get("accountType")) || null,
-          currency,
         }),
       });
       closeAccountDialog();
@@ -1292,7 +1287,6 @@
     renderDefinitionList(elements.transactionMetadata, [
       ["ID", transaction.id],
       ["Account", transaction.account],
-      ["Currency", transaction.currency],
       ["Transaction date", transaction.transaction_date],
       ["Raw row ID", transaction.raw_imported_row_id],
       ["Import file", transaction.import_filename],
@@ -1365,6 +1359,10 @@
       return;
     }
     closeTransactionDialog();
+  }
+
+  function accountTypeValues() {
+    return new Set(["credit", "checking", "savings"]);
   }
 
   function suppressButtonState(button) {
@@ -2566,10 +2564,10 @@
 
   function formatDollars(cents) {
     const amount = Math.abs(cents) / 100;
-    const formatted = new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency: "USD",
-    }).format(amount);
+    const formatted = `$${new Intl.NumberFormat(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount)}`;
     return cents < 0 ? `-${formatted}` : formatted;
   }
 

@@ -342,6 +342,23 @@
         </button>
       </div>
       <div class="form-grid">
+        <div class="type-button-row">
+          <input name="accountType" type="hidden" id="accountTypeInput" value="checking">
+          <div class="connected-button-group" id="accountTypeGroup" role="radiogroup" aria-label="Account type">
+            <button type="button" class="connected-button" data-type-value="credit" role="radio">
+              <span class="material-symbols-outlined" aria-hidden="true">credit_card</span>
+              <span>Credit</span>
+            </button>
+            <button type="button" class="connected-button" data-type-value="checking" role="radio">
+              <span class="material-symbols-outlined" aria-hidden="true">account_balance</span>
+              <span>Checking</span>
+            </button>
+            <button type="button" class="connected-button" data-type-value="savings" role="radio">
+              <span class="material-symbols-outlined" aria-hidden="true">savings</span>
+              <span>Savings</span>
+            </button>
+          </div>
+        </div>
         <label>
           <span>Name</span>
           <input name="name" type="text" required autocomplete="off">
@@ -349,20 +366,6 @@
         <label>
           <span>Institution</span>
           <input name="institution" type="text" autocomplete="off">
-        </label>
-        <label>
-          <span>Account type</span>
-          <select name="accountType">
-            <option value="checking">Checking</option>
-            <option value="savings">Savings</option>
-            <option value="credit">Credit</option>
-            <option value="cash">Cash</option>
-            <option value="investment">Investment</option>
-          </select>
-        </label>
-        <label>
-          <span>Currency</span>
-          <input name="currency" type="text" maxlength="3" required>
         </label>
       </div>
       <div id="accountMessage" class="modal-message" role="status" aria-live="polite"></div>

@@ -32,7 +32,6 @@ from db_cli import (  # noqa: E402
     get_or_create_institution,
     import_raw_rows,
     nonempty,
-    normalize_currency,
     optional_nonempty,
     read_csv_import_rows,
     require_category,
@@ -183,16 +182,15 @@ def create_account():
     name = nonempty(str(data.get("name", "")), "name")
     institution = optional_nonempty(data.get("institution"), "institution")
     account_type = optional_nonempty(data.get("account_type"), "account_type")
-    currency = normalize_currency(str(data.get("currency", "USD")))
 
     with closing(connect(current_db_path())) as conn:
         institution_id = get_or_create_institution(conn, institution)
         cursor = conn.execute(
             """
-            INSERT INTO accounts (institution_id, name, account_type, currency)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO accounts (institution_id, name, account_type)
+            VALUES (?, ?, ?)
             """,
-            (institution_id, name, account_type, currency),
+            (institution_id, name, account_type),
         )
         account = dict(fetch_account(conn, int(cursor.lastrowid)))
         state = read_state(conn)
@@ -219,9 +217,6 @@ def update_account(account_id: int):
         if "account_type" in data:
             updates.append("account_type = ?")
             values.append(optional_nonempty(data.get("account_type"), "account_type"))
-        if "currency" in data:
-            updates.append("currency = ?")
-            values.append(normalize_currency(str(data.get("currency", ""))))
         if not updates:
             raise CliError("No changes requested.")
 
@@ -887,7 +882,6 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
                 a.institution_id,
                 i.name AS institution,
                 a.account_type,
-                a.currency,
                 a.external_account_id,
                 a.created_at,
                 a.updated_at
@@ -952,7 +946,6 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
                 t.clean_description,
                 t.amount_cents,
                 printf('%.2f', t.amount_cents / 100.0) AS amount,
-                t.currency,
                 t.transaction_hash,
                 t.raw_imported_row_id,
                 rr.raw_date,
