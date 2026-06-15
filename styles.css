@@ -78,6 +78,10 @@ button {
   cursor: pointer;
 }
 
+button[hidden] {
+  display: none;
+}
+
 .app-shell {
   width: min(1240px, calc(100% - 32px));
   margin: 0 auto;
@@ -135,16 +139,65 @@ h2 {
 .icon-button,
 .primary,
 .danger-button {
-  min-height: 38px;
-  border-radius: 7px;
-  padding: 0 14px;
-  font-weight: 700;
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  border-radius: 20px;
+  padding: 0 24px;
+  font-size: 0.88rem;
+  font-weight: 760;
+  line-height: 1;
+  overflow: hidden;
+  transition: background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+
+.icon-button::before,
+.primary::before,
+.danger-button::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: currentColor;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms ease;
+}
+
+.icon-button:hover::before,
+.primary:hover::before,
+.danger-button:hover::before {
+  opacity: 0.08;
+}
+
+.icon-button:active,
+.primary:active,
+.danger-button:active {
+  transform: translateY(1px);
+}
+
+.icon-button:active::before,
+.primary:active::before,
+.danger-button:active::before {
+  opacity: 0.12;
+}
+
+.icon-button:disabled,
+.primary:disabled,
+.danger-button:disabled {
+  cursor: default;
+  opacity: 0.48;
+  transform: none;
 }
 
 .icon-button {
-  background: var(--surface);
+  background: transparent;
   border: 1px solid var(--border);
-  color: var(--text);
+  color: var(--accent-dark);
 }
 
 .profile-button {
@@ -228,24 +281,24 @@ h2 {
 
 .primary {
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-contrast);
+  box-shadow: none;
 }
 
 .primary:hover {
-  background: var(--accent-dark);
+  background: var(--accent);
 }
 
 .danger-button {
   flex: 0 0 auto;
-  background: var(--danger-bg);
+  background: transparent;
   border: 1px solid var(--danger-border);
   color: var(--danger);
   font-weight: 800;
 }
 
 .danger-button:disabled {
-  cursor: progress;
-  opacity: 0.68;
+  cursor: default;
 }
 
 .fab-button {
@@ -274,10 +327,11 @@ h2 {
   content: "";
   position: absolute;
   inset: 0;
-  z-index: -1;
+  z-index: 0;
   border-radius: inherit;
   background: currentColor;
   opacity: 0;
+  pointer-events: none;
   transition: opacity 150ms ease;
 }
 
@@ -665,15 +719,16 @@ input[type="file"] {
 }
 
 input[type="file"]::file-selector-button {
-  height: 26px;
+  height: 32px;
   margin: 0 8px 0 0;
   border: 0;
-  border-radius: 3px;
-  padding: 0 10px;
-  background: var(--surface-muted);
-  color: var(--text);
+  border-radius: 16px;
+  padding: 0 14px;
+  background: var(--accent);
+  color: var(--accent-contrast);
   font: inherit;
-  line-height: 26px;
+  font-weight: 760;
+  line-height: 32px;
 }
 
 .theme-toggle {
@@ -922,18 +977,42 @@ td.amount {
 }
 
 .range-setting-button {
+  position: relative;
+  isolation: isolate;
   display: inline-flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 42px;
-  padding: 0 12px;
-  background: var(--surface-muted);
-  color: var(--text);
+  min-height: 40px;
+  padding: 0 16px;
+  background: transparent;
+  color: var(--accent-dark);
   border: 1px solid var(--border);
-  border-radius: 6px;
-  font-weight: 720;
+  border-radius: 20px;
+  font-weight: 760;
   text-align: left;
+  overflow: hidden;
+}
+
+.range-setting-button::before,
+.range-preset-button::before,
+.calendar-nav-button::before,
+.calendar-day::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: currentColor;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms ease;
+}
+
+.range-setting-button:hover::before,
+.range-preset-button:hover::before,
+.calendar-nav-button:hover::before,
+.calendar-day:hover::before {
+  opacity: 0.08;
 }
 
 .setting-note {
@@ -1050,9 +1129,20 @@ td.amount {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
-  background: none;
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  padding: 0;
+  border-radius: 20px;
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+}
+
+.icon-only:hover {
   color: var(--text);
+  background: var(--surface-muted);
 }
 
 .icon-only.danger {
@@ -1135,14 +1225,17 @@ td.amount {
 }
 
 .range-preset-button {
-  min-height: 42px;
-  padding: 0 12px;
+  position: relative;
+  isolation: isolate;
+  min-height: 40px;
+  padding: 0 16px;
   background: transparent;
-  color: var(--text);
+  color: var(--accent-dark);
   border: 1px solid transparent;
-  border-radius: 6px;
-  font-weight: 720;
+  border-radius: 20px;
+  font-weight: 760;
   text-align: left;
+  overflow: hidden;
 }
 
 .range-preset-button.is-active {
@@ -1189,8 +1282,13 @@ td.amount {
 }
 
 .calendar-nav-button {
-  width: 36px;
-  height: 36px;
+  position: relative;
+  isolation: isolate;
+  width: 40px;
+  height: 40px;
+  border-radius: 20px;
+  color: var(--accent-dark);
+  overflow: hidden;
 }
 
 .calendar-grid {
@@ -1217,10 +1315,13 @@ td.amount {
 }
 
 .calendar-day {
+  position: relative;
+  isolation: isolate;
   background: transparent;
   color: var(--text);
-  border-radius: 0;
+  border-radius: 18px;
   font-weight: 720;
+  overflow: hidden;
 }
 
 .calendar-day.is-in-range {

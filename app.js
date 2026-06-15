@@ -282,7 +282,7 @@
   elements.transactionForm.addEventListener("submit", saveTransaction);
   elements.transactionCloseButton.addEventListener("click", closeTransactionDialog);
   elements.transactionEditButton.addEventListener("click", () => setTransactionEditMode(true));
-  elements.transactionCancelButton.addEventListener("click", cancelTransactionEdit);
+  elements.transactionCancelButton.addEventListener("click", cancelTransactionDialogAction);
   elements.transactionDeleteButton.addEventListener("click", deleteActiveTransaction);
   elements.transactionCategoryButton.addEventListener("click", () => {
     if (transactionEditMode) {
@@ -1268,7 +1268,7 @@
     });
     elements.transactionCategoryButton.disabled = !isEditing;
     elements.transactionEditButton.hidden = isEditing;
-    elements.transactionCancelButton.hidden = !isEditing;
+    elements.transactionCancelButton.hidden = false;
     elements.transactionSaveButton.hidden = !isEditing;
   }
 
@@ -1310,6 +1310,14 @@
     }
     populateTransactionDialog(transaction);
     setTransactionEditMode(false);
+  }
+
+  function cancelTransactionDialogAction() {
+    if (transactionEditMode) {
+      cancelTransactionEdit();
+      return;
+    }
+    closeTransactionDialog();
   }
 
   async function saveTransaction(event) {
