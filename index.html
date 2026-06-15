@@ -385,29 +385,24 @@
           <input name="name" type="text" required autocomplete="off">
         </label>
         <label>
-          <span>Match field</span>
-          <select name="matchField">
-            <option value="description">Description</option>
-            <option value="category">Category</option>
-          </select>
+          <span>Priority</span>
+          <input name="priority" type="number" min="0" value="100">
         </label>
-        <label>
-          <span>Match type</span>
-          <select name="matchType">
-            <option value="contains">Contains</option>
-            <option value="equals">Equals</option>
-            <option value="starts_with">Starts with</option>
-            <option value="regex">Regex</option>
-          </select>
+        <label class="match-toggle-field">
+          <span class="match-toggle-label">
+            <input name="matchDescriptionEnabled" type="checkbox" checked>
+            <span>Match description</span>
+          </span>
+          <input name="matchDescription" type="text" autocomplete="off">
         </label>
-        <label>
-          <span>Match value</span>
-          <input name="matchValue" type="text" required autocomplete="off">
+        <label class="match-toggle-field">
+          <span class="match-toggle-label">
+            <input name="matchCategoryEnabled" type="checkbox">
+            <span>Match category</span>
+          </span>
+          <input name="matchCategory" type="text" autocomplete="off">
         </label>
-        <label>
-          <span>Clean description</span>
-          <input name="setCleanDescription" type="text" autocomplete="off">
-        </label>
+        <div class="form-divider" aria-hidden="true"></div>
         <label>
           <span>Type</span>
           <select name="setTransactionType">
@@ -421,14 +416,14 @@
           <span>Clean Category</span>
           <select name="setCategoryId" id="ruleCategorySelect"></select>
         </label>
+        <label>
+          <span>Clean description</span>
+          <input name="setCleanDescription" type="text" autocomplete="off">
+        </label>
         <div class="form-field">
-          <span>Tag</span>
+          <span>Tags</span>
           <div id="ruleTags" class="tag-check-list"></div>
         </div>
-        <label>
-          <span>Priority</span>
-          <input name="priority" type="number" min="0" value="100">
-        </label>
       </div>
       <div id="ruleMessage" class="modal-message" role="status" aria-live="polite"></div>
       <div class="modal-actions">

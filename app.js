@@ -226,6 +226,8 @@
   elements.ruleCancelButton.addEventListener("click", closeRuleDialog);
   elements.ruleDismissButton.addEventListener("click", closeRuleDialog);
   elements.ruleDeleteButton.addEventListener("click", deleteEditingRule);
+  elements.ruleForm.elements.matchDescriptionEnabled.addEventListener("change", updateRuleMatchInputs);
+  elements.ruleForm.elements.matchCategoryEnabled.addEventListener("change", updateRuleMatchInputs);
   elements.ruleDialog.addEventListener("close", () => {
     editingRuleId = null;
   });
@@ -809,6 +811,24 @@
     return comfortableCategoryColors[Math.floor(Math.random() * comfortableCategoryColors.length)];
   }
 
+  function updateRuleMatchInputs() {
+    const form = elements.ruleForm;
+    const descriptionEnabled = form.elements.matchDescriptionEnabled.checked;
+    const categoryEnabled = form.elements.matchCategoryEnabled.checked;
+    form.elements.matchDescription.disabled = !descriptionEnabled;
+    form.elements.matchDescription.required = descriptionEnabled;
+    form.elements.matchCategory.disabled = !categoryEnabled;
+    form.elements.matchCategory.required = categoryEnabled;
+  }
+
+  function ruleMatchValues(rule) {
+    const description = clean(rule.match_description) ||
+      (rule.match_field === "description" ? clean(rule.match_value) : "");
+    const category = clean(rule.match_category) ||
+      (rule.match_field === "category" ? clean(rule.match_value) : "");
+    return { description, category };
+  }
+
   function openRuleAddDialog() {
     ruleDialogMode = "add";
     editingRuleId = null;
@@ -818,9 +838,10 @@
     elements.ruleSubmitButton.textContent = "Add Rule";
     elements.ruleDeleteButton.hidden = true;
     elements.ruleForm.reset();
-    elements.ruleForm.elements.matchField.value = "description";
-    elements.ruleForm.elements.matchType.value = "contains";
+    elements.ruleForm.elements.matchDescriptionEnabled.checked = true;
+    elements.ruleForm.elements.matchCategoryEnabled.checked = false;
     elements.ruleForm.elements.priority.value = "100";
+    updateRuleMatchInputs();
     renderRuleTags([]);
     openModal(elements.ruleDialog);
   }
@@ -834,15 +855,18 @@
     elements.ruleSubmitButton.textContent = "Save";
     elements.ruleDeleteButton.hidden = false;
     const form = elements.ruleForm;
+    const matches = ruleMatchValues(rule);
     form.elements.name.value = rule.name || "";
-    form.elements.matchField.value = rule.match_field || "description";
-    form.elements.matchType.value = rule.match_type || "contains";
-    form.elements.matchValue.value = rule.match_value || "";
+    form.elements.matchDescriptionEnabled.checked = Boolean(matches.description);
+    form.elements.matchDescription.value = matches.description;
+    form.elements.matchCategoryEnabled.checked = Boolean(matches.category);
+    form.elements.matchCategory.value = matches.category;
     form.elements.setCleanDescription.value = rule.set_clean_description || "";
     form.elements.setTransactionType.value = rule.set_transaction_type || "";
     form.elements.setCategoryId.value = rule.set_category_id === null ? "" : String(rule.set_category_id);
     renderRuleTags(rule.tag_ids || (rule.add_tag_id === null ? [] : [rule.add_tag_id]));
     form.elements.priority.value = String(rule.priority ?? 100);
+    updateRuleMatchInputs();
     openModal(elements.ruleDialog);
   }
 
@@ -857,9 +881,16 @@
     const setCleanDescription = clean(form.get("setCleanDescription"));
     const setTransactionType = clean(form.get("setTransactionType"));
     const setCategoryId = Number(form.get("setCategoryId")) || null;
+    const matchDescription = form.has("matchDescriptionEnabled") ? clean(form.get("matchDescription")) : null;
+    const matchCategory = form.has("matchCategoryEnabled") ? clean(form.get("matchCategory")) : null;
     const addTagIds = [...elements.ruleTags.querySelectorAll("input[type='checkbox']:checked")]
       .map((checkbox) => Number(checkbox.value))
       .filter((tagId) => Number.isInteger(tagId) && tagId > 0);
+
+    if (!matchDescription && !matchCategory) {
+      setModalMessage(elements.ruleMessage, "Match description, category, or both.", true);
+      return;
+    }
 
     if (!setCategoryId && !setCleanDescription && !setTransactionType && !addTagIds.length) {
       setModalMessage(elements.ruleMessage, "Set a category, description, type, or tag.", true);
@@ -872,9 +903,8 @@
         method: isEdit ? "PATCH" : "POST",
         body: JSON.stringify({
           name: clean(form.get("name")),
-          match_field: clean(form.get("matchField")),
-          match_type: clean(form.get("matchType")),
-          match_value: clean(form.get("matchValue")),
+          match_description: matchDescription || null,
+          match_category: matchCategory || null,
           set_category_id: setCategoryId,
           set_clean_description: setCleanDescription || null,
           set_transaction_type: setTransactionType || null,
@@ -1618,12 +1648,25 @@
         const category = state.categories.find((candidate) => candidate.id === rule.set_category_id);
         const row = tableRow([
           `${rule.name} (${rule.priority})`,
-          `${rule.match_field} ${rule.match_type} "${rule.match_value}"`,
+          ruleMatchSummary(rule),
           ruleActions(rule, category, tag) || "-",
         ]);
         makeEditableRow(row, `Edit rule ${rule.name}`, () => openRuleEditDialog(rule));
         tbody.appendChild(row);
       });
+  }
+
+  function ruleMatchSummary(rule) {
+    const matches = ruleMatchValues(rule);
+    const list = document.createElement("div");
+    list.className = "effects-list";
+    if (matches.description) {
+      list.appendChild(el("span", `Description contains "${matches.description}"`));
+    }
+    if (matches.category) {
+      list.appendChild(el("span", `Category contains "${matches.category}"`));
+    }
+    return list.childElementCount ? list : "-";
   }
 
   function renderLogs() {

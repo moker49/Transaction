@@ -49,6 +49,8 @@ EXPECTED_TRANSACTION_RULE_COLUMNS = {
     "match_field",
     "match_type",
     "match_value",
+    "match_description",
+    "match_category",
     "set_category_id",
     "set_clean_description",
     "set_transaction_type",
@@ -175,6 +177,23 @@ def migrate_existing_schema(conn: sqlite3.Connection, tables: Iterable[str]) -> 
                     CHECK (set_transaction_type IS NULL OR set_transaction_type IN ('income', 'bill', 'splurge'))
                 """
             )
+        if "match_description" not in rule_columns:
+            conn.execute("ALTER TABLE transaction_import_rules ADD COLUMN match_description TEXT")
+        if "match_category" not in rule_columns:
+            conn.execute("ALTER TABLE transaction_import_rules ADD COLUMN match_category TEXT")
+        conn.execute(
+            """
+            UPDATE transaction_import_rules
+            SET match_description = CASE
+                    WHEN match_description IS NULL AND match_field = 'description' THEN match_value
+                    ELSE match_description
+                END,
+                match_category = CASE
+                    WHEN match_category IS NULL AND match_field = 'category' THEN match_value
+                    ELSE match_category
+                END
+            """
+        )
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS transaction_import_rule_tags (

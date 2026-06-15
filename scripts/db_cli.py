@@ -166,6 +166,37 @@ def validate_rule_actions(
         raise CliError("A transaction rule must set a category, set a description, set a type, and/or add a tag.")
 
 
+def parse_rule_match_values(
+    match_description: str | None = None,
+    match_category: str | None = None,
+    match_field: str | None = None,
+    match_value: str | None = None,
+    match_type: str | None = None,
+) -> tuple[str | None, str | None, str, str, str]:
+    if match_type is not None:
+        validate_match_type(match_type)
+
+    description = optional_nonempty(match_description, "match_description")
+    category = optional_nonempty(match_category, "match_category")
+
+    if description is None and category is None and (match_field is not None or match_value is not None):
+        if match_field is None or match_value is None:
+            raise CliError("Legacy rule matching requires both --match-field and --match-value.")
+        legacy_field = validate_match_field(match_field)
+        legacy_value = nonempty(match_value, "match_value")
+        if legacy_field == "description":
+            description = legacy_value
+        else:
+            category = legacy_value
+
+    if description is None and category is None:
+        raise CliError("Rule must match description, category, or both.")
+
+    legacy_field = "description" if description is not None else "category"
+    legacy_value = description if description is not None else category
+    return description, category, legacy_field, "contains", legacy_value
+
+
 def require_category(conn: sqlite3.Connection, category_id: int) -> None:
     row = conn.execute("SELECT 1 FROM categories WHERE id = ?", (category_id,)).fetchone()
     if row is None:
@@ -350,6 +381,8 @@ def fetch_transaction_rule(conn: sqlite3.Connection, rule_id: int) -> sqlite3.Ro
             r.match_field,
             r.match_type,
             r.match_value,
+            r.match_description,
+            r.match_category,
             r.set_category_id,
             c.name AS set_category,
             r.set_clean_description,
@@ -531,7 +564,17 @@ def parse_amount_cents(value: str | None) -> int:
 def fetch_active_rules(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     return conn.execute(
         """
-        SELECT id, match_field, match_type, match_value, set_category_id, set_clean_description, set_transaction_type, add_tag_id
+        SELECT
+            id,
+            match_field,
+            match_type,
+            match_value,
+            match_description,
+            match_category,
+            set_category_id,
+            set_clean_description,
+            set_transaction_type,
+            add_tag_id
         FROM transaction_import_rules
         WHERE is_active = 1
         ORDER BY priority, id
@@ -540,6 +583,15 @@ def fetch_active_rules(conn: sqlite3.Connection) -> list[sqlite3.Row]:
 
 
 def rule_matches(rule: sqlite3.Row, raw_row: sqlite3.Row) -> bool:
+    match_description = normalize_match_text(rule["match_description"])
+    match_category = normalize_match_text(rule["match_category"])
+    if match_description or match_category:
+        if match_description and match_description not in normalize_match_text(raw_row["raw_description"]):
+            return False
+        if match_category and match_category not in normalize_match_text(raw_row["raw_category"]):
+            return False
+        return True
+
     field_value = {
         "category": raw_row["raw_category"],
         "description": raw_row["raw_description"],
@@ -547,17 +599,7 @@ def rule_matches(rule: sqlite3.Row, raw_row: sqlite3.Row) -> bool:
     haystack = normalize_match_text(field_value)
     needle = normalize_match_text(rule["match_value"])
 
-    if not needle:
-        return False
-    if rule["match_type"] == "contains":
-        return needle in haystack
-    if rule["match_type"] == "equals":
-        return haystack == needle
-    if rule["match_type"] == "starts_with":
-        return haystack.startswith(needle)
-    if rule["match_type"] == "regex":
-        return re.search(rule["match_value"], field_value or "", flags=re.IGNORECASE) is not None
-    return False
+    return bool(needle) and needle in haystack
 
 
 def apply_import_rules(conn: sqlite3.Connection, raw_row: sqlite3.Row) -> dict[str, Any]:
@@ -1349,9 +1391,13 @@ def command_untag_transaction(args: argparse.Namespace) -> None:
 
 def command_add_transaction_rule(args: argparse.Namespace) -> None:
     name = nonempty(args.name, "name")
-    match_field = validate_match_field(args.match_field)
-    match_type = validate_match_type(args.match_type)
-    match_value = nonempty(args.match_value, "match_value")
+    match_description, match_category, match_field, match_type, match_value = parse_rule_match_values(
+        match_description=args.match_description,
+        match_category=args.match_category,
+        match_field=args.match_field,
+        match_value=args.match_value,
+        match_type=args.match_type,
+    )
     set_clean_description = optional_nonempty(args.set_clean_description, "set_clean_description")
     set_transaction_type = validate_transaction_type(args.set_type, "set_type")
     is_active = 0 if args.inactive else 1
@@ -1371,6 +1417,8 @@ def command_add_transaction_rule(args: argparse.Namespace) -> None:
                 match_field,
                 match_type,
                 match_value,
+                match_description,
+                match_category,
                 set_category_id,
                 set_clean_description,
                 set_transaction_type,
@@ -1378,13 +1426,15 @@ def command_add_transaction_rule(args: argparse.Namespace) -> None:
                 priority,
                 is_active
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 name,
                 match_field,
-                match_type,
+                "contains",
                 match_value,
+                match_description,
+                match_category,
                 args.set_category_id,
                 set_clean_description,
                 set_transaction_type,
@@ -1415,19 +1465,71 @@ def command_update_transaction_rule(args: argparse.Namespace) -> None:
         next_set_clean_description = current["set_clean_description"]
         next_set_transaction_type = current["set_transaction_type"]
         next_add_tag_id = current["add_tag_id"]
+        next_match_description = current["match_description"]
+        next_match_category = current["match_category"]
 
         if args.name is not None:
             updates.append("name = ?")
             values.append(nonempty(args.name, "name"))
-        if args.match_field is not None:
+        has_new_match_args = (
+            args.match_description is not None
+            or args.clear_match_description
+            or args.match_category is not None
+            or args.clear_match_category
+        )
+        has_legacy_match_args = args.match_field is not None or args.match_value is not None or args.match_type is not None
+        if has_new_match_args:
+            if args.clear_match_description:
+                next_match_description = None
+            elif args.match_description is not None:
+                next_match_description = nonempty(args.match_description, "match_description")
+            if args.clear_match_category:
+                next_match_category = None
+            elif args.match_category is not None:
+                next_match_category = nonempty(args.match_category, "match_category")
+            (
+                next_match_description,
+                next_match_category,
+                next_match_field,
+                next_match_type,
+                next_match_value,
+            ) = parse_rule_match_values(
+                match_description=next_match_description,
+                match_category=next_match_category,
+                match_type=args.match_type,
+            )
+            updates.append("match_description = ?")
+            values.append(next_match_description)
+            updates.append("match_category = ?")
+            values.append(next_match_category)
             updates.append("match_field = ?")
-            values.append(validate_match_field(args.match_field))
-        if args.match_type is not None:
+            values.append(next_match_field)
             updates.append("match_type = ?")
-            values.append(validate_match_type(args.match_type))
-        if args.match_value is not None:
+            values.append(next_match_type)
             updates.append("match_value = ?")
-            values.append(nonempty(args.match_value, "match_value"))
+            values.append(next_match_value)
+        elif has_legacy_match_args:
+            (
+                next_match_description,
+                next_match_category,
+                next_match_field,
+                next_match_type,
+                next_match_value,
+            ) = parse_rule_match_values(
+                match_field=args.match_field if args.match_field is not None else current["match_field"],
+                match_value=args.match_value if args.match_value is not None else current["match_value"],
+                match_type=args.match_type,
+            )
+            updates.append("match_description = ?")
+            values.append(next_match_description)
+            updates.append("match_category = ?")
+            values.append(next_match_category)
+            updates.append("match_field = ?")
+            values.append(next_match_field)
+            updates.append("match_type = ?")
+            values.append(next_match_type)
+            updates.append("match_value = ?")
+            values.append(next_match_value)
 
         if args.clear_category:
             next_set_category_id = None
@@ -1657,9 +1759,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Add a transaction import rule and print it as JSON.",
     )
     add_rule_parser.add_argument("--name", required=True)
-    add_rule_parser.add_argument("--match-field", choices=sorted(MATCH_FIELDS), required=True)
-    add_rule_parser.add_argument("--match-type", choices=sorted(MATCH_TYPES), required=True)
-    add_rule_parser.add_argument("--match-value", required=True)
+    add_rule_parser.add_argument("--match-description")
+    add_rule_parser.add_argument("--match-category")
+    add_rule_parser.add_argument("--match-field", choices=sorted(MATCH_FIELDS))
+    add_rule_parser.add_argument("--match-type", choices=sorted(MATCH_TYPES))
+    add_rule_parser.add_argument("--match-value")
     add_rule_parser.add_argument("--set-category-id", type=positive_int)
     add_rule_parser.add_argument("--set-clean-description")
     add_rule_parser.add_argument("--set-type", choices=sorted(TRANSACTION_TYPES))
@@ -1674,6 +1778,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     update_rule_parser.add_argument("id", type=positive_int)
     update_rule_parser.add_argument("--name")
+    update_rule_parser.add_argument("--match-description")
+    update_rule_parser.add_argument("--clear-match-description", action="store_true")
+    update_rule_parser.add_argument("--match-category")
+    update_rule_parser.add_argument("--clear-match-category", action="store_true")
     update_rule_parser.add_argument("--match-field", choices=sorted(MATCH_FIELDS))
     update_rule_parser.add_argument("--match-type", choices=sorted(MATCH_TYPES))
     update_rule_parser.add_argument("--match-value")

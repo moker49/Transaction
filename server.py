@@ -42,8 +42,6 @@ from db_cli import (  # noqa: E402
     raw_row_hash,
     sync_raw_row_ready_status,
     validate_transaction_type,
-    validate_match_field,
-    validate_match_type,
     validate_rule_actions,
     parse_amount_cents,
     make_transaction_hash,
@@ -368,14 +366,29 @@ def delete_category(category_id: int):
     return jsonify({"status": "deleted", "category": category, "state": state})
 
 
+def parse_rule_match_inputs(data: dict[str, Any]) -> tuple[str | None, str | None]:
+    match_description = optional_nonempty(data.get("match_description"), "match_description")
+    match_category = optional_nonempty(data.get("match_category"), "match_category")
+    if match_description is None and match_category is None:
+        raise CliError("Rule must match description, category, or both.")
+    return match_description, match_category
+
+
+def legacy_rule_match(match_description: str | None, match_category: str | None) -> tuple[str, str, str]:
+    if match_description is not None:
+        return "description", "contains", match_description
+    if match_category is not None:
+        return "category", "contains", match_category
+    raise CliError("Rule must match description, category, or both.")
+
+
 @app.post("/api/rules")
 def create_rule():
     ensure_database()
     data = request.get_json(silent=True) or {}
     name = nonempty(str(data.get("name", "")), "name")
-    match_field = validate_match_field(str(data.get("match_field", "")))
-    match_type = validate_match_type(str(data.get("match_type", "")))
-    match_value = nonempty(str(data.get("match_value", "")), "match_value")
+    match_description, match_category = parse_rule_match_inputs(data)
+    match_field, match_type, match_value = legacy_rule_match(match_description, match_category)
     set_category_id = int(data["set_category_id"]) if data.get("set_category_id") is not None else None
     set_clean_description = optional_nonempty(data.get("set_clean_description"), "set_clean_description")
     set_transaction_type = validate_transaction_type(data.get("set_transaction_type"), allow_empty=True)
@@ -397,19 +410,23 @@ def create_rule():
                 match_field,
                 match_type,
                 match_value,
+                match_description,
+                match_category,
                 set_category_id,
                 set_clean_description,
                 set_transaction_type,
                 add_tag_id,
                 priority
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 name,
                 match_field,
                 match_type,
                 match_value,
+                match_description,
+                match_category,
                 set_category_id,
                 set_clean_description,
                 set_transaction_type,
@@ -440,19 +457,20 @@ def update_rule(rule_id: int):
         next_set_transaction_type = current["set_transaction_type"]
         next_add_tag_id = current["add_tag_id"]
         next_add_tag_ids = fetch_rule_tag_ids(conn, rule_id)
+        next_match_description = current["match_description"]
+        next_match_category = current["match_category"]
 
         if "name" in data:
             updates.append("name = ?")
             values.append(nonempty(str(data.get("name", "")), "name"))
-        if "match_field" in data:
-            updates.append("match_field = ?")
-            values.append(validate_match_field(str(data.get("match_field", ""))))
-        if "match_type" in data:
-            updates.append("match_type = ?")
-            values.append(validate_match_type(str(data.get("match_type", ""))))
-        if "match_value" in data:
-            updates.append("match_value = ?")
-            values.append(nonempty(str(data.get("match_value", "")), "match_value"))
+        if "match_description" in data:
+            next_match_description = optional_nonempty(data.get("match_description"), "match_description")
+            updates.append("match_description = ?")
+            values.append(next_match_description)
+        if "match_category" in data:
+            next_match_category = optional_nonempty(data.get("match_category"), "match_category")
+            updates.append("match_category = ?")
+            values.append(next_match_category)
         if "set_category_id" in data:
             raw_category_id = data.get("set_category_id")
             next_set_category_id = int(raw_category_id) if raw_category_id is not None else None
@@ -491,6 +509,15 @@ def update_rule(rule_id: int):
             values.append(1 if data.get("is_active") else 0)
         if not updates:
             raise CliError("No changes requested.")
+
+        if "match_description" in data or "match_category" in data:
+            match_field, match_type, match_value = legacy_rule_match(next_match_description, next_match_category)
+            updates.append("match_field = ?")
+            values.append(match_field)
+            updates.append("match_type = ?")
+            values.append(match_type)
+            updates.append("match_value = ?")
+            values.append(match_value)
 
         validate_rule_actions(next_set_category_id, next_set_clean_description, next_set_transaction_type, next_add_tag_id)
 
@@ -989,6 +1016,8 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
                 r.match_field,
                 r.match_type,
                 r.match_value,
+                r.match_description,
+                r.match_category,
                 r.set_category_id,
                 c.name AS set_category,
                 r.set_clean_description,

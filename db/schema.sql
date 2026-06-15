@@ -63,6 +63,8 @@ CREATE TABLE IF NOT EXISTS transaction_import_rules (
     match_field TEXT NOT NULL,
     match_type TEXT NOT NULL,
     match_value TEXT NOT NULL,
+    match_description TEXT,
+    match_category TEXT,
     set_category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
     set_clean_description TEXT,
     set_transaction_type TEXT,

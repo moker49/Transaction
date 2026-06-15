@@ -478,6 +478,31 @@ h2 {
   gap: 3px;
 }
 
+.form-divider {
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--border);
+  min-height: 1px;
+}
+
+.match-toggle-field {
+  gap: 8px;
+}
+
+.match-toggle-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
+.match-toggle-label input {
+  width: 16px;
+  min-height: 16px;
+  padding: 0;
+}
+
 .content-grid {
   display: grid;
   gap: 18px;

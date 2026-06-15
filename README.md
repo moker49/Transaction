@@ -63,7 +63,7 @@ python scripts/db_cli.py add-note --transaction-id 1 --note "Reviewed"
 python scripts/db_cli.py add-tag --name reimbursable
 python scripts/db_cli.py tag-transaction --transaction-id 1 --tag reimbursable
 python scripts/db_cli.py untag-transaction --transaction-id 1 --tag reimbursable
-python scripts/db_cli.py add-transaction-rule --name Coffee --match-field description --match-type contains --match-value Starbucks --set-clean-description Starbucks
+python scripts/db_cli.py add-transaction-rule --name Coffee --match-description Starbucks --set-clean-description Starbucks
 python scripts/db_cli.py update-transaction-rule 1 --priority 10 --inactive
 ```
 
@@ -145,7 +145,7 @@ The CLI intentionally does not include broad destructive commands or delete comm
 
 ## Import Rules
 
-`transaction_import_rules` stores reusable rules for cleaning and categorizing imported rows. Rules match `category` or `description` with `contains`, `equals`, `starts_with`, or `regex`, then can set a category, set a clean description, and/or add a tag.
+`transaction_import_rules` stores reusable rules for cleaning and categorizing imported rows. Rules can contain-match description, category, or both, then can set a category, set a clean description, set a transaction type, and/or add tags.
 
 ```powershell
 python scripts/db_cli.py describe transaction_import_rules
@@ -155,13 +155,13 @@ python scripts/db_cli.py query-readonly "SELECT * FROM transaction_import_rules 
 Add or update rules through the CLI so input validation is repeatable:
 
 ```powershell
-python scripts/db_cli.py add-transaction-rule --name Coffee --match-field description --match-type contains --match-value Starbucks --set-clean-description Starbucks --priority 25
-python scripts/db_cli.py update-transaction-rule 1 --match-type starts_with --priority 10 --active
+python scripts/db_cli.py add-transaction-rule --name Coffee --match-description Starbucks --set-clean-description Starbucks --priority 25
+python scripts/db_cli.py update-transaction-rule 1 --match-description Starbucks --match-category Dining --priority 10 --active
 python scripts/db_cli.py update-transaction-rule 1 --set-category-id 2 --add-tag-id 3
 python scripts/db_cli.py update-transaction-rule 1 --clear-category --clear-tag
 ```
 
-Each rule must keep at least one action: `--set-category-id`, `--set-clean-description`, or `--add-tag-id`. `--set-category-id` and `--add-tag-id` must reference existing rows.
+Each rule must keep at least one action: `--set-category-id`, `--set-clean-description`, `--set-type`, or `--add-tag-id`. `--set-category-id` and `--add-tag-id` must reference existing rows.
 
 ## Raw Imported Rows
 
