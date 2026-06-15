@@ -190,7 +190,7 @@ h2 {
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--surface);
-  padding: 0 6.5px;
+  padding: 0 9px;
 }
 
 .theme-thumb {
@@ -1080,6 +1080,11 @@ td.amount {
   grid-template-columns: repeat(4, minmax(180px, 1fr));
 }
 
+.transaction-detail-grid > section + section {
+  padding-left: 18px;
+  border-left: 1px solid var(--border);
+}
+
 .transaction-detail-grid h3 {
   margin: 0 0 10px;
   color: var(--muted);
@@ -1396,6 +1401,13 @@ tr.is-matched-row td {
     grid-template-columns: 1fr;
   }
 
+  .transaction-detail-grid > section + section {
+    padding-top: 14px;
+    padding-left: 0;
+    border-top: 1px solid var(--border);
+    border-left: 0;
+  }
+
   #transactionsView th:nth-child(5),
   #transactionsView th:nth-child(6),
   #transactionsView td:nth-child(5),
@@ -1505,10 +1517,6 @@ tr.is-matched-row td {
 
   .settings-list {
     padding: 12px;
-  }
-
-  .dashboard-range-row {
-    align-items: flex-start;
   }
 
   .dashboard-range-picker {

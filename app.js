@@ -525,7 +525,6 @@
     rawRowNotes.clear();
     visibleRawRows = [];
     setMessage("");
-    setDevMessage(event.currentTarget.checked ? "Using dummy database." : "Using primary database.");
     loadInitialState();
   }
 
@@ -534,15 +533,12 @@
   }
 
   function renderDatabaseModeLabel() {
+    elements.dummyDatabaseLabel.textContent = "Database";
     if (isUsingDummyDatabase()) {
-      elements.dummyDatabaseLabel.textContent = "Using dummy database";
-      elements.dummyDatabaseDescription.textContent =
-        "All reads, writes, imports, and dev actions are using data/transactions.dummy.sqlite.";
+      elements.dummyDatabaseDescription.textContent = "Using dummy database";
       return;
     }
-    elements.dummyDatabaseLabel.textContent = "Using primary database";
-    elements.dummyDatabaseDescription.textContent =
-      "All reads, writes, imports, and dev actions are using data/transactions.sqlite.";
+    elements.dummyDatabaseDescription.textContent = "Using primary database";
   }
 
   async function loadInitialState() {
@@ -1795,7 +1791,7 @@
   async function regenerateDatabase() {
     const confirmed = await confirmDestructive({
       title: "Restore Dummy Database",
-      message: "Restore the dummy database to the saved baseline? The primary database will not be changed.",
+      message: destructiveMessage("Restore dummy database?"),
       actionLabel: "Restore",
     });
     if (!confirmed) {
