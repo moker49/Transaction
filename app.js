@@ -2167,12 +2167,11 @@
       .slice()
       .sort((a, b) => a.priority - b.priority || a.id - b.id)
       .forEach((rule) => {
-        const tag = state.tags.find((candidate) => candidate.id === rule.add_tag_id);
         const category = state.categories.find((candidate) => candidate.id === rule.set_category_id);
         const row = tableRow([
           `${rule.name} (${rule.priority})`,
           ruleMatchSummary(rule),
-          ruleActions(rule, category, tag) || "-",
+          ruleActions(rule, category),
         ]);
         makeEditableRow(row, `Edit rule ${rule.name}`, () => openRuleEditDialog(rule));
         tbody.appendChild(row);
@@ -2888,31 +2887,30 @@
     return (cents / 100).toFixed(2);
   }
 
-  function ruleActions(rule, category, tag) {
-    const actions = [];
-    if (category) {
-      actions.push(`category: ${category.name}`);
-    } else if (rule.set_category) {
-      actions.push(`category: ${rule.set_category}`);
-    }
-    if (rule.set_clean_description) {
-      actions.push(`description: ${rule.set_clean_description}`);
-    }
-    if (rule.set_transaction_type) {
-      actions.push(`type: ${transactionTypeLabel(rule.set_transaction_type)}`);
-    }
-    if (rule.tags?.length) {
-      actions.push(`tags: ${rule.tags.map((item) => item.name).join(", ")}`);
-    } else if (tag) {
-      actions.push(`tag: ${tag.name}`);
-    }
-    if (!actions.length) {
-      return "";
-    }
+  function ruleActions(rule, category) {
     const list = document.createElement("div");
     list.className = "effects-list";
-    actions.forEach((action) => list.appendChild(el("span", action)));
-    return list;
+
+    if (category) {
+      list.appendChild(plainCategoryChip(category));
+    } else if (rule.set_category) {
+      list.appendChild(el("span", rule.set_category));
+    }
+
+    if (rule.tags?.length) {
+      const tags = el("div", "", "effect-chip-row");
+      rule.tags.forEach((item) => tags.appendChild(staticTagChip(item.name)));
+      list.appendChild(tags);
+    } else if (rule.add_tag_id !== null && rule.add_tag_id !== undefined) {
+      const tag = state.tags.find((candidate) => candidate.id === rule.add_tag_id);
+      if (tag) {
+        const tags = el("div", "", "effect-chip-row");
+        tags.appendChild(staticTagChip(tag.name));
+        list.appendChild(tags);
+      }
+    }
+
+    return list.childElementCount ? list : "-";
   }
 
   function transactionTypeLabel(value) {

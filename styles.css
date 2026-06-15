@@ -668,6 +668,12 @@ h2 {
   gap: 3px;
 }
 
+.effect-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .form-divider {
   grid-column: 1 / -1;
   border-top: 1px solid var(--border);
@@ -1966,6 +1972,21 @@ tr.is-matched-row td {
   td {
     padding-right: 8px;
     padding-left: 8px;
+  }
+
+  .effect-chip-row {
+    flex-wrap: nowrap;
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .effect-chip-row::-webkit-scrollbar {
+    display: none;
+  }
+
+  .effect-chip-row .tag-chip {
+    flex: 0 0 auto;
   }
 
   .import-fab,

@@ -44,6 +44,7 @@ from db_cli import (  # noqa: E402
     validate_rule_actions,
     parse_amount_cents,
     make_transaction_hash,
+    normalize_text,
 )
 from init_db import init_db  # noqa: E402
 
@@ -604,7 +605,7 @@ def update_transaction(transaction_id: int):
             updates.append("clean_description = ?")
             values.append(next_clean_description)
         notes_requested = "notes" in data
-        notes = optional_nonempty(data.get("notes"), "notes") if notes_requested else None
+        notes = normalize_text(data.get("notes")) if notes_requested else None
         tag_ids_requested = "tag_ids" in data
         tag_ids: list[int] = []
         if tag_ids_requested:
@@ -1204,4 +1205,3 @@ if __name__ == "__main__":
         debug=True,
         use_reloader=False,
     )
-
