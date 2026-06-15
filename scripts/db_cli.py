@@ -1681,7 +1681,7 @@ def build_parser() -> argparse.ArgumentParser:
     import_raw_rows_parser.add_argument("raw_row_ids", nargs="+", type=positive_int)
     import_raw_rows_parser.set_defaults(func=command_import_raw_rows)
 
-    add_account_parser = subparsers.add_parser("add-account", help="Add an account and print the account as JSON.")
+    add_account_parser = subparsers.add_parser("add-account", help="Create an account and print the account as JSON.")
     add_account_parser.add_argument("--name", required=True)
     add_account_parser.add_argument("--institution")
     add_account_parser.add_argument("--account-type")
@@ -1707,12 +1707,12 @@ def build_parser() -> argparse.ArgumentParser:
     delete_account_parser.add_argument("id", type=positive_int)
     delete_account_parser.set_defaults(func=command_delete_account)
 
-    add_note_parser = subparsers.add_parser("add-note", help="Add a note to a transaction and print the note as JSON.")
+    add_note_parser = subparsers.add_parser("add-note", help="Create a note to a transaction and print the note as JSON.")
     add_note_parser.add_argument("--transaction-id", type=positive_int, required=True)
     add_note_parser.add_argument("--note", required=True)
     add_note_parser.set_defaults(func=command_add_note)
 
-    add_tag_parser = subparsers.add_parser("add-tag", help="Add a tag and print it as JSON.")
+    add_tag_parser = subparsers.add_parser("add-tag", help="Create a tag and print it as JSON.")
     add_tag_parser.add_argument("--name", required=True)
     add_tag_parser.set_defaults(func=command_add_tag)
 
@@ -1725,7 +1725,7 @@ def build_parser() -> argparse.ArgumentParser:
     delete_tag_parser.add_argument("id", type=positive_int)
     delete_tag_parser.set_defaults(func=command_delete_tag)
 
-    add_category_parser = subparsers.add_parser("add-category", help="Add a category and print it as JSON.")
+    add_category_parser = subparsers.add_parser("add-category", help="Create a category and print it as JSON.")
     add_category_parser.add_argument("--name", required=True)
     add_category_parser.set_defaults(func=command_add_category)
 
@@ -1756,7 +1756,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     add_rule_parser = subparsers.add_parser(
         "add-transaction-rule",
-        help="Add a transaction import rule and print it as JSON.",
+        help="Create a transaction import rule and print it as JSON.",
     )
     add_rule_parser.add_argument("--name", required=True)
     add_rule_parser.add_argument("--match-description")

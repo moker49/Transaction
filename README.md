@@ -152,7 +152,7 @@ python scripts/db_cli.py describe transaction_import_rules
 python scripts/db_cli.py query-readonly "SELECT * FROM transaction_import_rules WHERE is_active = 1 ORDER BY priority, id"
 ```
 
-Add or update rules through the CLI so input validation is repeatable:
+Create or update rules through the CLI so input validation is repeatable:
 
 ```powershell
 python scripts/db_cli.py add-transaction-rule --name Coffee --match-description Starbucks --set-clean-description Starbucks --priority 25

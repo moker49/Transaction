@@ -625,8 +625,8 @@
   function openAccountAddDialog() {
     accountDialogMode = "add";
     editingAccountId = null;
-    elements.accountDialogTitle.textContent = "Add Account";
-    elements.accountSubmitButton.textContent = "Add Account";
+    elements.accountDialogTitle.textContent = "Create Account";
+    elements.accountSubmitButton.textContent = "Create Account";
     elements.accountDeleteButton.hidden = true;
     elements.accountMessage.textContent = "";
     elements.accountMessage.classList.remove("error");
@@ -727,7 +727,7 @@
 
   async function addTag() {
     const name = await promptForText({
-      title: "Add Tag",
+      title: "Create Tag",
       label: "Tag name",
       value: "",
     });
@@ -747,8 +747,8 @@
 
   function openCategoryAddDialog() {
     editingCategoryId = null;
-    elements.categoryDialogTitle.textContent = "Add Category";
-    elements.categorySubmitButton.textContent = "Add Category";
+    elements.categoryDialogTitle.textContent = "Create Category";
+    elements.categorySubmitButton.textContent = "Create Category";
     elements.categoryDeleteButton.hidden = true;
     elements.categoryMessage.textContent = "";
     elements.categoryMessage.classList.remove("error");
@@ -835,8 +835,8 @@
     editingRuleId = null;
     elements.ruleMessage.textContent = "";
     elements.ruleMessage.classList.remove("error");
-    elements.ruleDialogTitle.textContent = "Add Rule";
-    elements.ruleSubmitButton.textContent = "Add Rule";
+    elements.ruleDialogTitle.textContent = "Create Rule";
+    elements.ruleSubmitButton.textContent = "Create Rule";
     elements.ruleDeleteButton.hidden = true;
     elements.ruleForm.reset();
     const matchDescription = clean(prefill.matchDescription);
