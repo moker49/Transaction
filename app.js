@@ -119,6 +119,8 @@
     ruleDialog: document.querySelector("#ruleDialog"),
     ruleCategoryInput: document.querySelector("#ruleCategoryInput"),
     ruleCategoryButton: document.querySelector("#ruleCategoryButton"),
+    ruleTypeInput: document.querySelector("#ruleTypeInput"),
+    ruleTypeGroup: document.querySelector("#ruleTypeGroup"),
     ruleTags: document.querySelector("#ruleTags"),
     ruleCancelButton: document.querySelector("#ruleCancelButton"),
     ruleDismissButton: document.querySelector("#ruleDismissButton"),
@@ -170,6 +172,8 @@
     transactionAccountSelect: document.querySelector("#transactionAccountSelect"),
     transactionCategoryInput: document.querySelector("#transactionCategoryInput"),
     transactionCategoryButton: document.querySelector("#transactionCategoryButton"),
+    transactionTypeInput: document.querySelector("#transactionTypeInput"),
+    transactionTypeGroup: document.querySelector("#transactionTypeGroup"),
     transactionCategoryFilter: document.querySelector("#transactionCategoryFilter"),
     transactionSearch: document.querySelector("#transactionSearch"),
     transactionTags: document.querySelector("#transactionTags"),
@@ -239,6 +243,8 @@
   elements.ruleForm.elements.matchDescriptionEnabled.addEventListener("change", updateRuleMatchInputs);
   elements.ruleForm.elements.matchCategoryEnabled.addEventListener("change", updateRuleMatchInputs);
   elements.ruleCategoryButton.addEventListener("click", () => openCategoryPicker("rule"));
+  elements.ruleTypeGroup.addEventListener("click", (event) => selectTypeFromGroup(event, elements.ruleTypeInput, elements.ruleTypeGroup));
+  elements.ruleTypeGroup.addEventListener("keydown", (event) => navigateTypeGroup(event, elements.ruleTypeInput, elements.ruleTypeGroup));
   elements.ruleDialog.addEventListener("close", () => {
     editingRuleId = null;
   });
@@ -287,6 +293,16 @@
   elements.transactionCategoryButton.addEventListener("click", () => {
     if (transactionEditMode) {
       openCategoryPicker("transaction");
+    }
+  });
+  elements.transactionTypeGroup.addEventListener("click", (event) => {
+    if (transactionEditMode) {
+      selectTypeFromGroup(event, elements.transactionTypeInput, elements.transactionTypeGroup);
+    }
+  });
+  elements.transactionTypeGroup.addEventListener("keydown", (event) => {
+    if (transactionEditMode) {
+      navigateTypeGroup(event, elements.transactionTypeInput, elements.transactionTypeGroup);
     }
   });
   elements.rawRowForm.addEventListener("submit", saveRawRowNote);
@@ -852,6 +868,52 @@
     return { description, category };
   }
 
+  function selectTypeFromGroup(event, input, group) {
+    const button = event.target.closest("[data-type-value]");
+    if (!button || button.disabled || !group.contains(button)) {
+      return;
+    }
+    setTypeGroupValue(input, group, button.dataset.typeValue);
+  }
+
+  function setTypeGroupValue(input, group, value) {
+    const normalized = clean(value) || "splurge";
+    input.value = normalized;
+    group.querySelectorAll("[data-type-value]").forEach((button) => {
+      const isSelected = button.dataset.typeValue === normalized;
+      button.classList.toggle("is-selected", isSelected);
+      button.setAttribute("aria-checked", isSelected ? "true" : "false");
+      button.tabIndex = isSelected ? 0 : -1;
+    });
+  }
+
+  function setTypeGroupDisabled(group, isDisabled) {
+    group.querySelectorAll("[data-type-value]").forEach((button) => {
+      button.disabled = isDisabled;
+    });
+  }
+
+  function navigateTypeGroup(event, input, group) {
+    const buttons = [...group.querySelectorAll("[data-type-value]")].filter((button) => !button.disabled);
+    if (!buttons.length || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
+      return;
+    }
+    event.preventDefault();
+    const currentIndex = Math.max(0, buttons.findIndex((button) => button.dataset.typeValue === input.value));
+    let nextIndex = currentIndex;
+    if (event.key === "ArrowLeft") {
+      nextIndex = (currentIndex - 1 + buttons.length) % buttons.length;
+    } else if (event.key === "ArrowRight") {
+      nextIndex = (currentIndex + 1) % buttons.length;
+    } else if (event.key === "Home") {
+      nextIndex = 0;
+    } else if (event.key === "End") {
+      nextIndex = buttons.length - 1;
+    }
+    setTypeGroupValue(input, group, buttons[nextIndex].dataset.typeValue);
+    buttons[nextIndex].focus();
+  }
+
   function openRuleAddDialog(prefill = {}) {
     ruleDialogMode = "add";
     editingRuleId = null;
@@ -868,6 +930,7 @@
     elements.ruleForm.elements.matchDescriptionEnabled.checked = Boolean(matchDescription) || !matchCategory;
     elements.ruleForm.elements.matchCategoryEnabled.checked = Boolean(matchCategory);
     elements.ruleForm.elements.priority.value = "100";
+    setTypeGroupValue(elements.ruleTypeInput, elements.ruleTypeGroup, "splurge");
     setRuleCategoryValue(null);
     updateRuleMatchInputs();
     renderRuleTags([]);
@@ -890,7 +953,7 @@
     form.elements.matchCategoryEnabled.checked = Boolean(matches.category);
     form.elements.matchCategory.value = matches.category;
     form.elements.setCleanDescription.value = rule.set_clean_description || "";
-    form.elements.setTransactionType.value = rule.set_transaction_type || "";
+    setTypeGroupValue(elements.ruleTypeInput, elements.ruleTypeGroup, rule.set_transaction_type || "income");
     setRuleCategoryValue(rule.set_category_id);
     renderRuleTags(rule.tag_ids || (rule.add_tag_id === null ? [] : [rule.add_tag_id]));
     form.elements.priority.value = String(rule.priority ?? 100);
@@ -1200,9 +1263,9 @@
   function openTransactionDialog(transaction) {
     activeTransactionId = transaction.id;
     transactionEditMode = false;
-    openModal(elements.transactionDialog);
     populateTransactionDialog(transaction);
     setTransactionEditMode(false);
+    openModal(elements.transactionDialog);
   }
 
   function closeTransactionDialog() {
@@ -1220,7 +1283,7 @@
     elements.transactionMessage.classList.remove("error");
     form.elements.postedDate.value = transaction.posted_date || "";
     form.elements.accountId.value = String(transaction.account_id);
-    form.elements.transactionType.value = transaction.transaction_type || "";
+    setTypeGroupValue(elements.transactionTypeInput, elements.transactionTypeGroup, transaction.transaction_type || "splurge");
     setTransactionCategoryValue(transaction.category_id);
     form.elements.amount.value = transaction.amount || formatCents(transaction.amount_cents);
     form.elements.cleanDescription.value = transaction.clean_description || "";
@@ -1267,6 +1330,7 @@
       checkbox.disabled = !isEditing;
     });
     elements.transactionCategoryButton.disabled = !isEditing;
+    setTypeGroupDisabled(elements.transactionTypeGroup, !isEditing);
     elements.transactionEditButton.hidden = isEditing;
     elements.transactionCancelButton.hidden = false;
     elements.transactionSaveButton.hidden = !isEditing;

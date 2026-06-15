@@ -33,7 +33,7 @@
         <span>Dash</span>
       </button>
       <button class="nav-item" type="button" data-section="transactions" data-default-view="transactions">
-        <span class="material-symbols-outlined" aria-hidden="true">receipt_long</span>
+        <span class="material-symbols-outlined" aria-hidden="true">receipt</span>
         <span>Transactions</span>
       </button>
       <button class="nav-item" type="button" data-section="manage" data-default-view="accounts">
@@ -406,11 +406,21 @@
         <div class="form-divider" aria-hidden="true"></div>
         <label>
           <span>Type</span>
-          <select name="setTransactionType">
-            <option value="income">Income</option>
-            <option value="bill">Bill</option>
-            <option value="splurge">Splurge</option>
-          </select>
+          <input name="setTransactionType" type="hidden" id="ruleTypeInput" value="splurge">
+          <div class="connected-button-group" id="ruleTypeGroup" role="radiogroup" aria-label="Rule type">
+            <button type="button" class="connected-button" data-type-value="income" role="radio">
+              <span class="material-symbols-outlined" aria-hidden="true">payments</span>
+              <span>Income</span>
+            </button>
+            <button type="button" class="connected-button" data-type-value="bill" role="radio">
+              <span class="material-symbols-outlined" aria-hidden="true">receipt_long</span>
+              <span>Bill</span>
+            </button>
+            <button type="button" class="connected-button" data-type-value="splurge" role="radio">
+              <span class="material-symbols-outlined" aria-hidden="true">shopping_bag</span>
+              <span>Splurge</span>
+            </button>
+          </div>
         </label>
         <label>
           <span>Clean Category</span>
@@ -453,11 +463,21 @@
             </label>
             <label>
               <span>Type</span>
-              <select name="transactionType" data-editable-field disabled required>
-                <option value="income">Income</option>
-                <option value="bill">Bill</option>
-                <option value="splurge">Splurge</option>
-              </select>
+              <input name="transactionType" type="hidden" id="transactionTypeInput" value="splurge">
+              <div class="connected-button-group" id="transactionTypeGroup" role="radiogroup" aria-label="Transaction type">
+                <button type="button" class="connected-button" data-type-value="income" role="radio" disabled>
+                  <span class="material-symbols-outlined" aria-hidden="true">payments</span>
+                  <span>Income</span>
+                </button>
+                <button type="button" class="connected-button" data-type-value="bill" role="radio" disabled>
+                  <span class="material-symbols-outlined" aria-hidden="true">receipt_long</span>
+                  <span>Bill</span>
+                </button>
+                <button type="button" class="connected-button" data-type-value="splurge" role="radio" disabled>
+                  <span class="material-symbols-outlined" aria-hidden="true">shopping_bag</span>
+                  <span>Splurge</span>
+                </button>
+              </div>
             </label>
             <label>
               <span>Category</span>
