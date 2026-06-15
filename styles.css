@@ -887,8 +887,8 @@ button:focus-visible {
   justify-content: flex-start;
 }
 
-.transaction-controls .category-picker-button {
-  flex: 0 0 auto;
+.transaction-controls .category-picker-button,
+.category-parent-field  .category-picker-button{
   min-height: 38px;
   align-items: center;
 }
@@ -1166,7 +1166,13 @@ td.amount {
 }
 
 .manageable-chip {
-  padding-right: 4px;
+  cursor: pointer;
+}
+
+.manageable-chip .material-symbols-outlined {
+  flex: 0 0 auto;
+  font-size: 18px;
+  font-variation-settings: "FILL" 0, "wght" 520, "GRAD" 0, "opsz" 20;
 }
 
 .category-chip {
@@ -1178,6 +1184,14 @@ td.amount {
   border-color: color-mix(in srgb, var(--category-color) 54%, var(--border));
   background: color-mix(in srgb, var(--category-color) 20%, var(--surface-muted));
   color: color-mix(in srgb, var(--category-color) 70%, var(--text));
+}
+
+button.category-chip.manageable-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border-style: solid;
 }
 
 .category-chip:not(.manageable-chip) {
@@ -1202,27 +1216,43 @@ td.amount {
   white-space: nowrap;
 }
 
-.category-color-control {
+.category-form-grid {
+  grid-template-columns: 1fr;
+}
+
+.category-parent-name-row {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: fit-content(58%) minmax(0, 1fr);
+  align-items: end;
+  gap: 10px;
+}
+
+.category-parent-field,
+.category-parent-field .category-picker-button {
+  min-width: 0;
+}
+
+.category-color-picker {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+
+.category-color-preview {
+  display: flex;
   align-items: center;
-  gap: 8px;
-  color: var(--muted);
-  font-size: 0.86rem;
-  font-weight: 700;
-}
-
-.category-color-control > span:first-child {
-  grid-column: 1 / -1;
-}
-
-.category-color-swatch {
-  display: block;
-  width: 100%;
-  height: 38px;
-  border: 2px solid color-mix(in srgb, var(--category-color) 60%, var(--border));
+  justify-content: center;
+  height: 72px;
+  border: 2px solid var(--category-color);
   border-radius: 7px;
   background: color-mix(in srgb, var(--category-color) 38%, var(--surface-muted));
+  color: color-mix(in srgb, var(--category-color) 70%, var(--text));
+  font-weight: 780;
+  text-transform: none;
+}
+
+.category-color-picker input[type="range"] {
+  padding: 0;
 }
 
 .action-row {

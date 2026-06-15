@@ -40,6 +40,7 @@
   let textInputResolver = null;
   let textInputDeleteHandler = null;
   let categoryPickerTarget = null;
+  let categoryColorDraft = "#2f8f2f";
   let popupTimer = null;
   let dashboardRangeDraft = null;
   const importableRawRowStatuses = new Set(["new", "ready"]);
@@ -204,11 +205,20 @@
     categoryCancelButton: document.querySelector("#categoryCancelButton"),
     categoryDeleteButton: document.querySelector("#categoryDeleteButton"),
     categorySubmitButton: document.querySelector("#categorySubmitButton"),
-    categoryParentSelect: document.querySelector("#categoryParentSelect"),
-    categoryColorControl: document.querySelector("#categoryColorControl"),
+    categoryParentInput: document.querySelector("#categoryParentInput"),
+    categoryParentButton: document.querySelector("#categoryParentButton"),
     categoryColorInput: document.querySelector("#categoryColorInput"),
-    categoryColorSwatch: document.querySelector("#categoryColorSwatch"),
+    categoryColorPickButton: document.querySelector("#categoryColorPickButton"),
     categoryColorRandomizeButton: document.querySelector("#categoryColorRandomizeButton"),
+    categoryColorDialog: document.querySelector("#categoryColorDialog"),
+    categoryColorForm: document.querySelector("#categoryColorForm"),
+    categoryColorCloseButton: document.querySelector("#categoryColorCloseButton"),
+    categoryColorCancelButton: document.querySelector("#categoryColorCancelButton"),
+    categoryColorPreview: document.querySelector("#categoryColorPreview"),
+    categoryColorHue: document.querySelector("#categoryColorHue"),
+    categoryColorSaturation: document.querySelector("#categoryColorSaturation"),
+    categoryColorLightness: document.querySelector("#categoryColorLightness"),
+    categoryColorHex: document.querySelector("#categoryColorHex"),
     categoryMessage: document.querySelector("#categoryMessage"),
     categoryPickerDialog: document.querySelector("#categoryPickerDialog"),
     categoryPickerTitle: document.querySelector("#categoryPickerTitle"),
@@ -326,8 +336,24 @@
   elements.categoryCloseButton.addEventListener("click", closeCategoryDialog);
   elements.categoryCancelButton.addEventListener("click", closeCategoryDialog);
   elements.categoryDeleteButton.addEventListener("click", deleteEditingCategory);
-  elements.categoryParentSelect.addEventListener("change", updateCategoryColorControl);
-  elements.categoryColorRandomizeButton.addEventListener("click", () => setCategoryDialogColor(randomComfortableColor()));
+  elements.categoryParentButton.addEventListener("click", () => {
+    if (!elements.categoryParentButton.disabled) {
+      openCategoryPicker("category-parent");
+    }
+  });
+  elements.categoryColorPickButton.addEventListener("click", openCategoryColorPicker);
+  elements.categoryColorRandomizeButton.addEventListener("click", randomizeCategoryColorDraft);
+  elements.categoryColorForm.addEventListener("submit", applyCategoryColorPicker);
+  [elements.categoryColorHue, elements.categoryColorSaturation, elements.categoryColorLightness].forEach((input) => {
+    input.addEventListener("input", updateCategoryColorDraftFromSliders);
+  });
+  elements.categoryColorHex.addEventListener("input", updateCategoryColorDraftFromHex);
+  elements.categoryColorCloseButton.addEventListener("click", closeCategoryColorPicker);
+  elements.categoryColorCancelButton.addEventListener("click", closeCategoryColorPicker);
+  elements.categoryColorDialog.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    closeCategoryColorPicker();
+  });
   elements.categoryDialog.addEventListener("close", () => {
     editingCategoryId = null;
   });
@@ -779,7 +805,8 @@
     elements.categoryMessage.textContent = "";
     elements.categoryMessage.classList.remove("error");
     elements.categoryDialogForm.reset();
-    populateCategoryParentSelect();
+    setCategoryParentValue(null);
+    elements.categoryParentButton.disabled = false;
     setCategoryDialogColor(randomComfortableColor());
     updateCategoryColorControl();
     openModal(elements.categoryDialog);
@@ -793,8 +820,8 @@
     elements.categoryMessage.textContent = "";
     elements.categoryMessage.classList.remove("error");
     elements.categoryDialogForm.elements.name.value = category.name || "";
-    populateCategoryParentSelect(category);
-    elements.categoryDialogForm.elements.parentId.value = category.parent_id === null ? "" : String(category.parent_id);
+    setCategoryParentValue(category.parent_id);
+    elements.categoryParentButton.disabled = categoryDescendantIds(category.id).size > 0;
     setCategoryDialogColor(category.color || randomComfortableColor());
     updateCategoryColorControl();
     openModal(elements.categoryDialog);
@@ -825,17 +852,161 @@
   }
 
   function setCategoryDialogColor(color) {
-    elements.categoryColorInput.value = color;
-    elements.categoryColorSwatch.style.setProperty("--category-color", color);
+    const normalizedColor = normalizeHexColor(color) || comfortableCategoryColors[0];
+    elements.categoryColorInput.value = normalizedColor;
   }
 
   function updateCategoryColorControl() {
-    const isParent = !clean(elements.categoryParentSelect.value);
-    elements.categoryColorControl.hidden = !isParent;
+    const isParent = !clean(elements.categoryParentInput.value);
+    elements.categoryColorPickButton.hidden = !isParent;
+  }
+
+  function openCategoryColorPicker() {
+    categoryColorDraft = normalizeHexColor(elements.categoryColorInput.value) || comfortableCategoryColors[0];
+    syncCategoryColorPickerFromHex(categoryColorDraft);
+    openModal(elements.categoryColorDialog);
+  }
+
+  function closeCategoryColorPicker() {
+    elements.categoryColorDialog.close();
+  }
+
+  function applyCategoryColorPicker(event) {
+    event.preventDefault();
+    const normalizedColor = normalizeHexColor(categoryColorDraft);
+    if (!normalizedColor) {
+      return;
+    }
+    setCategoryDialogColor(normalizedColor);
+    closeCategoryColorPicker();
+  }
+
+  function updateCategoryColorDraftFromSliders() {
+    categoryColorDraft = hslToHex(
+      Number(elements.categoryColorHue.value),
+      Number(elements.categoryColorSaturation.value),
+      Number(elements.categoryColorLightness.value),
+    );
+    syncCategoryColorPickerPreview(categoryColorDraft);
+  }
+
+  function updateCategoryColorDraftFromHex() {
+    const normalizedColor = normalizeHexColor(elements.categoryColorHex.value);
+    if (!normalizedColor) {
+      return;
+    }
+    categoryColorDraft = normalizedColor;
+    syncCategoryColorPickerFromHex(normalizedColor, { keepHexInput: true });
+  }
+
+  function randomizeCategoryColorDraft() {
+    categoryColorDraft = randomComfortableColor();
+    syncCategoryColorPickerFromHex(categoryColorDraft);
+  }
+
+  function syncCategoryColorPickerFromHex(color, { keepHexInput = false } = {}) {
+    const normalizedColor = normalizeHexColor(color) || comfortableCategoryColors[0];
+    const hsl = hexToHsl(normalizedColor);
+    elements.categoryColorHue.value = String(Math.round(hsl.h));
+    elements.categoryColorSaturation.value = String(Math.round(hsl.s));
+    elements.categoryColorLightness.value = String(Math.round(hsl.l));
+    if (!keepHexInput) {
+      elements.categoryColorHex.value = normalizedColor;
+    }
+    syncCategoryColorPickerPreview(normalizedColor);
+  }
+
+  function syncCategoryColorPickerPreview(color) {
+    const normalizedColor = normalizeHexColor(color);
+    if (!normalizedColor) {
+      return;
+    }
+    elements.categoryColorPreview.style.setProperty("--category-color", normalizedColor);
+    elements.categoryColorHex.value = normalizedColor;
   }
 
   function randomComfortableColor() {
-    return comfortableCategoryColors[Math.floor(Math.random() * comfortableCategoryColors.length)];
+    const hue = Math.floor(Math.random() * 360);
+    const saturation = 38 + Math.floor(Math.random() * 23);
+    const lightness = 40 + Math.floor(Math.random() * 17);
+    return hslToHex(hue, saturation, lightness);
+  }
+
+  function normalizeHexColor(value) {
+    const raw = clean(value).replace(/^#/, "");
+    if (/^[0-9a-fA-F]{3}$/.test(raw)) {
+      return `#${raw.split("").map((char) => `${char}${char}`).join("").toLowerCase()}`;
+    }
+    if (/^[0-9a-fA-F]{6}$/.test(raw)) {
+      return `#${raw.toLowerCase()}`;
+    }
+    return null;
+  }
+
+  function hexToHsl(hex) {
+    const normalized = normalizeHexColor(hex) || comfortableCategoryColors[0];
+    const r = parseInt(normalized.slice(1, 3), 16) / 255;
+    const g = parseInt(normalized.slice(3, 5), 16) / 255;
+    const b = parseInt(normalized.slice(5, 7), 16) / 255;
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const lightness = (max + min) / 2;
+    if (max === min) {
+      return { h: 0, s: 0, l: lightness * 100 };
+    }
+    const delta = max - min;
+    const saturation = delta / (1 - Math.abs((2 * lightness) - 1));
+    let hue;
+    if (max === r) {
+      hue = 60 * (((g - b) / delta) % 6);
+    } else if (max === g) {
+      hue = 60 * (((b - r) / delta) + 2);
+    } else {
+      hue = 60 * (((r - g) / delta) + 4);
+    }
+    return {
+      h: (hue + 360) % 360,
+      s: saturation * 100,
+      l: lightness * 100,
+    };
+  }
+
+  function hslToHex(hue, saturation, lightness) {
+    const h = (((Number(hue) || 0) % 360) + 360) % 360;
+    const s = clamp(Number(saturation) || 0, 0, 100) / 100;
+    const l = clamp(Number(lightness) || 0, 0, 100) / 100;
+    const chroma = (1 - Math.abs((2 * l) - 1)) * s;
+    const x = chroma * (1 - Math.abs(((h / 60) % 2) - 1));
+    const match = l - (chroma / 2);
+    let r = 0;
+    let g = 0;
+    let b = 0;
+    if (h < 60) {
+      r = chroma;
+      g = x;
+    } else if (h < 120) {
+      r = x;
+      g = chroma;
+    } else if (h < 180) {
+      g = chroma;
+      b = x;
+    } else if (h < 240) {
+      g = x;
+      b = chroma;
+    } else if (h < 300) {
+      r = x;
+      b = chroma;
+    } else {
+      r = chroma;
+      b = x;
+    }
+    return `#${[r, g, b].map((channel) => {
+      return Math.round((channel + match) * 255).toString(16).padStart(2, "0");
+    }).join("")}`;
+  }
+
+  function clamp(value, min, max) {
+    return Math.min(max, Math.max(min, value));
   }
 
   function updateRuleMatchInputs() {
@@ -1642,17 +1813,13 @@
     renderCategoryButton(elements.ruleCategoryButton, elements.ruleCategoryInput.value);
     renderCategoryButton(elements.transactionCategoryButton, elements.transactionCategoryInput.value, "Select category");
     renderCategoryButton(elements.transactionCategoryFilterButton, elements.transactionCategoryFilter.value, "All categories");
+    renderCategoryButton(elements.categoryParentButton, elements.categoryParentInput.value, "No parent");
   }
 
-  function populateCategoryParentSelect(category = null) {
-    if (category && categoryDescendantIds(category.id).size > 0) {
-      fillSelect(elements.categoryParentSelect, [{ value: "", label: "No parent" }]);
-      return;
-    }
-    const options = orderedCategories()
-      .filter((option) => option.parent_id === null && option.id !== category?.id)
-      .map((option) => ({ value: String(option.id), label: option.name }));
-    fillSelect(elements.categoryParentSelect, [{ value: "", label: "No parent" }, ...options]);
+  function setCategoryParentValue(categoryId) {
+    elements.categoryParentInput.value = categoryId === null || categoryId === undefined ? "" : String(categoryId);
+    renderCategoryButton(elements.categoryParentButton, elements.categoryParentInput.value, "No parent");
+    updateCategoryColorControl();
   }
 
   function categoryOptions() {
@@ -1661,13 +1828,19 @@
 
   function openCategoryPicker(target) {
     categoryPickerTarget = target;
-    const canClear = target === "rule" || target === "transaction-filter";
+    const canClear = target === "rule" || target === "transaction-filter" || target === "category-parent";
     elements.categoryPickerTitle.textContent = target === "rule"
       ? "Select Clean Category"
       : target === "transaction-filter"
         ? "Filter By Category"
-        : "Select Category";
-    elements.categoryPickerClearButton.textContent = target === "transaction-filter" ? "All Categories" : "No Category";
+        : target === "category-parent"
+          ? "Select Parent Category"
+          : "Select Category";
+    elements.categoryPickerClearButton.textContent = target === "transaction-filter"
+      ? "All Categories"
+      : target === "category-parent"
+        ? "No Parent"
+        : "No Category";
     elements.categoryPickerClearButton.hidden = !canClear;
     renderCategoryPicker();
     openModal(elements.categoryPickerDialog);
@@ -1688,10 +1861,14 @@
       ? Number(elements.transactionCategoryInput.value) || null
       : categoryPickerTarget === "transaction-filter"
         ? Number(elements.transactionCategoryFilter.value) || null
-        : Number(elements.ruleCategoryInput.value) || null;
+        : categoryPickerTarget === "category-parent"
+          ? Number(elements.categoryParentInput.value) || null
+          : Number(elements.ruleCategoryInput.value) || null;
+    const parentOnly = categoryPickerTarget === "category-parent";
     renderCategorySections(elements.categoryPickerList, {
       selectable: true,
       selectedId,
+      parentOnly,
       onSelect: (category) => selectPickedCategory(category.id),
     });
   }
@@ -1706,15 +1883,22 @@
       setTransactionCategoryFilterValue(categoryId);
     } else if (categoryPickerTarget === "rule") {
       setRuleCategoryValue(categoryId);
+    } else if (categoryPickerTarget === "category-parent") {
+      setCategoryParentValue(categoryId);
     }
     closeCategoryPicker();
   }
 
   function renderCategorySections(categoryList, options = {}) {
     const selectable = Boolean(options.selectable);
+    const parentOnly = Boolean(options.parentOnly);
     const roots = orderedCategories().filter((category) => category.parent_id === null);
     const rendered = new Set();
     roots.forEach((root) => {
+      if (parentOnly && root.id === editingCategoryId) {
+        rendered.add(root.id);
+        return;
+      }
       const section = document.createElement("section");
       section.className = "category-section";
       const header = document.createElement("div");
@@ -1725,7 +1909,7 @@
       }
       const chips = document.createElement("div");
       chips.className = "category-section-chips";
-      const children = orderedCategories().filter((category) => category.parent_id === root.id);
+      const children = parentOnly ? [] : orderedCategories().filter((category) => category.parent_id === root.id);
       if (selectable) {
         chips.appendChild(selectableCategoryChip(root, options.selectedId === root.id, options.onSelect));
         rendered.add(root.id);
@@ -1747,7 +1931,7 @@
       rendered.add(root.id);
     });
     orderedCategories()
-      .filter((category) => !rendered.has(category.id))
+      .filter((category) => !rendered.has(category.id) && (!parentOnly || category.parent_id === null))
       .forEach((category) => categoryList.appendChild(selectable
         ? selectableCategoryChip(category, options.selectedId === category.id, options.onSelect)
         : categoryChip(category)));
@@ -2871,13 +3055,13 @@
   }
 
   function manageableChip(label, onEdit, extraClass = "") {
-    const wrapper = document.createElement("span");
-    wrapper.className = `chip manageable-chip${extraClass ? ` ${extraClass}` : ""}`;
-    wrapper.append(
-      el("span", label),
-      actionButtons([["edit", `Edit ${label}`, onEdit]]),
-    );
-    return wrapper;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `chip manageable-chip${extraClass ? ` ${extraClass}` : ""}`;
+    button.setAttribute("aria-label", `Edit ${label}`);
+    button.append(materialIcon("edit"), el("span", label));
+    button.addEventListener("click", onEdit);
+    return button;
   }
 
   function el(tag, text, className) {

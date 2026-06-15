@@ -572,26 +572,25 @@
           <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
-      <div class="form-grid">
-        <label>
-          <span>Name</span>
-          <input name="name" type="text" required autocomplete="off">
-        </label>
-        <label>
-          <span>Parent category</span>
-          <select name="parentId" id="categoryParentSelect"></select>
-        </label>
-        <div class="category-color-control" id="categoryColorControl">
-          <span>Color</span>
-          <input name="color" type="hidden" id="categoryColorInput">
-          <span class="category-color-swatch" id="categoryColorSwatch" aria-hidden="true"></span>
-          <button type="button" class="icon-button" id="categoryColorRandomizeButton">Randomize</button>
+      <div class="form-grid category-form-grid">
+        <div class="category-parent-name-row">
+          <label class="category-parent-field">
+            <span>Parent</span>
+            <input name="parentId" type="hidden" id="categoryParentInput">
+            <button type="button" class="category-picker-button" id="categoryParentButton"></button>
+          </label>
+          <label>
+            <span>Name</span>
+            <input name="name" type="text" required autocomplete="off">
+          </label>
         </div>
+        <input name="color" type="hidden" id="categoryColorInput">
       </div>
       <div id="categoryMessage" class="modal-message" role="status" aria-live="polite"></div>
       <div class="modal-actions">
         <button type="button" class="danger-button modal-delete-button" id="categoryDeleteButton" hidden>Delete</button>
         <button type="button" class="icon-button" id="categoryCancelButton">Cancel</button>
+        <button type="button" class="icon-button" id="categoryColorPickButton">Color</button>
         <button type="submit" class="primary" id="categorySubmitButton">Create Category</button>
       </div>
     </form>
@@ -611,6 +610,41 @@
         <button type="button" class="primary" id="categoryPickerCancelButton">Done</button>
       </div>
     </div>
+  </dialog>
+
+  <dialog id="categoryColorDialog" class="modal" tabindex="-1">
+    <form id="categoryColorForm" class="modal-panel">
+      <div class="panel-heading">
+        <h2>Pick Color</h2>
+        <button class="icon-only" type="button" id="categoryColorCloseButton" aria-label="Close">
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <div class="category-color-picker">
+        <div class="category-color-preview" id="categoryColorPreview" aria-hidden="true">Sample</div>
+        <label>
+          <span>Hue</span>
+          <input name="hue" type="range" min="0" max="359" id="categoryColorHue">
+        </label>
+        <label>
+          <span>Saturation</span>
+          <input name="saturation" type="range" min="0" max="100" id="categoryColorSaturation">
+        </label>
+        <label>
+          <span>Lightness</span>
+          <input name="lightness" type="range" min="0" max="100" id="categoryColorLightness">
+        </label>
+        <label>
+          <span>Hex</span>
+          <input name="hex" type="text" id="categoryColorHex" autocomplete="off" inputmode="text">
+        </label>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="icon-button" id="categoryColorCancelButton">Cancel</button>
+        <button type="button" class="icon-button" id="categoryColorRandomizeButton">Randomize</button>
+        <button type="submit" class="primary" id="categoryColorApplyButton">Apply</button>
+      </div>
+    </form>
   </dialog>
 
   <dialog id="textInputDialog" class="modal" tabindex="-1">
