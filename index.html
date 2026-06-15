@@ -333,7 +333,7 @@
     </main>
   </div>
 
-  <dialog id="accountDialog" class="modal" tabindex="-1">
+  <dialog id="accountDialog" class="modal account-modal" tabindex="-1">
     <form id="accountForm" class="modal-panel">
       <div class="panel-heading">
         <h2 id="accountDialogTitle">Edit Account</h2>
@@ -462,7 +462,8 @@
           <div class="detail-list">
             <div class="type-button-row">
               <input name="transactionType" type="hidden" id="transactionTypeInput" value="splurge">
-              <div class="connected-button-group" id="transactionTypeGroup" role="radiogroup" aria-label="Transaction type">
+              <div class="connected-button-group" id="transactionTypeGroup" role="radiogroup"
+                aria-label="Transaction type">
                 <button type="button" class="connected-button" data-type-value="income" role="radio" disabled>
                   <span class="material-symbols-outlined" aria-hidden="true">payments</span>
                   <span>Income</span>
@@ -564,7 +565,7 @@
     </form>
   </dialog>
 
-  <dialog id="categoryDialog" class="modal" tabindex="-1">
+  <dialog id="categoryDialog" class="modal category-modal" tabindex="-1">
     <form id="categoryDialogForm" class="modal-panel">
       <div class="panel-heading">
         <h2 id="categoryDialogTitle">Create Category</h2>

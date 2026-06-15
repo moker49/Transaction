@@ -729,7 +729,6 @@ h2 {
 
 .form-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
   padding: 18px;
 }
@@ -1316,6 +1315,14 @@ button.category-chip.manageable-chip {
   box-shadow: var(--shadow);
 }
 
+.account-modal {
+  width: 360px;
+}
+
+.category-modal {
+  width: 460px;
+}
+
 .modal:focus {
   outline: none;
 }
@@ -1492,7 +1499,7 @@ button.category-chip.manageable-chip {
 
 .transaction-detail-grid {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) minmax(170px, 0.65fr) minmax(210px, 0.8fr) minmax(210px, 0.8fr);
+  grid-template-columns: minmax(260px, 1fr) minmax(170px, 0.65fr) minmax(210px, 0.8fr);
   gap: 18px;
   padding: 18px;
 }
@@ -1527,8 +1534,6 @@ button.category-chip.manageable-chip {
 .type-button-row {
   display: flex;
   justify-content: center;
-  grid-column: 1 / -1;
-  min-width: 0;
 }
 
 .detail-row-date-category {
@@ -2096,4 +2101,10 @@ tr.is-matched-row td {
   .tab {
     min-height: 48px;
   }
+
+  .account-modal,
+  .category-modal {
+    width: calc(100vw - 28px);
+  }
+
 }
