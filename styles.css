@@ -260,6 +260,10 @@ h2 {
   box-shadow: var(--shadow);
 }
 
+.fab-button[hidden] {
+  display: none;
+}
+
 .fab-button .material-symbols-outlined {
   font-size: 24px;
 }
@@ -681,7 +685,7 @@ td {
   font-size: 0.9rem;
 }
 
-#transactionsView th:nth-child(3),
+#transactionsView th:nth-child(4),
 th[data-raw-column="amount"],
 td.amount {
   text-align: right;
@@ -778,7 +782,6 @@ td.amount {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-width: min(330px, 100%);
   min-height: 42px;
   padding: 0 12px;
   background: var(--surface-muted);
@@ -1165,6 +1168,23 @@ select:disabled {
   padding: 18px;
   color: var(--muted);
   font-weight: 700;
+  white-space: pre-line;
+}
+
+.confirm-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 18px 18px;
+}
+
+.confirm-option[hidden] {
+  display: none;
+}
+
+.confirm-option input {
+  width: 18px;
+  min-height: 18px;
 }
 
 .app-message {
@@ -1356,7 +1376,6 @@ tr.is-matched-row td {
   table {
     width: 100%;
     min-width: 0;
-    table-layout: fixed;
   }
 
   th,
@@ -1492,10 +1511,6 @@ tr.is-matched-row td {
     align-items: flex-start;
   }
 
-  .range-setting-button {
-    width: 100%;
-  }
-
   .dashboard-range-picker {
     grid-template-columns: 1fr;
     padding: 12px;
@@ -1531,10 +1546,6 @@ tr.is-matched-row td {
   .danger-row {
     align-items: stretch;
     flex-direction: column;
-  }
-
-  .danger-button {
-    width: 100%;
   }
 
   .controls input,

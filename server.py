@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sqlite3
 import sys
 from contextlib import closing
@@ -52,6 +53,7 @@ from init_db import init_db  # noqa: E402
 
 app = Flask(__name__, static_folder=str(ROOT), static_url_path="")
 DUMMY_DB_PATH = DEFAULT_DB_PATH.with_name("transactions.dummy.sqlite")
+DUMMY_RESTORE_DB_PATH = DEFAULT_DB_PATH.with_name("transactions.dummy.restore.sqlite")
 TRANSACTION_TYPES = ("income", "bill", "splurge")
 COMFORTABLE_CATEGORY_COLORS = (
     "#2f8f2f",
@@ -516,6 +518,48 @@ def delete_rule(rule_id: int):
     return jsonify({"status": "deleted", "transaction_rule": rule, "state": state})
 
 
+@app.delete("/api/transactions/<int:transaction_id>")
+def delete_transaction(transaction_id: int):
+    ensure_database()
+    data = request.get_json(silent=True) or {}
+    delete_raw_row = bool(data.get("delete_raw_row"))
+    with closing(connect(current_db_path())) as conn:
+        transaction = conn.execute(
+            "SELECT id, raw_imported_row_id FROM transactions WHERE id = ?",
+            (transaction_id,),
+        ).fetchone()
+        if transaction is None:
+            raise CliError(f"Transaction not found: {transaction_id}")
+        raw_row_id = transaction["raw_imported_row_id"]
+        conn.execute("DELETE FROM transactions WHERE id = ?", (transaction_id,))
+        if delete_raw_row and raw_row_id is not None:
+            conn.execute("DELETE FROM raw_imported_rows WHERE id = ?", (raw_row_id,))
+        state = read_state(conn)
+        conn.commit()
+    return jsonify({"status": "deleted", "transaction_id": transaction_id, "state": state})
+
+
+@app.delete("/api/raw-rows/<int:raw_row_id>")
+def delete_raw_row(raw_row_id: int):
+    ensure_database()
+    data = request.get_json(silent=True) or {}
+    delete_transaction_too = bool(data.get("delete_transaction"))
+    with closing(connect(current_db_path())) as conn:
+        raw_row = conn.execute(
+            "SELECT id, parsed_transaction_id FROM raw_imported_rows WHERE id = ?",
+            (raw_row_id,),
+        ).fetchone()
+        if raw_row is None:
+            raise CliError(f"Raw row not found: {raw_row_id}")
+        transaction_id = raw_row["parsed_transaction_id"]
+        if delete_transaction_too and transaction_id is not None:
+            conn.execute("DELETE FROM transactions WHERE id = ?", (transaction_id,))
+        conn.execute("DELETE FROM raw_imported_rows WHERE id = ?", (raw_row_id,))
+        state = read_state(conn)
+        conn.commit()
+    return jsonify({"status": "deleted", "raw_row_id": raw_row_id, "state": state})
+
+
 @app.patch("/api/transactions/<int:transaction_id>")
 def update_transaction(transaction_id: int):
     ensure_database()
@@ -770,10 +814,12 @@ def import_selected_raw_rows():
 @app.post("/api/dev/regenerate-database")
 def regenerate_database():
     data = request.get_json(silent=True) or {}
-    if data.get("confirm") != "DELETE ALL DATA":
-        raise CliError("Regenerate database requires confirmation.")
+    if data.get("confirm") != "RESTORE DUMMY DATABASE":
+        raise CliError("Dummy database restore requires confirmation.")
 
-    db_path = current_db_path()
+    db_path = DUMMY_DB_PATH
+    if not DUMMY_RESTORE_DB_PATH.exists():
+        raise CliError("Dummy restore snapshot is missing.")
     for path in [
         db_path,
         db_path.with_name(f"{db_path.name}-wal"),
@@ -781,12 +827,13 @@ def regenerate_database():
     ]:
         path.unlink(missing_ok=True)
 
+    shutil.copy2(DUMMY_RESTORE_DB_PATH, db_path)
     init_db(db_path)
     with closing(connect(db_path)) as conn:
         state = read_state(conn)
         conn.commit()
 
-    return jsonify({"status": "regenerated", "state": state})
+    return jsonify({"status": "restored", "state": state})
 
 
 def current_db_path() -> Path:

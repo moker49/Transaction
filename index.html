@@ -52,7 +52,7 @@
       <button class="tab" type="button" data-section="manage" data-view="tags">Tags</button>
       <button class="tab" type="button" data-section="manage" data-view="rules">Rules</button>
       <button class="tab" type="button" data-section="import" data-view="import">CSV Import</button>
-      <button class="tab" type="button" data-section="import" data-view="raw">Pending</button>
+      <button class="tab" type="button" data-section="import" data-view="raw">Raw Transactions</button>
       <button class="tab" type="button" data-section="settings" data-view="settings">Settings</button>
       <button class="tab" type="button" data-section="settings" data-view="dev">Dev</button>
       <button class="tab" type="button" data-section="settings" data-view="logs">Logs</button>
@@ -114,8 +114,8 @@
                 <tr>
                   <th>Date</th>
                   <th>Category</th>
-                  <th>Amount</th>
                   <th>Description</th>
+                  <th>Amount</th>
                   <th>Account</th>
                   <th>Notes</th>
                 </tr>
@@ -132,10 +132,10 @@
             <div class="table-wrap">
               <table>
                 <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Institution</th>
-                  <th>Account type</th>
+                  <tr>
+                    <th>Name</th>
+                    <th>Institution</th>
+                    <th>Account type</th>
                     <th>Records</th>
                   </tr>
                 </thead>
@@ -225,8 +225,8 @@
                   <th data-raw-column="select">Import</th>
                   <th data-raw-column="date">Date</th>
                   <th data-raw-column="category">Category</th>
-                  <th data-raw-column="amount">Amount</th>
                   <th data-raw-column="description">Description</th>
+                  <th data-raw-column="amount">Amount</th>
                   <th data-raw-column="account">Account</th>
                   <th data-raw-column="notes">Notes</th>
                   <th data-raw-column="status">Status</th>
@@ -248,10 +248,10 @@
             <div class="table-wrap">
               <table>
                 <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Match</th>
-                  <th>Effects</th>
+                  <tr>
+                    <th>Name</th>
+                    <th>Match</th>
+                    <th>Effects</th>
                   </tr>
                 </thead>
                 <tbody id="rulesTable"></tbody>
@@ -283,7 +283,7 @@
             </div>
             <div class="setting-row dashboard-range-row">
               <div>
-                <strong>Dashboard range</strong>
+                <strong>Dashboard</strong>
               </div>
               <button type="button" class="range-setting-button" id="dashboardRangeButton">
                 <span id="dashboardRangeLabel">Last month</span>
@@ -314,11 +314,11 @@
             </div>
             <div class="setting-row danger-row">
               <div>
-                <strong>Regenerate database</strong>
-                <span class="setting-note">Delete all local data and recreate the schema.</span>
+                <strong>Restore dummy database</strong>
+                <span class="setting-note">Reset only the dummy database to the saved baseline.</span>
               </div>
               <button type="button" class="danger-button" id="regenerateDatabaseButton">
-                Regenerate
+                Restore
               </button>
             </div>
             <div id="devMessage" class="message" role="status" aria-live="polite"></div>
@@ -512,6 +512,7 @@
       </div>
       <div id="transactionMessage" class="modal-message" role="status" aria-live="polite"></div>
       <div class="modal-actions">
+        <button type="button" class="danger-button modal-delete-button" id="transactionDeleteButton">Delete</button>
         <button type="button" class="icon-button" id="transactionEditButton">Edit</button>
         <button type="button" class="icon-button" id="transactionCancelButton" hidden>Cancel</button>
         <button type="submit" class="primary" id="transactionSaveButton" hidden>Save</button>
@@ -522,7 +523,7 @@
   <dialog id="rawRowDialog" class="modal wide-modal" tabindex="-1">
     <form id="rawRowForm" class="modal-panel">
       <div class="panel-heading">
-        <h2 id="rawRowDialogTitle">Pending Row</h2>
+        <h2 id="rawRowDialogTitle">Raw Transaction</h2>
         <button class="icon-only" type="button" id="rawRowCloseButton" aria-label="Close">
           <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
@@ -551,6 +552,7 @@
         </section>
       </div>
       <div class="modal-actions">
+        <button type="button" class="danger-button modal-delete-button" id="rawRowDeleteButton">Delete</button>
         <button type="button" class="icon-button" id="rawRowDismissButton">Cancel</button>
         <button type="submit" class="primary" id="rawRowSaveButton">Save</button>
       </div>
@@ -622,6 +624,10 @@
         </button>
       </div>
       <p id="confirmMessage" class="confirm-message"></p>
+      <label class="confirm-option" id="confirmOption" hidden>
+        <input type="checkbox" id="confirmOptionInput">
+        <span id="confirmOptionLabel"></span>
+      </label>
       <div class="modal-actions">
         <button type="button" class="icon-button" id="confirmDismissButton">Cancel</button>
         <button type="submit" class="danger-button" id="confirmSubmitButton">Delete</button>

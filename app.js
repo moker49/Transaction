@@ -158,6 +158,9 @@
     confirmCancelButton: document.querySelector("#confirmCancelButton"),
     confirmDismissButton: document.querySelector("#confirmDismissButton"),
     confirmSubmitButton: document.querySelector("#confirmSubmitButton"),
+    confirmOption: document.querySelector("#confirmOption"),
+    confirmOptionInput: document.querySelector("#confirmOptionInput"),
+    confirmOptionLabel: document.querySelector("#confirmOptionLabel"),
     transactionDialog: document.querySelector("#transactionDialog"),
     transactionForm: document.querySelector("#transactionForm"),
     transactionDialogTitle: document.querySelector("#transactionDialogTitle"),
@@ -173,11 +176,13 @@
     transactionEditButton: document.querySelector("#transactionEditButton"),
     transactionCancelButton: document.querySelector("#transactionCancelButton"),
     transactionSaveButton: document.querySelector("#transactionSaveButton"),
+    transactionDeleteButton: document.querySelector("#transactionDeleteButton"),
     rawRowDialog: document.querySelector("#rawRowDialog"),
     rawRowForm: document.querySelector("#rawRowForm"),
     rawRowDialogTitle: document.querySelector("#rawRowDialogTitle"),
     rawRowCloseButton: document.querySelector("#rawRowCloseButton"),
     rawRowDismissButton: document.querySelector("#rawRowDismissButton"),
+    rawRowDeleteButton: document.querySelector("#rawRowDeleteButton"),
     rawRowRawValues: document.querySelector("#rawRowRawValues"),
     rawRowMatchedValues: document.querySelector("#rawRowMatchedValues"),
     rawRowImportValues: document.querySelector("#rawRowImportValues"),
@@ -265,9 +270,11 @@
   elements.transactionCloseButton.addEventListener("click", closeTransactionDialog);
   elements.transactionEditButton.addEventListener("click", () => setTransactionEditMode(true));
   elements.transactionCancelButton.addEventListener("click", cancelTransactionEdit);
+  elements.transactionDeleteButton.addEventListener("click", deleteActiveTransaction);
   elements.rawRowForm.addEventListener("submit", saveRawRowNote);
   elements.rawRowCloseButton.addEventListener("click", closeRawRowDialog);
   elements.rawRowDismissButton.addEventListener("click", closeRawRowDialog);
+  elements.rawRowDeleteButton.addEventListener("click", deleteActiveRawRow);
   elements.rawRowDialog.addEventListener("close", () => {
     activeRawRowId = null;
   });
@@ -712,7 +719,7 @@
       if (payload.status === "already_imported") {
         showPopup("File already imported for this account.", "warning");
       } else {
-        setMessage(`Imported ${payload.inserted_raw_row_count} raw rows from ${file.name}.`);
+        setMessage(`Imported ${payload.inserted_raw_row_count} raw transactions from ${file.name}.`);
       }
     } catch (error) {
       showPopup(error.message || "CSV import failed.", "error");
@@ -893,7 +900,7 @@
   async function deleteAccount(account) {
     const confirmed = await confirmDestructive({
       title: "Delete Account",
-      message: `Delete account "${account.name}"? This cannot be undone.`,
+      message: destructiveMessage(`Delete account "${account.name}"?`),
       actionLabel: "Delete Account",
     });
     if (!confirmed) {
@@ -926,7 +933,7 @@
   async function deleteCategory(category) {
     const confirmed = await confirmDestructive({
       title: "Delete Category",
-      message: `Delete category "${category.name}"? This cannot be undone.`,
+      message: destructiveMessage(`Delete category "${category.name}"?`),
       actionLabel: "Delete Category",
     });
     if (!confirmed) {
@@ -980,7 +987,7 @@
   async function deleteTag(tag) {
     const confirmed = await confirmDestructive({
       title: "Delete Tag",
-      message: `Delete tag "${tag.name}"? This cannot be undone.`,
+      message: destructiveMessage(`Delete tag "${tag.name}"?`),
       actionLabel: "Delete Tag",
     });
     if (!confirmed) {
@@ -999,7 +1006,7 @@
   async function deleteRule(rule) {
     const confirmed = await confirmDestructive({
       title: "Delete Rule",
-      message: `Delete rule "${rule.name}"? This cannot be undone.`,
+      message: destructiveMessage(`Delete rule "${rule.name}"?`),
       actionLabel: "Delete Rule",
     });
     if (!confirmed) {
@@ -1114,13 +1121,13 @@
       const row = tableRow([
         displayDateCell(transaction.posted_date),
         category ? displayCategoryChip(category) : transaction.category || "-",
-        transaction.amount || formatCents(transaction.amount_cents),
         transaction.clean_description || "-",
+        transaction.amount || formatCents(transaction.amount_cents),
         transaction.account || "-",
         transaction.notes || "-",
       ]);
       row.children[0]?.classList.add("date-cell");
-      row.children[2]?.classList.add("amount");
+      row.children[3]?.classList.add("amount");
       row.classList.add("clickable-row");
       row.tabIndex = 0;
       row.setAttribute("role", "button");
@@ -1284,6 +1291,32 @@
     }
   }
 
+  async function deleteActiveTransaction() {
+    const transaction = activeTransaction();
+    if (!transaction) {
+      return;
+    }
+    const confirmed = await confirmDestructive({
+      title: "Delete Transaction",
+      message: destructiveMessage(`Delete transaction "${transaction.clean_description || transaction.id}"?`),
+      actionLabel: "Delete Transaction",
+      optionLabel: transaction.raw_imported_row_id ? `Also delete associated raw transaction ${transaction.raw_imported_row_id}` : "",
+    });
+    if (!confirmed) {
+      return;
+    }
+    try {
+      const payload = await apiRequest(`/api/transactions/${transaction.id}`, {
+        method: "DELETE",
+        body: JSON.stringify({ delete_raw_row: Boolean(confirmed.optionChecked) }),
+      });
+      closeTransactionDialog();
+      applyStateFromPayload(payload);
+    } catch (error) {
+      setModalMessage(elements.transactionMessage, error.message || "Could not delete transaction.", true);
+    }
+  }
+
   function openRawRowDialog(rawRow) {
     activeRawRowId = rawRow.id;
     populateRawRowDialog(rawRow);
@@ -1300,7 +1333,7 @@
 
   function populateRawRowDialog(rawRow) {
     const account = state.accounts.find((candidate) => candidate.id === rawRow.account_id);
-    elements.rawRowDialogTitle.textContent = `Pending Row ${rawRow.id}`;
+    elements.rawRowDialogTitle.textContent = `Raw Transaction ${rawRow.id}`;
     elements.rawRowNoteInput.value = rawRowNotes.get(rawRow.id) || "";
     elements.rawRowNoteInput.disabled = false;
     renderDefinitionList(elements.rawRowRawValues, [
@@ -1343,6 +1376,35 @@
     }
     renderRawRows();
     closeRawRowDialog();
+  }
+
+  async function deleteActiveRawRow() {
+    const rawRow = activeRawRow();
+    if (!rawRow) {
+      return;
+    }
+    const associatedTransactionId = rawRow.import_status === "imported" ? rawRow.parsed_transaction_id : null;
+    const confirmed = await confirmDestructive({
+      title: "Delete Raw Transaction",
+      message: destructiveMessage(`Delete raw transaction ${rawRow.id}?`),
+      actionLabel: "Delete",
+      optionLabel: associatedTransactionId ? `Also delete associated transaction ${associatedTransactionId}` : "",
+    });
+    if (!confirmed) {
+      return;
+    }
+    try {
+      const payload = await apiRequest(`/api/raw-rows/${rawRow.id}`, {
+        method: "DELETE",
+        body: JSON.stringify({ delete_transaction: Boolean(confirmed.optionChecked) }),
+      });
+      selectedRawRowIds.delete(rawRow.id);
+      rawRowNotes.delete(rawRow.id);
+      closeRawRowDialog();
+      applyStateFromPayload(payload);
+    } catch (error) {
+      showPopup(error.message || "Could not delete raw transaction.", "error");
+    }
   }
 
   function renderAccountSelects() {
@@ -1635,7 +1697,7 @@
       const account = state.accounts.find((candidate) => candidate.id === rawRow.account_id);
       const tr = document.createElement("tr");
       tr.classList.toggle("is-matched-row", isMatchedRawRow(rawRow));
-      makeEditableRow(tr, `View pending row ${rawRow.id}`, () => openRawRowDialog(rawRow));
+      makeEditableRow(tr, `View raw transaction ${rawRow.id}`, () => openRawRowDialog(rawRow));
       const checkbox = document.createElement("input");
       checkbox.className = "row-checkbox";
       checkbox.type = "checkbox";
@@ -1674,8 +1736,8 @@
         ["select", cell(checkbox)],
         ["date", cell(displayDateCell(rawRow.raw_date), "date-cell")],
         ["category", cell(rawValueWithPreview(rawRow.raw_category, rawRow.preview_category))],
-        ["amount", cell(rawRow.raw_amount || "-", "amount")],
         ["description", cell(rawValueWithPreview(rawRow.raw_description, rawRow.preview_clean_description))],
+        ["amount", cell(rawRow.raw_amount || "-", "amount")],
         ["account", cell(account ? account.name : "Unknown", "muted-cell")],
         ["notes", cell(noteInput)],
         ["status", cell(statusBadge(rawRow), "status-cell")],
@@ -1732,26 +1794,29 @@
 
   async function regenerateDatabase() {
     const confirmed = await confirmDestructive({
-      title: "Regenerate Database",
-      message: "Regenerate the database? This permanently deletes all accounts, imports, transactions, categories, tags, rules, and logs.",
-      actionLabel: "Regenerate",
+      title: "Restore Dummy Database",
+      message: "Restore the dummy database to the saved baseline? The primary database will not be changed.",
+      actionLabel: "Restore",
     });
     if (!confirmed) {
       return;
     }
 
-    setDevMessage("Regenerating database...");
+    setDevMessage("Restoring dummy database...");
     elements.regenerateDatabaseButton.disabled = true;
     try {
       const payload = await apiRequest("/api/dev/regenerate-database", {
         method: "POST",
-        body: JSON.stringify({ confirm: "DELETE ALL DATA" }),
+        body: JSON.stringify({ confirm: "RESTORE DUMMY DATABASE" }),
       });
       selectedRawRowIds.clear();
       rawRowNotes.clear();
       visibleRawRows = [];
+      elements.dummyDatabaseToggle.checked = true;
+      localStorage.setItem(DUMMY_DATABASE_KEY, "true");
+      renderDatabaseModeLabel();
       applyStateFromPayload(payload);
-      setDevMessage("Database regenerated.");
+      setDevMessage("Dummy database restored.");
     } catch (error) {
       showPopup(error.message || "Could not regenerate database.", "error");
     } finally {
@@ -2258,6 +2323,10 @@
     return transactionTypes.find((type) => type.value === value)?.label || value;
   }
 
+  function destructiveMessage(message) {
+    return `${message}\nThis cannot be undone.`;
+  }
+
   function promptForText({ title, label, value, deleteLabel, onDelete }) {
     if (textInputResolver) {
       closeTextInputDialog(null);
@@ -2295,13 +2364,16 @@
     elements.textInputDeleteButton.hidden = true;
   }
 
-  function confirmDestructive({ title, message, actionLabel }) {
+  function confirmDestructive({ title, message, actionLabel, optionLabel = "" }) {
     if (confirmResolver) {
       closeConfirmDialog(false);
     }
     elements.confirmTitle.textContent = title;
     elements.confirmMessage.textContent = message;
     elements.confirmSubmitButton.textContent = actionLabel;
+    elements.confirmOption.hidden = !optionLabel;
+    elements.confirmOptionInput.checked = false;
+    elements.confirmOptionLabel.textContent = optionLabel;
     openModal(elements.confirmDialog);
     return new Promise((resolve) => {
       confirmResolver = resolve;
@@ -2310,17 +2382,20 @@
 
   function resolveConfirm(event) {
     event.preventDefault();
-    closeConfirmDialog(true);
+    closeConfirmDialog(true, { optionChecked: elements.confirmOptionInput.checked });
   }
 
-  function closeConfirmDialog(confirmed) {
+  function closeConfirmDialog(confirmed, result = {}) {
     if (elements.confirmDialog.open) {
       elements.confirmDialog.close();
     }
     if (confirmResolver) {
-      confirmResolver(confirmed);
+      confirmResolver(confirmed ? { confirmed: true, ...result } : false);
       confirmResolver = null;
     }
+    elements.confirmOption.hidden = true;
+    elements.confirmOptionInput.checked = false;
+    elements.confirmOptionLabel.textContent = "";
   }
 
   function setModalMessage(element, message, isError = false) {
