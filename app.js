@@ -1605,9 +1605,34 @@
   }
 
   function displayCategoryChip(category) {
-    const chip = el("span", category.name, "chip category-chip");
+    const chip = el("span", "", "chip category-chip transaction-category-chip");
     chip.style.setProperty("--category-color", effectiveCategoryColor(category));
+    manualChipWrap(category.name, 11).forEach((line) => {
+      chip.appendChild(el("span", line, "transaction-category-chip-line"));
+    });
     return chip;
+  }
+
+  function manualChipWrap(label, maxLineLength) {
+    const words = clean(label).split(/\s+/).filter(Boolean);
+    if (!words.length) {
+      return ["-"];
+    }
+    const lines = [];
+    let current = "";
+    words.forEach((word) => {
+      const next = current ? `${current} ${word}` : word;
+      if (current && next.length > maxLineLength) {
+        lines.push(current);
+        current = word;
+      } else {
+        current = next;
+      }
+    });
+    if (current) {
+      lines.push(current);
+    }
+    return lines;
   }
 
   function effectiveCategoryColor(category) {

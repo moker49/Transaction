@@ -862,6 +862,22 @@ td.amount {
   overflow-wrap: anywhere;
 }
 
+.transaction-category-chip {
+  display: inline-grid;
+  justify-items: start;
+  width: max-content;
+  max-width: none;
+  gap: 0;
+  white-space: normal;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.transaction-category-chip-line {
+  display: block;
+  white-space: nowrap;
+}
+
 .category-color-control {
   display: grid;
   grid-template-columns: auto 1fr;
