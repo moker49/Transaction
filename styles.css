@@ -674,21 +674,6 @@ h2 {
   min-height: 1px;
 }
 
-.match-toggle-field {
-  gap: 8px;
-}
-
-.match-input-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.match-input-row input[type="text"] {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
 .content-grid {
   display: grid;
   gap: 18px;
@@ -1323,6 +1308,10 @@ button.category-chip.manageable-chip {
   width: 460px;
 }
 
+.rule-modal {
+  width: min(820px, calc(100vw - 28px));
+}
+
 .modal:focus {
   outline: none;
 }
@@ -1506,6 +1495,71 @@ button.category-chip.manageable-chip {
 
 .raw-row-detail-grid {
   grid-template-columns: repeat(4, minmax(180px, 1fr));
+}
+
+.rule-form-grid {
+  grid-template-columns: minmax(0, 1fr) 1px minmax(0, 1fr);
+  align-items: stretch;
+  column-gap: 18px;
+}
+
+.rule-form-column {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  min-width: 0;
+}
+
+.rule-name-priority-row,
+.rule-match-row,
+.rule-clean-row {
+  display: grid;
+  align-items: end;
+  gap: 10px;
+  min-width: 0;
+}
+
+.rule-form-grid .form-divider {
+  grid-column: 2;
+  align-self: stretch;
+  width: 1px;
+  min-height: 0;
+  border-top: 0;
+  border-left: 1px solid var(--border);
+}
+
+.rule-name-priority-row {
+  grid-template-columns: minmax(0, 1fr) 118px;
+}
+
+.rule-match-row {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.rule-clean-row {
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+}
+
+.rule-name-priority-row > label,
+.rule-match-row > label,
+.rule-clean-row > label {
+  min-width: 0;
+}
+
+.rule-form-column .connected-button-group {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: 100%;
+}
+
+.rule-form-column .connected-button {
+  min-width: 0;
+  padding: 0 10px;
+}
+
+.rule-clean-row .category-picker-button {
+  min-height: 38px;
+  align-items: center;
 }
 
 .transaction-detail-grid > section + section {
@@ -1923,6 +1977,26 @@ tr.is-matched-row td {
   .transaction-detail-grid,
   .raw-row-detail-grid {
     grid-template-columns: 1fr;
+  }
+
+  .rule-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .rule-name-priority-row {
+    grid-template-columns: minmax(0, 1fr) 92px;
+  }
+
+  .rule-match-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .rule-form-grid .form-divider {
+    grid-column: auto;
+    width: auto;
+    min-height: 1px;
+    border-top: 1px solid var(--border);
+    border-left: 0;
   }
 
   .detail-row-date-category,

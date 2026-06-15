@@ -252,8 +252,6 @@
   elements.ruleCancelButton.addEventListener("click", closeRuleDialog);
   elements.ruleDismissButton.addEventListener("click", closeRuleDialog);
   elements.ruleDeleteButton.addEventListener("click", deleteEditingRule);
-  elements.ruleForm.elements.matchDescriptionEnabled.addEventListener("change", updateRuleMatchInputs);
-  elements.ruleForm.elements.matchCategoryEnabled.addEventListener("change", updateRuleMatchInputs);
   elements.ruleCategoryButton.addEventListener("click", () => openCategoryPicker("rule"));
   elements.ruleTypeGroup.addEventListener("click", (event) => selectTypeFromGroup(event, elements.ruleTypeInput, elements.ruleTypeGroup));
   elements.ruleTypeGroup.addEventListener("keydown", (event) => navigateTypeGroup(event, elements.ruleTypeInput, elements.ruleTypeGroup));
@@ -1009,16 +1007,6 @@
     return Math.min(max, Math.max(min, value));
   }
 
-  function updateRuleMatchInputs() {
-    const form = elements.ruleForm;
-    const descriptionEnabled = form.elements.matchDescriptionEnabled.checked;
-    const categoryEnabled = form.elements.matchCategoryEnabled.checked;
-    form.elements.matchDescription.disabled = !descriptionEnabled;
-    form.elements.matchDescription.required = descriptionEnabled;
-    form.elements.matchCategory.disabled = !categoryEnabled;
-    form.elements.matchCategory.required = categoryEnabled;
-  }
-
   function ruleMatchValues(rule) {
     const description = clean(rule.match_description) ||
       (rule.match_field === "description" ? clean(rule.match_value) : "");
@@ -1086,12 +1074,9 @@
     const matchCategory = clean(prefill.matchCategory);
     elements.ruleForm.elements.matchDescription.value = matchDescription;
     elements.ruleForm.elements.matchCategory.value = matchCategory;
-    elements.ruleForm.elements.matchDescriptionEnabled.checked = Boolean(matchDescription) || !matchCategory;
-    elements.ruleForm.elements.matchCategoryEnabled.checked = Boolean(matchCategory);
     elements.ruleForm.elements.priority.value = "100";
     setTypeGroupValue(elements.ruleTypeInput, elements.ruleTypeGroup, "splurge");
     setRuleCategoryValue(null);
-    updateRuleMatchInputs();
     renderRuleTags([]);
     openModal(elements.ruleDialog);
   }
@@ -1107,16 +1092,13 @@
     const form = elements.ruleForm;
     const matches = ruleMatchValues(rule);
     form.elements.name.value = rule.name || "";
-    form.elements.matchDescriptionEnabled.checked = Boolean(matches.description);
     form.elements.matchDescription.value = matches.description;
-    form.elements.matchCategoryEnabled.checked = Boolean(matches.category);
     form.elements.matchCategory.value = matches.category;
     form.elements.setCleanDescription.value = rule.set_clean_description || "";
     setTypeGroupValue(elements.ruleTypeInput, elements.ruleTypeGroup, rule.set_transaction_type || "income");
     setRuleCategoryValue(rule.set_category_id);
     renderRuleTags(rule.tag_ids || (rule.add_tag_id === null ? [] : [rule.add_tag_id]));
     form.elements.priority.value = String(rule.priority ?? 100);
-    updateRuleMatchInputs();
     openModal(elements.ruleDialog);
   }
 
@@ -1131,8 +1113,8 @@
     const setCleanDescription = clean(form.get("setCleanDescription"));
     const setTransactionType = clean(form.get("setTransactionType"));
     const setCategoryId = Number(form.get("setCategoryId")) || null;
-    const matchDescription = form.has("matchDescriptionEnabled") ? clean(form.get("matchDescription")) : null;
-    const matchCategory = form.has("matchCategoryEnabled") ? clean(form.get("matchCategory")) : null;
+    const matchDescription = clean(form.get("matchDescription"));
+    const matchCategory = clean(form.get("matchCategory"));
     const addTagIds = [...elements.ruleTags.querySelectorAll("input[type='checkbox']:checked")]
       .map((checkbox) => Number(checkbox.value))
       .filter((tagId) => Number.isInteger(tagId) && tagId > 0);

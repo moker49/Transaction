@@ -377,7 +377,7 @@
     </form>
   </dialog>
 
-  <dialog id="ruleDialog" class="modal" tabindex="-1">
+  <dialog id="ruleDialog" class="modal rule-modal" tabindex="-1">
     <form id="ruleForm" class="modal-panel">
       <div class="panel-heading">
         <h2 id="ruleDialogTitle">Create Rule</h2>
@@ -385,60 +385,64 @@
           <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
-      <div class="form-grid">
-        <label>
-          <span>Name</span>
-          <input name="name" type="text" required autocomplete="off">
-        </label>
-        <label>
-          <span>Priority</span>
-          <input name="priority" type="number" min="0" value="100">
-        </label>
-        <label class="match-toggle-field">
-          <span>Match description</span>
-          <span class="match-input-row">
-            <input name="matchDescriptionEnabled" type="checkbox" checked>
-            <input name="matchDescription" type="text" autocomplete="off">
-          </span>
-        </label>
-        <label class="match-toggle-field">
-          <span>Match category</span>
-          <span class="match-input-row">
-            <input name="matchCategoryEnabled" type="checkbox">
-            <input name="matchCategory" type="text" autocomplete="off">
-          </span>
-        </label>
-        <div class="form-divider" aria-hidden="true"></div>
-        <div class="type-button-row">
-          <input name="setTransactionType" type="hidden" id="ruleTypeInput" value="splurge">
-          <div class="connected-button-group" id="ruleTypeGroup" role="radiogroup" aria-label="Rule type">
-            <button type="button" class="connected-button" data-type-value="income" role="radio">
-              <span class="material-symbols-outlined" aria-hidden="true">payments</span>
-              <span>Income</span>
-            </button>
-            <button type="button" class="connected-button" data-type-value="bill" role="radio">
-              <span class="material-symbols-outlined" aria-hidden="true">receipt_long</span>
-              <span>Bill</span>
-            </button>
-            <button type="button" class="connected-button" data-type-value="splurge" role="radio">
-              <span class="material-symbols-outlined" aria-hidden="true">shopping_bag</span>
-              <span>Splurge</span>
-            </button>
+      <div class="form-grid rule-form-grid">
+        <div class="rule-form-column">
+          <div class="rule-name-priority-row">
+            <label>
+              <span>Name</span>
+              <input name="name" type="text" required autocomplete="off">
+            </label>
+            <label>
+              <span>Priority</span>
+              <input name="priority" type="number" min="0" value="100">
+            </label>
+          </div>
+          <div class="rule-match-row">
+            <label>
+              <span>Match description</span>
+              <input name="matchDescription" type="text" autocomplete="off">
+            </label>
+            <label>
+              <span>Match category</span>
+              <input name="matchCategory" type="text" autocomplete="off">
+            </label>
           </div>
         </div>
-        <label>
-          <span>Clean Category</span>
-          <input name="setCategoryId" type="hidden" id="ruleCategoryInput">
-          <button type="button" class="category-picker-button" id="ruleCategoryButton"></button>
-        </label>
-        <label>
-          <span>Clean description</span>
-          <input name="setCleanDescription" type="text" autocomplete="off">
-        </label>
-        <label class="tag-field">
-          <span>Tags</span>
-          <div id="ruleTags" class="tag-check-list"></div>
-        </label>
+        <div class="form-divider" aria-hidden="true"></div>
+        <div class="rule-form-column">
+          <div class="type-button-row">
+            <input name="setTransactionType" type="hidden" id="ruleTypeInput" value="splurge">
+            <div class="connected-button-group" id="ruleTypeGroup" role="radiogroup" aria-label="Rule type">
+              <button type="button" class="connected-button" data-type-value="income" role="radio">
+                <span class="material-symbols-outlined" aria-hidden="true">payments</span>
+                <span>Income</span>
+              </button>
+              <button type="button" class="connected-button" data-type-value="bill" role="radio">
+                <span class="material-symbols-outlined" aria-hidden="true">receipt_long</span>
+                <span>Bill</span>
+              </button>
+              <button type="button" class="connected-button" data-type-value="splurge" role="radio">
+                <span class="material-symbols-outlined" aria-hidden="true">shopping_bag</span>
+                <span>Splurge</span>
+              </button>
+            </div>
+          </div>
+          <div class="rule-clean-row">
+            <label>
+              <span>Clean Category</span>
+              <input name="setCategoryId" type="hidden" id="ruleCategoryInput">
+              <button type="button" class="category-picker-button" id="ruleCategoryButton"></button>
+            </label>
+            <label>
+              <span>Clean description</span>
+              <input name="setCleanDescription" type="text" autocomplete="off">
+            </label>
+          </div>
+          <label class="tag-field">
+            <span>Tags</span>
+            <div id="ruleTags" class="tag-check-list"></div>
+          </label>
+        </div>
       </div>
       <div id="ruleMessage" class="modal-message" role="status" aria-live="polite"></div>
       <div class="modal-actions">
