@@ -674,19 +674,15 @@ h2 {
   gap: 8px;
 }
 
-.match-toggle-label {
+.match-input-row {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: var(--muted);
-  font-size: 0.82rem;
-  font-weight: 650;
 }
 
-.match-toggle-label input {
-  width: 16px;
-  min-height: 16px;
-  padding: 0;
+.match-input-row input[type="text"] {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .content-grid {
@@ -771,6 +767,49 @@ select {
   background: var(--input-bg);
   color: var(--text);
   padding: 0 10px;
+}
+
+input[type="checkbox"]:not(.tag-chip-select input) {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-grid;
+  place-content: center;
+  flex: 0 0 auto;
+  width: 18px;
+  min-width: 18px;
+  height: 18px;
+  min-height: 18px;
+  margin: 0;
+  padding: 0;
+  border: 2px solid var(--muted);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--accent-contrast);
+}
+
+input[type="checkbox"]:not(.tag-chip-select input)::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  transform: scale(0);
+  transform-origin: center;
+  transition: transform 90ms ease;
+  clip-path: polygon(14% 44%, 0 59%, 38% 96%, 100% 22%, 84% 8%, 36% 66%);
+  background: currentColor;
+}
+
+input[type="checkbox"]:not(.tag-chip-select input):checked {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+input[type="checkbox"]:not(.tag-chip-select input):checked::before {
+  transform: scale(1);
+}
+
+input[type="checkbox"]:not(.tag-chip-select input):focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
 }
 
 input[type="file"] {
@@ -1590,11 +1629,6 @@ select:disabled {
 
 .confirm-option[hidden] {
   display: none;
-}
-
-.confirm-option input {
-  width: 18px;
-  min-height: 18px;
 }
 
 .app-message {
