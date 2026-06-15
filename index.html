@@ -103,7 +103,9 @@
         <section class="panel">
           <div class="panel-heading with-controls">
             <div class="controls transaction-controls">
-              <select id="transactionCategoryFilter" aria-label="Filter transactions by category"></select>
+              <input type="hidden" id="transactionCategoryFilter" value="">
+              <button type="button" class="category-picker-button" id="transactionCategoryFilterButton"
+                aria-label="Filter transactions by category"></button>
               <input id="transactionSearch" type="search" placeholder="Search transactions"
                 aria-label="Search transactions">
             </div>

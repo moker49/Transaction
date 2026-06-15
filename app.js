@@ -172,6 +172,7 @@
     transactionAccountSelect: document.querySelector("#transactionAccountSelect"),
     transactionCategoryInput: document.querySelector("#transactionCategoryInput"),
     transactionCategoryButton: document.querySelector("#transactionCategoryButton"),
+    transactionCategoryFilterButton: document.querySelector("#transactionCategoryFilterButton"),
     transactionTypeInput: document.querySelector("#transactionTypeInput"),
     transactionTypeGroup: document.querySelector("#transactionTypeGroup"),
     transactionCategoryFilter: document.querySelector("#transactionCategoryFilter"),
@@ -286,6 +287,7 @@
     closeConfirmDialog(false);
   });
   elements.transactionForm.addEventListener("submit", saveTransaction);
+  elements.transactionCategoryFilterButton.addEventListener("click", () => openCategoryPicker("transaction-filter"));
   elements.transactionCloseButton.addEventListener("click", closeTransactionDialog);
   elements.transactionEditButton.addEventListener("click", () => setTransactionEditMode(true));
   elements.transactionCancelButton.addEventListener("click", cancelTransactionDialogAction);
@@ -312,7 +314,6 @@
   elements.rawRowDialog.addEventListener("close", () => {
     activeRawRowId = null;
   });
-  elements.transactionCategoryFilter.addEventListener("change", renderTransactions);
   elements.transactionSearch.addEventListener("input", renderTransactions);
   elements.transactionDialog.addEventListener("close", () => {
     activeTransactionId = null;
@@ -1646,6 +1647,12 @@
     renderCategoryButton(elements.transactionCategoryButton, elements.transactionCategoryInput.value, "Select category");
   }
 
+  function setTransactionCategoryFilterValue(categoryId) {
+    elements.transactionCategoryFilter.value = categoryId === null || categoryId === undefined ? "" : String(categoryId);
+    renderCategoryButton(elements.transactionCategoryFilterButton, elements.transactionCategoryFilter.value, "All categories");
+    renderTransactions();
+  }
+
   function renderCategories() {
     const categoryList = document.querySelector("#categoryList");
     clear(categoryList);
@@ -1655,15 +1662,9 @@
       renderCategorySections(categoryList);
     }
 
-    fillSelect(
-      elements.transactionCategoryFilter,
-      [
-        { value: "", label: "All categories" },
-        ...categoryOptions(),
-      ],
-    );
     renderCategoryButton(elements.ruleCategoryButton, elements.ruleCategoryInput.value);
     renderCategoryButton(elements.transactionCategoryButton, elements.transactionCategoryInput.value, "Select category");
+    renderCategoryButton(elements.transactionCategoryFilterButton, elements.transactionCategoryFilter.value, "All categories");
   }
 
   function populateCategoryParentSelect(category = null) {
@@ -1683,9 +1684,14 @@
 
   function openCategoryPicker(target) {
     categoryPickerTarget = target;
-    const isRule = target === "rule";
-    elements.categoryPickerTitle.textContent = isRule ? "Select Clean Category" : "Select Category";
-    elements.categoryPickerClearButton.hidden = !isRule;
+    const canClear = target === "rule" || target === "transaction-filter";
+    elements.categoryPickerTitle.textContent = target === "rule"
+      ? "Select Clean Category"
+      : target === "transaction-filter"
+        ? "Filter By Category"
+        : "Select Category";
+    elements.categoryPickerClearButton.textContent = target === "transaction-filter" ? "All Categories" : "No Category";
+    elements.categoryPickerClearButton.hidden = !canClear;
     renderCategoryPicker();
     openModal(elements.categoryPickerDialog);
   }
@@ -1703,7 +1709,9 @@
     }
     const selectedId = categoryPickerTarget === "transaction"
       ? Number(elements.transactionCategoryInput.value) || null
-      : Number(elements.ruleCategoryInput.value) || null;
+      : categoryPickerTarget === "transaction-filter"
+        ? Number(elements.transactionCategoryFilter.value) || null
+        : Number(elements.ruleCategoryInput.value) || null;
     renderCategorySections(elements.categoryPickerList, {
       selectable: true,
       selectedId,
@@ -1717,6 +1725,8 @@
         return;
       }
       setTransactionCategoryValue(categoryId);
+    } else if (categoryPickerTarget === "transaction-filter") {
+      setTransactionCategoryFilterValue(categoryId);
     } else if (categoryPickerTarget === "rule") {
       setRuleCategoryValue(categoryId);
     }

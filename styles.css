@@ -832,7 +832,18 @@ button:focus-visible {
 
 .transaction-controls {
   width: 100%;
+  flex-wrap: nowrap;
   justify-content: flex-start;
+}
+
+.transaction-controls .category-picker-button {
+  flex: 0 0 auto;
+}
+
+.transaction-controls #transactionSearch {
+  flex: 1 1 220px;
+  width: auto;
+  min-width: 0;
 }
 
 .raw-controls .icon-only {
