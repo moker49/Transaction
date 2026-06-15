@@ -183,6 +183,7 @@
     rawRowCloseButton: document.querySelector("#rawRowCloseButton"),
     rawRowDismissButton: document.querySelector("#rawRowDismissButton"),
     rawRowDeleteButton: document.querySelector("#rawRowDeleteButton"),
+    rawRowSaveButton: document.querySelector("#rawRowSaveButton"),
     rawRowRawValues: document.querySelector("#rawRowRawValues"),
     rawRowMatchedValues: document.querySelector("#rawRowMatchedValues"),
     rawRowImportValues: document.querySelector("#rawRowImportValues"),
@@ -222,7 +223,7 @@
   elements.importSelectedRowsButton.addEventListener("click", importSelectedRawRows);
   elements.regenerateDatabaseButton.addEventListener("click", regenerateDatabase);
   elements.dummyDatabaseToggle.addEventListener("change", updateDatabaseMode);
-  elements.ruleAddButton.addEventListener("click", openRuleAddDialog);
+  elements.ruleAddButton.addEventListener("click", () => openRuleAddDialog());
   elements.ruleCancelButton.addEventListener("click", closeRuleDialog);
   elements.ruleDismissButton.addEventListener("click", closeRuleDialog);
   elements.ruleDeleteButton.addEventListener("click", deleteEditingRule);
@@ -829,7 +830,7 @@
     return { description, category };
   }
 
-  function openRuleAddDialog() {
+  function openRuleAddDialog(prefill = {}) {
     ruleDialogMode = "add";
     editingRuleId = null;
     elements.ruleMessage.textContent = "";
@@ -838,8 +839,12 @@
     elements.ruleSubmitButton.textContent = "Add Rule";
     elements.ruleDeleteButton.hidden = true;
     elements.ruleForm.reset();
-    elements.ruleForm.elements.matchDescriptionEnabled.checked = true;
-    elements.ruleForm.elements.matchCategoryEnabled.checked = false;
+    const matchDescription = clean(prefill.matchDescription);
+    const matchCategory = clean(prefill.matchCategory);
+    elements.ruleForm.elements.matchDescription.value = matchDescription;
+    elements.ruleForm.elements.matchCategory.value = matchCategory;
+    elements.ruleForm.elements.matchDescriptionEnabled.checked = Boolean(matchDescription) || !matchCategory;
+    elements.ruleForm.elements.matchCategoryEnabled.checked = Boolean(matchCategory);
     elements.ruleForm.elements.priority.value = "100";
     updateRuleMatchInputs();
     renderRuleTags([]);
@@ -1359,9 +1364,11 @@
 
   function populateRawRowDialog(rawRow) {
     const account = state.accounts.find((candidate) => candidate.id === rawRow.account_id);
+    const shouldCreateRule = shouldOfferRuleCreation(rawRow);
     elements.rawRowDialogTitle.textContent = `Raw Transaction ${rawRow.id}`;
     elements.rawRowNoteInput.value = rawRowNotes.get(rawRow.id) || "";
     elements.rawRowNoteInput.disabled = false;
+    elements.rawRowSaveButton.textContent = shouldCreateRule ? "Create Rule" : "Save";
     renderDefinitionList(elements.rawRowRawValues, [
       ["Date", formatDisplayDate(rawRow.raw_date)],
       ["Category", rawRow.raw_category],
@@ -1387,11 +1394,23 @@
     ]);
   }
 
+  function shouldOfferRuleCreation(rawRow) {
+    return rawRow.import_status !== "imported" && !isImportableRawRow(rawRow);
+  }
+
   function saveRawRowNote(event) {
     event.preventDefault();
     const rawRow = activeRawRow();
     if (!rawRow) {
       closeRawRowDialog();
+      return;
+    }
+    if (shouldOfferRuleCreation(rawRow)) {
+      closeRawRowDialog();
+      openRuleAddDialog({
+        matchDescription: rawRow.raw_description,
+        matchCategory: rawRow.raw_category,
+      });
       return;
     }
     const note = clean(elements.rawRowNoteInput.value);
