@@ -534,6 +534,18 @@ def delete_transaction(transaction_id: int):
         conn.execute("DELETE FROM transactions WHERE id = ?", (transaction_id,))
         if delete_raw_row and raw_row_id is not None:
             conn.execute("DELETE FROM raw_imported_rows WHERE id = ?", (raw_row_id,))
+        elif raw_row_id is not None:
+            conn.execute(
+                """
+                UPDATE raw_imported_rows
+                SET import_status = 'new',
+                    import_error = NULL,
+                    parsed_transaction_id = NULL,
+                    updated_at = datetime('now')
+                WHERE id = ?
+                """,
+                (raw_row_id,),
+            )
         state = read_state(conn)
         conn.commit()
     return jsonify({"status": "deleted", "transaction_id": transaction_id, "state": state})
