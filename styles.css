@@ -450,7 +450,7 @@ h2 {
   border-radius: 16px;
 }
 
-.csv-import-fab {
+.csv-upload-fab {
   position: fixed;
   right: max(18px, env(safe-area-inset-right));
   bottom: max(18px, env(safe-area-inset-bottom));
@@ -2144,7 +2144,7 @@ tr.is-matched-row td {
   }
 
   .import-fab,
-  .csv-import-fab,
+  .csv-upload-fab,
   .manage-fab {
     bottom: calc(86px + env(safe-area-inset-bottom));
   }

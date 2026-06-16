@@ -105,7 +105,7 @@
     dashboardSplurgeLegend: document.querySelector("#dashboardSplurgeLegend"),
     accountAddButton: document.querySelector("#accountAddButton"),
     accountForm: document.querySelector("#accountForm"),
-    csvImportButton: document.querySelector("#csvImportButton"),
+    csvUploadButton: document.querySelector("#csvUploadButton"),
     importDialog: document.querySelector("#importDialog"),
     importForm: document.querySelector("#importForm"),
     importCloseButton: document.querySelector("#importCloseButton"),
@@ -256,7 +256,7 @@
 
   elements.accountAddButton.addEventListener("click", openAccountAddDialog);
   elements.accountForm.addEventListener("submit", saveAccount);
-  elements.csvImportButton.addEventListener("click", openImportDialog);
+  elements.csvUploadButton.addEventListener("click", openImportDialog);
   elements.importForm.addEventListener("submit", importCsv);
   elements.importCloseButton.addEventListener("click", closeImportDialog);
   elements.importCancelButton.addEventListener("click", closeImportDialog);

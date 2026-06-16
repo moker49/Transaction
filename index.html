@@ -40,8 +40,8 @@
         <span class="material-symbols-outlined" aria-hidden="true">tune</span>
         <span>Manage</span>
       </button>
-      <button class="nav-item" type="button" data-section="import" data-default-view="import">
-        <span class="material-symbols-outlined" aria-hidden="true">upload_file</span>
+      <button class="nav-item" type="button" data-section="import" data-default-view="raw">
+        <span class="material-symbols-outlined" aria-hidden="true">download</span>
         <span>Import</span>
       </button>
     </nav>
@@ -51,8 +51,8 @@
       <button class="tab" type="button" data-section="manage" data-view="categories">Categories</button>
       <button class="tab" type="button" data-section="manage" data-view="tags">Tags</button>
       <button class="tab" type="button" data-section="manage" data-view="rules">Rules</button>
-      <button class="tab" type="button" data-section="import" data-view="import">CSV Import</button>
-      <button class="tab" type="button" data-section="import" data-view="raw">Raw Transactions</button>
+      <button class="tab" type="button" data-section="import" data-view="raw">Import</button>
+      <button class="tab" type="button" data-section="import" data-view="import">CSV Upload</button>
       <button class="tab" type="button" data-section="settings" data-view="settings">Settings</button>
       <button class="tab" type="button" data-section="settings" data-view="dev">Dev</button>
       <button class="tab" type="button" data-section="settings" data-view="logs">Logs</button>
@@ -180,15 +180,15 @@
         <div class="content-grid">
           <section class="panel">
             <div class="panel-heading">
-              <h2>Recent CSV Imports</h2>
+              <h2>Recent Uploads</h2>
             </div>
             <div id="importList" class="list empty-target"></div>
           </section>
         </div>
-        <button type="button" class="primary fab-button csv-import-fab" id="csvImportButton" aria-label="Import CSV"
-          title="Import CSV">
+        <button type="button" class="primary fab-button csv-upload-fab" id="csvUploadButton" aria-label="Upload CSV"
+          title="Upload CSV">
           <span class="material-symbols-outlined" aria-hidden="true">upload_file</span>
-          <span class="fab-label">Import CSV</span>
+          <span class="fab-label">Upload</span>
         </button>
       </section>
 
