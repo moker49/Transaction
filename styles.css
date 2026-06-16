@@ -450,6 +450,17 @@ h2 {
   border-radius: 16px;
 }
 
+.csv-import-fab {
+  position: fixed;
+  right: max(18px, env(safe-area-inset-right));
+  bottom: max(18px, env(safe-area-inset-bottom));
+  z-index: 25;
+  width: auto;
+  min-width: 132px;
+  padding-right: 20px;
+  border-radius: 16px;
+}
+
 .primary-nav {
   min-height: 58px;
   margin-bottom: 8px;
@@ -714,10 +725,6 @@ h2 {
   padding: 14px 18px 18px;
 }
 
-.panel-heading.with-controls {
-  align-items: flex-start;
-}
-
 .form-grid {
   display: grid;
   gap: 14px;
@@ -864,11 +871,18 @@ button:focus-visible {
 }
 
 .raw-controls-heading {
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.raw-controls-heading > #rawSelectedCount {
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 760;
 }
 
 .raw-controls {
-  width: 100%;
+  width: auto;
 }
 
 .transaction-controls {
@@ -908,6 +922,10 @@ button:focus-visible {
   z-index: 25;
 }
 
+.mobile-only {
+  display: none;
+}
+
 .table-wrap {
   width: 100%;
   overflow: auto;
@@ -919,6 +937,33 @@ button:focus-visible {
 
 .raw-table {
   max-height: none;
+}
+
+.raw-table-header {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 760;
+}
+
+.text-button {
+  min-height: 36px;
+  padding: 0 8px;
+  border-radius: 18px;
+  background: transparent;
+  color: var(--accent-dark);
+  font: inherit;
+  font-weight: 800;
+}
+
+.text-button:disabled {
+  cursor: default;
+  opacity: 0.48;
 }
 
 table {
@@ -1291,6 +1336,11 @@ button.category-chip.manageable-chip {
   background: var(--surface-muted);
 }
 
+.icon-only.is-active {
+  color: var(--accent-dark);
+  background: var(--success-bg);
+}
+
 .icon-only.danger {
   color: var(--danger);
   border-color: var(--danger-border);
@@ -1334,6 +1384,10 @@ button.category-chip.manageable-chip {
   width: min(820px, calc(100vw - 28px));
 }
 
+.import-modal {
+  width: min(520px, calc(100vw - 28px));
+}
+
 .modal::backdrop {
   background: rgba(0, 0, 0, 0.56);
 }
@@ -1363,6 +1417,91 @@ button.category-chip.manageable-chip {
   top: 0;
   z-index: 2;
   background: var(--surface);
+}
+
+.modal-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.modal-subtitle-chip {
+  display: flex;
+}
+
+.import-upload-dialog {
+  display: grid;
+  gap: 16px;
+  padding: 20px 18px 16px;
+}
+
+.upload-icon-shell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: var(--success-bg);
+  color: var(--accent-dark);
+}
+
+.upload-icon-shell .material-symbols-outlined {
+  font-size: 30px;
+}
+
+.file-upload-field {
+  cursor: pointer;
+}
+
+.file-upload-title {
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.file-upload-field input[type="file"] {
+  position: absolute;
+  width: 1px;
+  min-width: 1px;
+  height: 1px;
+  min-height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.file-upload-surface {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 76px;
+  padding: 14px 16px;
+  border: 1px dashed var(--tag-chip-outline);
+  border-radius: 8px;
+  background: var(--surface-muted);
+  color: var(--muted);
+  font-weight: 760;
+  overflow: hidden;
+}
+
+.file-upload-surface .material-symbols-outlined {
+  flex: 0 0 auto;
+  color: var(--accent-dark);
+}
+
+#importFileName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-upload-field.has-file .file-upload-surface,
+.file-upload-field.is-dragging .file-upload-surface {
+  border-style: solid;
+  border-color: var(--accent);
+  background: var(--success-bg);
+  color: var(--text);
 }
 
 .modal-delete-button {
@@ -1942,9 +2081,8 @@ tr.is-matched-row td {
     padding-top: 14px;
   }
 
-  .panel-heading.with-controls {
-    align-items: stretch;
-    flex-direction: column;
+  .raw-controls-heading > #rawSelectedCount {
+    display: none;
   }
 
   .topbar-actions,
@@ -1954,8 +2092,21 @@ tr.is-matched-row td {
 
   .raw-controls {
     display: grid;
-    grid-template-columns: 42px minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-columns: 74px minmax(0, 1fr) minmax(0, 1fr);
     align-items: center;
+    width: 100%;
+  }
+
+  .raw-select-all-button {
+    display: none;
+  }
+
+  .raw-table-header {
+    display: flex;
+  }
+
+  .mobile-only {
+    display: inline-flex;
   }
 
   .raw-controls select {
@@ -1990,6 +2141,7 @@ tr.is-matched-row td {
   }
 
   .import-fab,
+  .csv-import-fab,
   .manage-fab {
     bottom: calc(86px + env(safe-area-inset-bottom));
   }
@@ -2052,9 +2204,18 @@ tr.is-matched-row td {
   #rulesView th:nth-child(2),
   #rulesView td:nth-child(2),
   #rawRowsTableElement th[data-raw-column="account"],
+  #rawRowsTableElement th[data-raw-column="status"],
   #rawRowsTableElement th[data-raw-column="notes"],
   #rawRowsTable td[data-raw-column="account"],
+  #rawRowsTable td[data-raw-column="status"],
   #rawRowsTable td[data-raw-column="notes"] {
+    display: none;
+  }
+
+  #rawRowsTableElement:not(.show-mobile-import-column) th[data-raw-column="select"],
+  #rawRowsTableElement:not(.show-mobile-import-column) td[data-raw-column="select"],
+  #rawRowsTableElement.show-mobile-import-column th[data-raw-column="date"],
+  #rawRowsTableElement.show-mobile-import-column td[data-raw-column="date"] {
     display: none;
   }
 

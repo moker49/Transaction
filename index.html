@@ -101,7 +101,7 @@
 
       <section class="view" id="transactionsView">
         <section class="panel">
-          <div class="panel-heading with-controls">
+          <div class="panel-heading">
             <div class="controls transaction-controls">
               <input type="hidden" id="transactionCategoryFilter" value="">
               <button type="button" class="category-picker-button" id="transactionCategoryFilterButton"
@@ -177,37 +177,36 @@
       </section>
 
       <section class="view" id="importView">
-        <div class="content-grid two-column">
+        <div class="content-grid">
           <section class="panel">
-            <form id="importForm" class="form-grid">
-              <label>
-                <span>Account</span>
-                <select name="accountId" id="importAccountSelect" required></select>
-              </label>
-              <label>
-                <span>CSV file</span>
-                <input name="csvFile" type="file" accept=".csv,text/csv" required>
-              </label>
-              <button type="submit" class="primary">Import CSV</button>
-            </form>
-            <div id="importMessage" class="message" role="status" aria-live="polite"></div>
-          </section>
-
-          <section class="panel">
-            <h2 class="visually-hidden">Recent CSV imports</h2>
+            <div class="panel-heading">
+              <h2>Recent CSV Imports</h2>
+            </div>
             <div id="importList" class="list empty-target"></div>
           </section>
         </div>
+        <button type="button" class="primary fab-button csv-import-fab" id="csvImportButton" aria-label="Import CSV"
+          title="Import CSV">
+          <span class="material-symbols-outlined" aria-hidden="true">upload_file</span>
+          <span class="fab-label">Import CSV</span>
+        </button>
       </section>
 
       <section class="view" id="rawView">
         <section class="panel">
-          <div class="panel-heading with-controls raw-controls-heading">
+          <div class="panel-heading raw-controls-heading">
+            <span id="rawSelectedCount">0 selected</span>
             <div class="controls raw-controls">
-              <button type="button" class="icon-button icon-only" id="selectVisibleRowsButton"
-                aria-label="Select visible" title="Select visible">
-                <span class="material-symbols-outlined" aria-hidden="true">select_all</span>
-              </button>
+              <button type="button" class="text-button raw-select-all-button" id="selectVisibleRowsButton">Select
+                all</button>
+              <label class="theme-toggle raw-column-toggle mobile-only" title="Show import column">
+                <input type="checkbox" id="rawColumnToggleInput" aria-label="Show import column">
+                <span class="theme-track" aria-hidden="true">
+                  <span class="theme-thumb"></span>
+                  <span class="theme-icon theme-icon-light material-symbols-outlined">calendar_today</span>
+                  <span class="theme-icon theme-icon-dark material-symbols-outlined">select_all</span>
+                </span>
+              </label>
               <select id="rawAccountFilter" aria-label="Filter by account"></select>
               <select id="rawStatusFilter" aria-label="Filter by import status">
                 <option value="all">All rows</option>
@@ -220,6 +219,10 @@
               </select>
             </div>
           </div>
+          <div class="raw-table-header">
+            <span id="rawSelectedCountMobile">0 selected</span>
+            <button type="button" class="text-button" id="selectVisibleRowsMobileButton">Select all</button>
+          </div>
           <div class="table-wrap raw-table raw-table-wrap">
             <table id="rawRowsTableElement">
               <thead>
@@ -230,8 +233,8 @@
                   <th data-raw-column="description">Description</th>
                   <th data-raw-column="amount">Amount</th>
                   <th data-raw-column="account">Account</th>
-                  <th data-raw-column="notes">Notes</th>
                   <th data-raw-column="status">Status</th>
+                  <th data-raw-column="notes">Notes</th>
                 </tr>
               </thead>
               <tbody id="rawRowsTable"></tbody>
@@ -530,13 +533,49 @@
     </form>
   </dialog>
 
+  <dialog id="importDialog" class="modal import-modal" tabindex="-1">
+    <form id="importForm" class="modal-panel">
+      <div class="panel-heading">
+        <h2>Import CSV</h2>
+        <button class="icon-only" type="button" id="importCloseButton" aria-label="Close">
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <div class="import-upload-dialog">
+        <div class="upload-icon-shell" aria-hidden="true">
+          <span class="material-symbols-outlined">upload_file</span>
+        </div>
+        <label>
+          <span>Account</span>
+          <select name="accountId" id="importAccountSelect" required></select>
+        </label>
+        <label class="file-upload-field" id="importFileDropZone">
+          <span class="file-upload-title">CSV file</span>
+          <input name="csvFile" id="importCsvFileInput" type="file" accept=".csv,text/csv" required>
+          <span class="file-upload-surface">
+            <span class="material-symbols-outlined" aria-hidden="true">attach_file</span>
+            <span id="importFileName">Choose file</span>
+          </span>
+        </label>
+      </div>
+      <div id="importMessage" class="modal-message" role="status" aria-live="polite"></div>
+      <div class="modal-actions">
+        <button type="button" class="icon-button" id="importCancelButton">Cancel</button>
+        <button type="submit" class="primary">Import</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="rawRowDialog" class="modal wide-modal" tabindex="-1">
     <form id="rawRowForm" class="modal-panel">
       <div class="panel-heading">
         <h2 id="rawRowDialogTitle">Raw Transaction</h2>
-        <button class="icon-only" type="button" id="rawRowCloseButton" aria-label="Close">
-          <span class="material-symbols-outlined" aria-hidden="true">close</span>
-        </button>
+        <div class="modal-heading-actions">
+          <div id="rawRowStatusSubtitle" class="modal-subtitle-chip"></div>
+          <button class="icon-only" type="button" id="rawRowCloseButton" aria-label="Close">
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
+          </button>
+        </div>
       </div>
       <div class="transaction-detail-grid raw-row-detail-grid">
         <section>

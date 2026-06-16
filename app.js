@@ -47,6 +47,7 @@
   let categoryColorDraft = "#2f8f2f";
   let popupTimer = null;
   let dashboardRangeDraft = null;
+  let rawMobileImportColumnVisible = false;
   const importableRawRowStatuses = new Set(["new", "ready"]);
   const transactionTypes = [
     { value: "income", label: "Income" },
@@ -104,7 +105,14 @@
     dashboardSplurgeLegend: document.querySelector("#dashboardSplurgeLegend"),
     accountAddButton: document.querySelector("#accountAddButton"),
     accountForm: document.querySelector("#accountForm"),
+    csvImportButton: document.querySelector("#csvImportButton"),
+    importDialog: document.querySelector("#importDialog"),
     importForm: document.querySelector("#importForm"),
+    importCloseButton: document.querySelector("#importCloseButton"),
+    importCancelButton: document.querySelector("#importCancelButton"),
+    importCsvFileInput: document.querySelector("#importCsvFileInput"),
+    importFileDropZone: document.querySelector("#importFileDropZone"),
+    importFileName: document.querySelector("#importFileName"),
     categoryAddButton: document.querySelector("#categoryAddButton"),
     tagAddButton: document.querySelector("#tagAddButton"),
     ruleForm: document.querySelector("#ruleForm"),
@@ -116,8 +124,12 @@
     dummyDatabaseDescription: document.querySelector("#dummyDatabaseDescription"),
     rawAccountFilter: document.querySelector("#rawAccountFilter"),
     rawStatusFilter: document.querySelector("#rawStatusFilter"),
+    rawColumnToggleInput: document.querySelector("#rawColumnToggleInput"),
+    rawSelectedCount: document.querySelector("#rawSelectedCount"),
+    rawSelectedCountMobile: document.querySelector("#rawSelectedCountMobile"),
     rawRowsTableElement: document.querySelector("#rawRowsTableElement"),
     selectVisibleRowsButton: document.querySelector("#selectVisibleRowsButton"),
+    selectVisibleRowsMobileButton: document.querySelector("#selectVisibleRowsMobileButton"),
     importSelectedRowsButton: document.querySelector("#importSelectedRowsButton"),
     regenerateDatabaseButton: document.querySelector("#regenerateDatabaseButton"),
     ruleAddButton: document.querySelector("#ruleAddButton"),
@@ -194,6 +206,7 @@
     rawRowDialog: document.querySelector("#rawRowDialog"),
     rawRowForm: document.querySelector("#rawRowForm"),
     rawRowDialogTitle: document.querySelector("#rawRowDialogTitle"),
+    rawRowStatusSubtitle: document.querySelector("#rawRowStatusSubtitle"),
     rawRowCloseButton: document.querySelector("#rawRowCloseButton"),
     rawRowDismissButton: document.querySelector("#rawRowDismissButton"),
     rawRowDeleteButton: document.querySelector("#rawRowDeleteButton"),
@@ -243,13 +256,22 @@
 
   elements.accountAddButton.addEventListener("click", openAccountAddDialog);
   elements.accountForm.addEventListener("submit", saveAccount);
+  elements.csvImportButton.addEventListener("click", openImportDialog);
   elements.importForm.addEventListener("submit", importCsv);
+  elements.importCloseButton.addEventListener("click", closeImportDialog);
+  elements.importCancelButton.addEventListener("click", closeImportDialog);
+  elements.importCsvFileInput.addEventListener("change", updateImportFileName);
+  elements.importFileDropZone.addEventListener("dragover", handleImportFileDrag);
+  elements.importFileDropZone.addEventListener("dragleave", handleImportFileDrag);
+  elements.importFileDropZone.addEventListener("drop", handleImportFileDrop);
   elements.categoryAddButton.addEventListener("click", openCategoryAddDialog);
   elements.tagAddButton.addEventListener("click", addTag);
   elements.ruleForm.addEventListener("submit", saveRule);
   elements.rawAccountFilter.addEventListener("change", renderRawRows);
   elements.rawStatusFilter.addEventListener("change", renderRawRows);
+  elements.rawColumnToggleInput.addEventListener("change", toggleRawMobileColumn);
   elements.selectVisibleRowsButton.addEventListener("click", selectVisibleRawRows);
+  elements.selectVisibleRowsMobileButton.addEventListener("click", selectVisibleRawRows);
   elements.importSelectedRowsButton.addEventListener("click", importSelectedRawRows);
   elements.regenerateDatabaseButton.addEventListener("click", regenerateDatabase);
   elements.dummyDatabaseToggle.addEventListener("change", updateDatabaseMode);
@@ -759,7 +781,7 @@
     const file = form.get("csvFile");
     const sourceType = "csv";
 
-    if (!accountId || !(file instanceof File)) {
+    if (!accountId || !(file instanceof File) || !file.name) {
       showPopup("Choose an account and CSV file.", "warning");
       return;
     }
@@ -774,6 +796,8 @@
         body: upload,
       });
       formElement.reset();
+      updateImportFileName();
+      closeImportDialog();
       applyStateFromPayload(payload);
       if (payload.status === "already_imported") {
         showPopup("File already imported for this account.", "warning");
@@ -783,6 +807,43 @@
     } catch (error) {
       showPopup(error.message || "CSV import failed.", "error");
     }
+  }
+
+  function openImportDialog() {
+    setMessage("");
+    updateImportFileName();
+    openModal(elements.importDialog);
+  }
+
+  function closeImportDialog() {
+    elements.importDialog.close();
+  }
+
+  function updateImportFileName() {
+    const file = elements.importCsvFileInput.files?.[0];
+    elements.importFileName.textContent = file?.name || "Choose file";
+    elements.importFileDropZone.classList.toggle("has-file", Boolean(file));
+  }
+
+  function handleImportFileDrag(event) {
+    event.preventDefault();
+    elements.importFileDropZone.classList.toggle("is-dragging", event.type === "dragover");
+  }
+
+  function handleImportFileDrop(event) {
+    event.preventDefault();
+    elements.importFileDropZone.classList.remove("is-dragging");
+    const file = [...event.dataTransfer.files].find((candidate) => {
+      return candidate.type === "text/csv" || candidate.name.toLowerCase().endsWith(".csv");
+    });
+    if (!file) {
+      showPopup("Choose a CSV file.", "warning");
+      return;
+    }
+    const files = new DataTransfer();
+    files.items.add(file);
+    elements.importCsvFileInput.files = files.files;
+    updateImportFileName();
   }
 
   async function addTag() {
@@ -1667,6 +1728,7 @@
   function populateRawRowDialog(rawRow) {
     const account = state.accounts.find((candidate) => candidate.id === rawRow.account_id);
     elements.rawRowDialogTitle.textContent = `Raw Transaction ${rawRow.id}`;
+    elements.rawRowStatusSubtitle.replaceChildren(statusBadge(rawRow));
     elements.rawRowNoteInput.value = rawRowStoredNote(rawRow);
     elements.rawRowNoteInput.disabled = false;
     elements.rawRowSaveButton.textContent = "Save";
@@ -2227,6 +2289,7 @@
     if (statusFilter !== "all") {
       hiddenColumns.add("status");
     }
+    updateRawMobileColumnToggle();
     updateRawColumnHeaders(hiddenColumns);
     const rawColumnCount = 8 - hiddenColumns.size;
 
@@ -2306,8 +2369,8 @@
         ["description", cell(rawValueWithPreview(rawRow.raw_description, rawRow.preview_clean_description))],
         ["amount", cell(rawRow.raw_amount || "-", "amount")],
         ["account", cell(account ? account.name : "Unknown", "muted-cell")],
-        ["notes", cell(noteInput)],
         ["status", cell(statusBadge(rawRow), "status-cell")],
+        ["notes", cell(noteInput)],
       ];
       tr.append(...cells
         .filter(([column]) => !hiddenColumns.has(column))
@@ -2395,13 +2458,21 @@
     const selectableIds = visibleRawRows
       .filter((row) => isImportableRawRow(row))
       .map((row) => row.id);
-    const allSelected = selectableIds.length > 0 && selectableIds.every((rowId) => selectedRawRowIds.has(rowId));
-    if (allSelected) {
-      selectableIds.forEach((rowId) => selectedRawRowIds.delete(rowId));
-    } else {
-      selectableIds.forEach((rowId) => selectedRawRowIds.add(rowId));
-    }
+    selectableIds.forEach((rowId) => selectedRawRowIds.add(rowId));
     renderRawRows();
+  }
+
+  function toggleRawMobileColumn() {
+    rawMobileImportColumnVisible = elements.rawColumnToggleInput.checked;
+    updateRawMobileColumnToggle();
+  }
+
+  function updateRawMobileColumnToggle() {
+    elements.rawRowsTableElement.classList.toggle("show-mobile-import-column", rawMobileImportColumnVisible);
+    elements.rawColumnToggleInput.checked = rawMobileImportColumnVisible;
+    const label = rawMobileImportColumnVisible ? "Show date column" : "Show import column";
+    elements.rawColumnToggleInput.setAttribute("aria-label", label);
+    elements.rawColumnToggleInput.closest(".raw-column-toggle").title = label;
   }
 
   function updateImportSelectedButton() {
@@ -2414,17 +2485,22 @@
     elements.importSelectedRowsButton.title =
       importableCount === 0 ? "Import selected" : `Import selected (${importableCount})`;
     elements.importSelectedRowsButton.setAttribute("aria-label", elements.importSelectedRowsButton.title);
+    elements.rawSelectedCount.textContent = `${importableCount} selected`;
+    elements.rawSelectedCountMobile.textContent = `${importableCount} selected`;
   }
 
   function updateSelectVisibleButton() {
     const selectableIds = visibleRawRows
       .filter((row) => isImportableRawRow(row))
       .map((row) => row.id);
-    const allSelected = selectableIds.length > 0 && selectableIds.every((rowId) => selectedRawRowIds.has(rowId));
     elements.selectVisibleRowsButton.disabled = selectableIds.length === 0;
-    elements.selectVisibleRowsButton.title = allSelected ? "Clear visible" : "Select visible";
+    elements.selectVisibleRowsButton.title = "Select all visible";
     elements.selectVisibleRowsButton.setAttribute("aria-label", elements.selectVisibleRowsButton.title);
-    elements.selectVisibleRowsButton.querySelector(".material-symbols-outlined").textContent = allSelected ? "deselect" : "select_all";
+    elements.selectVisibleRowsButton.textContent = "Select all";
+    elements.selectVisibleRowsMobileButton.disabled = selectableIds.length === 0;
+    elements.selectVisibleRowsMobileButton.title = elements.selectVisibleRowsButton.title;
+    elements.selectVisibleRowsMobileButton.setAttribute("aria-label", elements.selectVisibleRowsButton.title);
+    elements.selectVisibleRowsMobileButton.textContent = "Select all";
   }
 
   function updateRawColumnHeaders(hiddenColumns) {
