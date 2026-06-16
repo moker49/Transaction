@@ -155,7 +155,6 @@
     ruleMessage: document.querySelector("#ruleMessage"),
     ruleSubmitButton: document.querySelector("#ruleSubmitButton"),
     ruleDeleteButton: document.querySelector("#ruleDeleteButton"),
-    profileButton: document.querySelector("#profileButton"),
     settingsThemeToggle: document.querySelector("#settingsThemeToggle"),
     dashboardRangeButton: document.querySelector("#dashboardRangeButton"),
     dashboardRangeLabel: document.querySelector("#dashboardRangeLabel"),
@@ -295,7 +294,6 @@
   elements.ruleDialog.addEventListener("close", () => {
     editingRuleId = null;
   });
-  elements.profileButton.addEventListener("click", () => activateView("settings"));
   elements.settingsThemeToggle.addEventListener("change", updateTheme);
   elements.mobileThemeToggle.addEventListener("change", updateTheme);
   elements.mobileMenuButton.addEventListener("click", openMobileDrawer);
@@ -739,8 +737,6 @@
       navItem.classList.toggle("is-active", isActive);
       navItem.setAttribute("aria-current", isActive ? "page" : "false");
     });
-    elements.profileButton.classList.toggle("is-active", activeSection === "settings");
-    elements.profileButton.setAttribute("aria-current", activeSection === "settings" ? "page" : "false");
     elements.tabs.forEach((tab) => {
       const isActive = tab.dataset.view === viewName;
       const isVisible = tab.dataset.section === activeSection;

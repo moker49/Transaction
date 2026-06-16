@@ -2419,6 +2419,10 @@ tr.is-matched-row td {
     line-height: 1.1;
   }
 
+  .desktop-settings-nav {
+    display: none;
+  }
+
   .nav-item .material-symbols-outlined {
     width: 34px;
     height: 26px;
