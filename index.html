@@ -13,6 +13,57 @@
 </head>
 
 <body>
+  <div class="mobile-app-bar">
+    <button type="button" class="mobile-menu-button" id="mobileMenuButton" aria-label="Open settings">
+      <span class="material-symbols-outlined" aria-hidden="true">menu</span>
+    </button>
+    <button type="button" class="mobile-range-button" id="mobileDashboardRangeButton">
+      <span id="mobileDashboardRangeLabel">Last month</span>
+    </button>
+  </div>
+
+  <div class="mobile-drawer-backdrop" id="mobileDrawerBackdrop" hidden></div>
+  <aside class="mobile-nav-drawer" id="mobileNavDrawer" aria-label="Settings drawer" aria-hidden="true">
+    <div class="mobile-drawer-header">
+      <strong>Personal Finances</strong>
+    </div>
+    <div class="settings-list mobile-drawer-settings">
+      <div class="setting-row">
+        <div>
+          <strong id="mobileDummyDatabaseLabel">Database</strong>
+          <span class="setting-note" id="mobileDummyDatabaseDescription">Using primary database</span>
+        </div>
+        <label class="theme-toggle" title="Use dummy database">
+          <input type="checkbox" id="mobileDummyDatabaseToggle" aria-label="Use dummy database">
+          <span class="theme-track" aria-hidden="true">
+            <span class="theme-thumb"></span>
+            <span class="theme-icon theme-icon-light material-symbols-outlined">database</span>
+            <span class="theme-icon theme-icon-dark material-symbols-outlined">science</span>
+          </span>
+        </label>
+      </div>
+      <div class="setting-row">
+        <div>
+          <strong>Theme</strong>
+        </div>
+        <label class="theme-toggle" title="Toggle theme">
+          <input type="checkbox" id="mobileThemeToggle" checked aria-label="Use dark theme">
+          <span class="theme-track" aria-hidden="true">
+            <span class="theme-thumb"></span>
+            <span class="theme-icon theme-icon-light material-symbols-outlined">light_mode</span>
+            <span class="theme-icon theme-icon-dark material-symbols-outlined">dark_mode</span>
+          </span>
+        </label>
+      </div>
+      <div class="setting-row danger-row">
+        <button type="button" class="danger-button" id="mobileRegenerateDatabaseButton">
+          Clear Dummy Database
+        </button>
+      </div>
+      <div id="mobileDevMessage" class="message" role="status" aria-live="polite"></div>
+    </div>
+  </aside>
+
   <div class="app-shell">
     <header class="topbar">
       <div>

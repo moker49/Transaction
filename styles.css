@@ -150,6 +150,12 @@ h2 {
   gap: 8px;
 }
 
+.mobile-app-bar,
+.mobile-drawer-backdrop,
+.mobile-nav-drawer {
+  display: none;
+}
+
 .icon-button,
 .primary,
 .danger-button {
@@ -1551,8 +1557,6 @@ button.category-chip.manageable-chip {
 
 .calendar-range-fields {
   display: flex;
-  justify-content: flex-end;
-  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -2079,9 +2083,116 @@ tr.is-matched-row td {
     padding-bottom: 70px;
   }
 
+  body.drawer-open {
+    overflow: hidden;
+  }
+
+  .mobile-app-bar {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 10px 14px;
+    background: var(--bg);
+  }
+
+  .mobile-menu-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    border-radius: 24px;
+    background: transparent;
+    color: var(--text);
+  }
+
+  .mobile-range-button {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    min-height: 56px;
+    padding: 0 22px;
+    border-radius: 28px;
+    background: var(--surface-muted);
+    color: var(--text);
+    font-size: 1rem;
+    font-weight: 700;
+    text-align: left;
+  }
+
+  .mobile-range-button span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    display: block;
+    background: rgba(0, 0, 0, 0.38);
+  }
+
+  .mobile-drawer-backdrop[hidden] {
+    display: none;
+  }
+
+  .mobile-nav-drawer {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 61;
+    display: block;
+    width: min(340px, calc(100vw - 56px));
+    padding-top: max(18px, env(safe-area-inset-top));
+    overflow: auto;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    transform: translateX(-100%);
+    transition: transform 180ms ease;
+  }
+
+  .mobile-nav-drawer.is-open {
+    transform: translateX(0);
+  }
+
+  .mobile-drawer-header {
+    display: grid;
+    gap: 4px;
+    padding: 40px 12px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .mobile-drawer-header strong {
+    font-size: 1.08rem;
+  }
+
+  .mobile-drawer-header span {
+    color: var(--muted);
+    font-size: 0.86rem;
+    font-weight: 650;
+  }
+
+  .mobile-drawer-settings {
+    padding-top: 12px;
+  }
+
   .app-shell {
     width: min(100% - 20px, 1240px);
-    padding-top: 14px;
+    padding-top: 4px;
+  }
+
+  .topbar {
+    display: none;
   }
 
   .raw-controls-heading > #rawSelectedCount {
@@ -2344,10 +2455,6 @@ tr.is-matched-row td {
 
   .range-preset-list {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .calendar-range-fields {
-    justify-content: stretch;
   }
 
   .calendar-range-fields input {

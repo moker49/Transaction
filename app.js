@@ -96,6 +96,17 @@
     appMessage: document.querySelector("#appMessage"),
     appMessageIcon: document.querySelector("#appMessageIcon"),
     appMessageText: document.querySelector("#appMessageText"),
+    mobileMenuButton: document.querySelector("#mobileMenuButton"),
+    mobileDashboardRangeButton: document.querySelector("#mobileDashboardRangeButton"),
+    mobileDashboardRangeLabel: document.querySelector("#mobileDashboardRangeLabel"),
+    mobileDrawerBackdrop: document.querySelector("#mobileDrawerBackdrop"),
+    mobileNavDrawer: document.querySelector("#mobileNavDrawer"),
+    mobileDummyDatabaseToggle: document.querySelector("#mobileDummyDatabaseToggle"),
+    mobileDummyDatabaseLabel: document.querySelector("#mobileDummyDatabaseLabel"),
+    mobileDummyDatabaseDescription: document.querySelector("#mobileDummyDatabaseDescription"),
+    mobileThemeToggle: document.querySelector("#mobileThemeToggle"),
+    mobileRegenerateDatabaseButton: document.querySelector("#mobileRegenerateDatabaseButton"),
+    mobileDevMessage: document.querySelector("#mobileDevMessage"),
     dashboardTypeBar: document.querySelector("#dashboardTypeBar"),
     dashboardTypeBarLegend: document.querySelector("#dashboardTypeBarLegend"),
     dashboardCategoryPie: document.querySelector("#dashboardCategoryPie"),
@@ -286,6 +297,12 @@
   });
   elements.profileButton.addEventListener("click", () => activateView("settings"));
   elements.settingsThemeToggle.addEventListener("change", updateTheme);
+  elements.mobileThemeToggle.addEventListener("change", updateTheme);
+  elements.mobileMenuButton.addEventListener("click", openMobileDrawer);
+  elements.mobileDrawerBackdrop.addEventListener("click", closeMobileDrawer);
+  elements.mobileDashboardRangeButton.addEventListener("click", openDashboardRangeDialog);
+  elements.mobileDummyDatabaseToggle.addEventListener("change", updateDatabaseMode);
+  elements.mobileRegenerateDatabaseButton.addEventListener("click", regenerateDatabase);
   elements.dashboardRangeButton.addEventListener("click", openDashboardRangeDialog);
   elements.dashboardRangeForm.addEventListener("submit", applyDashboardRange);
   elements.dashboardRangeCloseButton.addEventListener("click", closeDashboardRangeDialog);
@@ -393,6 +410,11 @@
   document.querySelectorAll("dialog.modal").forEach((dialog) => {
     dialog.addEventListener("close", updateModalScrollLock);
   });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && elements.mobileNavDrawer.classList.contains("is-open")) {
+      closeMobileDrawer();
+    }
+  });
 
   initializeTheme();
   initializeDashboardRange();
@@ -410,6 +432,7 @@
     localStorage.setItem("transaction-theme", theme);
     const isDark = theme === "dark";
     elements.settingsThemeToggle.checked = isDark;
+    elements.mobileThemeToggle.checked = isDark;
   }
 
   function updateTheme(event) {
@@ -488,6 +511,7 @@
   function renderDashboardRangeButton() {
     const period = dashboardPeriod();
     elements.dashboardRangeLabel.textContent = formatDateRangeLabel(period.start, period.end);
+    elements.mobileDashboardRangeLabel.textContent = formatDateRangeLabel(period.start, period.end);
   }
 
   function renderDashboardRangeDialog() {
@@ -604,12 +628,17 @@
   }
 
   function initializeDatabaseMode() {
-    elements.dummyDatabaseToggle.checked = localStorage.getItem(DUMMY_DATABASE_KEY) === "true";
+    const isDummy = localStorage.getItem(DUMMY_DATABASE_KEY) === "true";
+    elements.dummyDatabaseToggle.checked = isDummy;
+    elements.mobileDummyDatabaseToggle.checked = isDummy;
     renderDatabaseModeLabel();
   }
 
   function updateDatabaseMode(event) {
-    localStorage.setItem(DUMMY_DATABASE_KEY, event.currentTarget.checked ? "true" : "false");
+    const isDummy = event.currentTarget.checked;
+    localStorage.setItem(DUMMY_DATABASE_KEY, isDummy ? "true" : "false");
+    elements.dummyDatabaseToggle.checked = isDummy;
+    elements.mobileDummyDatabaseToggle.checked = isDummy;
     renderDatabaseModeLabel();
     selectedRawRowIds.clear();
     rawRowNotes.clear();
@@ -624,11 +653,28 @@
 
   function renderDatabaseModeLabel() {
     elements.dummyDatabaseLabel.textContent = "Database";
+    elements.mobileDummyDatabaseLabel.textContent = "Database";
     if (isUsingDummyDatabase()) {
       elements.dummyDatabaseDescription.textContent = "Using dummy database";
+      elements.mobileDummyDatabaseDescription.textContent = "Using dummy database";
       return;
     }
     elements.dummyDatabaseDescription.textContent = "Using primary database";
+    elements.mobileDummyDatabaseDescription.textContent = "Using primary database";
+  }
+
+  function openMobileDrawer() {
+    elements.mobileDrawerBackdrop.hidden = false;
+    elements.mobileNavDrawer.classList.add("is-open");
+    elements.mobileNavDrawer.setAttribute("aria-hidden", "false");
+    document.body.classList.add("drawer-open");
+  }
+
+  function closeMobileDrawer() {
+    elements.mobileNavDrawer.classList.remove("is-open");
+    elements.mobileNavDrawer.setAttribute("aria-hidden", "true");
+    elements.mobileDrawerBackdrop.hidden = true;
+    document.body.classList.remove("drawer-open");
   }
 
   async function loadInitialState() {
@@ -2409,6 +2455,7 @@
 
     setDevMessage("Restoring dummy database...");
     elements.regenerateDatabaseButton.disabled = true;
+    elements.mobileRegenerateDatabaseButton.disabled = true;
     try {
       const payload = await apiRequest("/api/dev/regenerate-database", {
         method: "POST",
@@ -2418,6 +2465,7 @@
       rawRowNotes.clear();
       visibleRawRows = [];
       elements.dummyDatabaseToggle.checked = true;
+      elements.mobileDummyDatabaseToggle.checked = true;
       localStorage.setItem(DUMMY_DATABASE_KEY, "true");
       renderDatabaseModeLabel();
       applyStateFromPayload(payload);
@@ -2426,6 +2474,7 @@
       showPopup(error.message || "Could not regenerate database.", "error");
     } finally {
       elements.regenerateDatabaseButton.disabled = false;
+      elements.mobileRegenerateDatabaseButton.disabled = false;
     }
   }
 
@@ -3087,6 +3136,8 @@
   function setDevMessage(message, isError = false) {
     elements.devMessage.textContent = message;
     elements.devMessage.classList.toggle("error", isError);
+    elements.mobileDevMessage.textContent = message;
+    elements.mobileDevMessage.classList.toggle("error", isError);
   }
 
   function setText(selector, value) {
