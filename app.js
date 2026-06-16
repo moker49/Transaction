@@ -2459,6 +2459,7 @@
       .filter((row) => isImportableRawRow(row))
       .map((row) => row.id);
     selectableIds.forEach((rowId) => selectedRawRowIds.add(rowId));
+    rawMobileImportColumnVisible = true;
     renderRawRows();
   }
 

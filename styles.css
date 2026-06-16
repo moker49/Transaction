@@ -878,7 +878,6 @@ button:focus-visible {
 .raw-controls-heading > #rawSelectedCount {
   color: var(--muted);
   font-size: 0.86rem;
-  font-weight: 760;
 }
 
 .raw-controls {
@@ -948,7 +947,6 @@ button:focus-visible {
   border-bottom: 1px solid var(--border);
   color: var(--muted);
   font-size: 0.86rem;
-  font-weight: 760;
 }
 
 .text-button {
@@ -1983,6 +1981,7 @@ th[data-raw-column="select"],
 .raw-select-cell {
   text-align: center;
   vertical-align: middle;
+  padding-right: 0;
 }
 
 .raw-select-cell {
@@ -2214,6 +2213,11 @@ tr.is-matched-row td {
   #rawRowsTable td[data-raw-column="status"],
   #rawRowsTable td[data-raw-column="notes"] {
     display: none;
+  }
+
+  th[data-raw-column="select"],
+  td[data-raw-column="select"]{
+    padding-right: 8px;
   }
 
   #rawRowsTableElement:not(.show-mobile-import-column) th[data-raw-column="select"],
