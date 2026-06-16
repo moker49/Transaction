@@ -22,7 +22,7 @@
       <div class="topbar-actions">
         <button class="profile-button" type="button" id="profileButton" aria-label="Profile and settings"
           title="Profile and settings">
-          <span class="material-symbols-outlined" aria-hidden="true">account_circle</span>
+          <span class="material-symbols-outlined" aria-hidden="true">settings</span>
         </button>
       </div>
     </header>
@@ -53,9 +53,6 @@
       <button class="tab" type="button" data-section="manage" data-view="rules">Rules</button>
       <button class="tab" type="button" data-section="import" data-view="raw">Import</button>
       <button class="tab" type="button" data-section="import" data-view="import">CSV Upload</button>
-      <button class="tab" type="button" data-section="settings" data-view="settings">Settings</button>
-      <button class="tab" type="button" data-section="settings" data-view="dev">Dev</button>
-      <button class="tab" type="button" data-section="settings" data-view="logs">Logs</button>
     </nav>
 
     <main>
@@ -273,7 +270,25 @@
 
       <section class="view" id="settingsView">
         <section class="panel">
+          <div class="panel-heading">
+            <h2>Settings</h2>
+          </div>
           <div class="settings-list">
+            <div class="setting-row">
+              <div>
+                <strong id="dummyDatabaseLabel">Use dummy database</strong>
+                <span class="setting-note" id="dummyDatabaseDescription">Route all reads, writes, imports, and dev
+                  actions to a separate dummy SQLite file.</span>
+              </div>
+              <label class="theme-toggle" title="Use dummy database">
+                <input type="checkbox" id="dummyDatabaseToggle" aria-label="Use dummy database">
+                <span class="theme-track" aria-hidden="true">
+                  <span class="theme-thumb"></span>
+                  <span class="theme-icon theme-icon-light material-symbols-outlined">database</span>
+                  <span class="theme-icon theme-icon-dark material-symbols-outlined">science</span>
+                </span>
+              </label>
+            </div>
             <div class="setting-row">
               <div>
                 <strong>Theme</strong>
@@ -296,28 +311,6 @@
                 <span class="material-symbols-outlined" aria-hidden="true">calendar_month</span>
               </button>
             </div>
-          </div>
-        </section>
-      </section>
-
-      <section class="view" id="devView">
-        <section class="panel">
-          <div class="settings-list">
-            <div class="setting-row">
-              <div>
-                <strong id="dummyDatabaseLabel">Use dummy database</strong>
-                <span class="setting-note" id="dummyDatabaseDescription">Route all reads, writes, imports, and dev
-                  actions to a separate dummy SQLite file.</span>
-              </div>
-              <label class="theme-toggle" title="Use dummy database">
-                <input type="checkbox" id="dummyDatabaseToggle" aria-label="Use dummy database">
-                <span class="theme-track" aria-hidden="true">
-                  <span class="theme-thumb"></span>
-                  <span class="theme-icon theme-icon-light material-symbols-outlined">database</span>
-                  <span class="theme-icon theme-icon-dark material-symbols-outlined">science</span>
-                </span>
-              </label>
-            </div>
             <div class="setting-row danger-row">
               <button type="button" class="danger-button" id="regenerateDatabaseButton">
                 Restore Dummy Database
@@ -325,12 +318,6 @@
             </div>
             <div id="devMessage" class="message" role="status" aria-live="polite"></div>
           </div>
-        </section>
-      </section>
-
-      <section class="view" id="logsView">
-        <section class="panel">
-          <div id="logList" class="list empty-target"></div>
         </section>
       </section>
     </main>

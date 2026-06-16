@@ -21,7 +21,6 @@
     imports: [],
     transactions: [],
     rawRows: [],
-    logs: [],
   };
 
   let state = structuredClone(defaultState);
@@ -686,7 +685,7 @@
   function activateView(viewName) {
     const activeTab = [...elements.tabs].find((tab) => tab.dataset.view === viewName);
     const activeNavItem = [...elements.navItems].find((navItem) => navItem.dataset.defaultView === viewName);
-    const activeSection = activeTab?.dataset.section || activeNavItem?.dataset.section || "dash";
+    const activeSection = activeTab?.dataset.section || activeNavItem?.dataset.section || (viewName === "settings" ? "settings" : "dash");
     let visibleTabCount = 0;
 
     elements.navItems.forEach((navItem) => {
@@ -1363,7 +1362,6 @@
     renderCategories();
     renderTags();
     renderRules();
-    renderLogs();
     renderRawRows();
   }
 
@@ -2251,29 +2249,6 @@
       list.appendChild(el("span", `Category contains "${matches.category}"`));
     }
     return list.childElementCount ? list : "-";
-  }
-
-  function renderLogs() {
-    const logList = document.querySelector("#logList");
-    clear(logList);
-    if (!state.logs.length) {
-      appendEmpty(logList);
-      return;
-    }
-
-    state.logs.slice(0, 20).forEach((log) => {
-      const node = document.createElement("div");
-      node.className = `list-item log-${log.level}`;
-      node.append(
-        el("strong", `${log.level.toUpperCase()} | ${log.source}`),
-        el("span", log.message, "list-meta"),
-        el("span", formatDateTime(log.created_at), "list-meta"),
-      );
-      if (log.details && Object.keys(log.details).length) {
-        node.append(el("span", JSON.stringify(log.details), "list-meta"));
-      }
-      logList.appendChild(node);
-    });
   }
 
   function renderRawRows() {

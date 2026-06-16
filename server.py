@@ -991,17 +991,6 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
             """
         ).fetchall()
     )
-    logs = rows_to_dicts(
-        conn.execute(
-            """
-            SELECT id, level, source, message, details_json, created_at
-            FROM logs
-            ORDER BY created_at DESC, id DESC
-            LIMIT 100
-            """
-        ).fetchall()
-    )
-
     for item in imports:
         item["metadata"] = parse_metadata(item.pop("metadata_json"))
     tags_by_transaction: dict[int, list[dict[str, Any]]] = {}
@@ -1029,9 +1018,6 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
         category["is_default"] = category["name"] in DEFAULT_CATEGORY_NAMES
     for tag in tags:
         tag["is_protected"] = False
-    for log in logs:
-        log["details"] = parse_metadata(log.pop("details_json"))
-
     return {
         "accounts": accounts,
         "categories": categories,
@@ -1040,7 +1026,6 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
         "imports": imports,
         "transactions": transactions,
         "rawRows": raw_rows,
-        "logs": logs,
     }
 
 
