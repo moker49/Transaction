@@ -994,6 +994,10 @@ td {
   font-size: 0.9rem;
 }
 
+#rawRowsTable tr {
+  height: 72px;
+}
+
 #transactionsView th:nth-child(4),
 th[data-raw-column="amount"],
 td.amount {
@@ -2217,6 +2221,22 @@ tr.is-matched-row td {
   #rawRowsTableElement.show-mobile-import-column th[data-raw-column="date"],
   #rawRowsTableElement.show-mobile-import-column td[data-raw-column="date"] {
     display: none;
+  }
+
+  #rawRowsTableElement th[data-raw-column="select"],
+  #rawRowsTable td[data-raw-column="select"],
+  #rawRowsTableElement th[data-raw-column="date"],
+  #rawRowsTable td[data-raw-column="date"] {
+    width: 74px;
+    min-width: 74px;
+    max-width: 74px;
+  }
+
+  #rawRowsTableElement th[data-raw-column="category"],
+  #rawRowsTable td[data-raw-column="category"] {
+    width: 111px;
+    min-width: 111px;
+    max-width: 111px;
   }
 
   .metric-grid {
