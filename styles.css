@@ -2190,6 +2190,7 @@ tr.is-matched-row td {
 
 .clickable-row {
   cursor: pointer;
+  height: 56px;
 }
 
 .clickable-row:hover td,
@@ -2543,7 +2544,7 @@ tr.is-matched-row td {
   }
 
   .nav-item .material-symbols-outlined {
-    width: 34px;
+    width: 56px;
     height: 26px;
     border-radius: 999px;
     font-size: 22px;
