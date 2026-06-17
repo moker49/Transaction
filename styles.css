@@ -59,9 +59,9 @@
   --text: var(--md-sys-color-on-surface);
   --muted: var(--md-sys-color-on-surface-variant);
   --border: var(--md-sys-color-outline-variant);
-  --accent: var(--md-sys-color-primary);
+  --accent: var(--md-sys-color-primary-container);
   --accent-dark: var(--md-sys-color-primary);
-  --accent-contrast: var(--md-sys-color-on-primary);
+  --accent-contrast: var(--md-sys-color-on-primary-container);
   --danger: var(--md-sys-color-error);
   --danger-bg: var(--md-sys-color-error-container);
   --danger-border: color-mix(in srgb, var(--md-sys-color-error) 58%, var(--md-sys-color-outline-variant));
@@ -74,8 +74,8 @@
   --focus: color-mix(in srgb, var(--md-sys-color-primary) 32%, transparent);
   --shadow: 0 14px 35px rgb(0 0 0 / 0.26);
   --connected-bg: var(--md-sys-color-secondary-container);
-  --connected-selected-bg: var(--md-sys-color-primary-fixed);
-  --connected-selected-text: var(--md-sys-color-on-primary-fixed);
+  --connected-selected-bg: var(--md-sys-color-primary-container);
+  --connected-selected-text: var(--md-sys-color-on-primary-container);
   --tag-chip-bg: var(--md-sys-color-surface-container-high);
   --tag-chip-selected-bg: var(--md-sys-color-secondary-container);
   --tag-chip-selected-text: var(--md-sys-color-on-secondary-container);
