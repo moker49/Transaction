@@ -15,10 +15,10 @@
   --md-sys-color-on-tertiary: rgb(7 53 67);
   --md-sys-color-tertiary-container: rgb(36 76 90);
   --md-sys-color-on-tertiary-container: rgb(192 233 251);
-  --md-sys-color-error: rgb(255 180 171);
+  --md-sys-color-error: hsl(6, 100%, 66%);
   --md-sys-color-on-error: rgb(105 0 5);
   --md-sys-color-error-container: rgb(147 0 10);
-  --md-sys-color-on-error-container: rgb(255 218 214);
+  --md-sys-color-on-error-container: hsl(6, 100%, 72%);
   --md-sys-color-background: rgb(15 21 17);
   --md-sys-color-on-background: rgb(222 228 222);
   --md-sys-color-surface: rgb(15 21 17);
@@ -62,7 +62,7 @@
   --accent: var(--md-sys-color-primary-container);
   --accent-dark: var(--md-sys-color-primary);
   --accent-contrast: var(--md-sys-color-on-primary-container);
-  --danger: var(--md-sys-color-error);
+  --danger: var(--md-sys-color-on-error-container);
   --danger-bg: var(--md-sys-color-error-container);
   --danger-border: color-mix(in srgb, var(--md-sys-color-error) 58%, var(--md-sys-color-outline-variant));
   --warning: var(--md-sys-color-tertiary);
@@ -102,7 +102,7 @@
   --md-sys-color-on-tertiary-container: rgb(36 76 90);
   --md-sys-color-error: rgb(186 26 26);
   --md-sys-color-on-error: rgb(255 255 255);
-  --md-sys-color-error-container: rgb(255 218 214);
+  --md-sys-color-error-container: hsl(6, 100%, 82%);
   --md-sys-color-on-error-container: rgb(147 0 10);
   --md-sys-color-background: rgb(245 251 245);
   --md-sys-color-on-background: rgb(23 29 25);
@@ -147,7 +147,7 @@
   --accent: var(--md-sys-color-primary);
   --accent-dark: var(--md-sys-color-primary);
   --accent-contrast: var(--md-sys-color-on-primary);
-  --danger: var(--md-sys-color-error);
+  --danger: var(--md-sys-color-on-error-container);
   --danger-bg: var(--md-sys-color-error-container);
   --danger-border: color-mix(in srgb, var(--md-sys-color-error) 42%, var(--md-sys-color-outline-variant));
   --warning: var(--md-sys-color-tertiary);
