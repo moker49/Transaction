@@ -426,43 +426,39 @@
       </div>
       <div class="form-grid rule-form-grid">
         <div class="rule-form-column">
-          <div class="rule-name-priority-row">
+          <div class="rule-match-description-row">
             <label>
-              <span>Name</span>
-              <input name="name" type="text" required autocomplete="off">
+              <span>Match description</span>
+              <input name="matchDescription" type="text" autocomplete="off">
+            </label>
+          </div>
+          <div class="rule-match-row">
+            <label>
+              <span>Match category</span>
+              <input name="matchCategory" type="text" autocomplete="off">
             </label>
             <label>
               <span>Priority</span>
               <input name="priority" type="number" min="0" value="100">
             </label>
           </div>
-          <div class="rule-match-row">
-            <label>
-              <span>Match description</span>
-              <input name="matchDescription" type="text" autocomplete="off">
-            </label>
-            <label>
-              <span>Match category</span>
-              <input name="matchCategory" type="text" autocomplete="off">
-            </label>
-          </div>
         </div>
         <div class="form-divider" aria-hidden="true"></div>
         <div class="rule-form-column">
           <div class="type-button-row">
-            <input name="setTransactionType" type="hidden" id="ruleTypeInput" value="splurge">
+            <input name="setTransactionType" type="hidden" id="ruleTypeInput" value="expense">
             <div class="connected-button-group" id="ruleTypeGroup" role="radiogroup" aria-label="Rule type">
               <button type="button" class="connected-button" data-type-value="income" role="radio">
                 <span class="material-symbols-outlined" aria-hidden="true">payments</span>
                 <span>Income</span>
               </button>
-              <button type="button" class="connected-button" data-type-value="bill" role="radio">
+              <button type="button" class="connected-button" data-type-value="expense" role="radio">
                 <span class="material-symbols-outlined" aria-hidden="true">receipt_long</span>
-                <span>Bill</span>
+                <span>Expense</span>
               </button>
-              <button type="button" class="connected-button" data-type-value="splurge" role="radio">
-                <span class="material-symbols-outlined" aria-hidden="true">shopping_bag</span>
-                <span>Splurge</span>
+              <button type="button" class="connected-button" data-type-value="transfer" role="radio">
+                <span class="material-symbols-outlined" aria-hidden="true">sync_alt</span>
+                <span>Transfer</span>
               </button>
             </div>
           </div>
@@ -504,20 +500,20 @@
         <section>
           <div class="detail-list">
             <div class="type-button-row">
-              <input name="transactionType" type="hidden" id="transactionTypeInput" value="splurge">
+              <input name="transactionType" type="hidden" id="transactionTypeInput" value="expense">
               <div class="connected-button-group" id="transactionTypeGroup" role="radiogroup"
                 aria-label="Transaction type">
                 <button type="button" class="connected-button" data-type-value="income" role="radio" disabled>
                   <span class="material-symbols-outlined" aria-hidden="true">payments</span>
                   <span>Income</span>
                 </button>
-                <button type="button" class="connected-button" data-type-value="bill" role="radio" disabled>
+                <button type="button" class="connected-button" data-type-value="expense" role="radio" disabled>
                   <span class="material-symbols-outlined" aria-hidden="true">receipt_long</span>
-                  <span>Bill</span>
+                  <span>Expense</span>
                 </button>
-                <button type="button" class="connected-button" data-type-value="splurge" role="radio" disabled>
-                  <span class="material-symbols-outlined" aria-hidden="true">shopping_bag</span>
-                  <span>Splurge</span>
+                <button type="button" class="connected-button" data-type-value="transfer" role="radio" disabled>
+                  <span class="material-symbols-outlined" aria-hidden="true">sync_alt</span>
+                  <span>Transfer</span>
                 </button>
               </div>
             </div>

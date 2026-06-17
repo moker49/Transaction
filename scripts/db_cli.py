@@ -33,7 +33,7 @@ FORBIDDEN_SQL_WORDS = {
 MATCH_FIELDS = {"category", "description"}
 MATCH_TYPES = {"contains", "equals", "starts_with", "regex"}
 IMPORTABLE_RAW_ROW_STATUSES = {"importable"}
-TRANSACTION_TYPES = {"income", "bill", "splurge"}
+TRANSACTION_TYPES = {"income", "expense", "transfer"}
 
 
 class CliError(Exception):

@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     transaction_hash TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-    CHECK (transaction_type IN ('income', 'bill', 'splurge')),
+    CHECK (transaction_type IN ('income', 'expense', 'transfer')),
     UNIQUE (account_id, external_transaction_id),
     UNIQUE (account_id, transaction_hash)
 );
@@ -71,7 +71,7 @@ CREATE TABLE IF NOT EXISTS transaction_import_rules (
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     CHECK (match_field IN ('category', 'description')),
     CHECK (match_type IN ('contains', 'equals', 'starts_with', 'regex')),
-    CHECK (set_transaction_type IS NULL OR set_transaction_type IN ('income', 'bill', 'splurge')),
+    CHECK (set_transaction_type IS NULL OR set_transaction_type IN ('income', 'expense', 'transfer')),
     CHECK (is_active IN (0, 1)),
     CHECK (set_category_id IS NOT NULL OR set_clean_description IS NOT NULL OR set_transaction_type IS NOT NULL OR add_tag_id IS NOT NULL)
 );

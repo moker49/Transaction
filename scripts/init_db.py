@@ -82,6 +82,8 @@ EXPECTED_RAW_IMPORTED_ROW_COLUMNS = {
     "created_at",
     "updated_at",
 }
+NEW_TRANSACTION_TYPES = ("income", "expense", "transfer")
+BILL_TAG_NAME = "bill"
 
 
 def init_db(db_path: Path = DEFAULT_DB_PATH, schema_path: Path = SCHEMA_PATH) -> Path:
@@ -92,6 +94,7 @@ def init_db(db_path: Path = DEFAULT_DB_PATH, schema_path: Path = SCHEMA_PATH) ->
     with closing(sqlite3.connect(db_path)) as conn:
         conn.execute("PRAGMA foreign_keys = ON")
         conn.executescript(schema)
+        ensure_bill_tag(conn)
         conn.commit()
 
     return db_path
@@ -139,6 +142,8 @@ def drop_user_tables(conn: sqlite3.Connection, tables: Iterable[str]) -> None:
 
 def migrate_existing_schema(conn: sqlite3.Connection, tables: Iterable[str]) -> None:
     table_set = set(tables)
+    if "tags" in table_set:
+        ensure_bill_tag(conn)
     if "accounts" in table_set:
         account_columns = {row[1] for row in conn.execute("PRAGMA table_info(accounts)").fetchall()}
         if "currency" in account_columns:
@@ -147,12 +152,13 @@ def migrate_existing_schema(conn: sqlite3.Connection, tables: Iterable[str]) -> 
             conn.commit()
     if "transactions" in table_set:
         transaction_columns = {row[1] for row in conn.execute("PRAGMA table_info(transactions)").fetchall()}
+        transaction_table_ddl = table_ddl(conn, "transactions")
         if "transaction_type" not in transaction_columns:
             conn.execute(
                 """
                 ALTER TABLE transactions
-                ADD COLUMN transaction_type TEXT NOT NULL DEFAULT 'splurge'
-                    CHECK (transaction_type IN ('income', 'bill', 'splurge'))
+                ADD COLUMN transaction_type TEXT NOT NULL DEFAULT 'expense'
+                    CHECK (transaction_type IN ('income', 'expense', 'transfer'))
                 """
             )
         conn.execute(
@@ -160,7 +166,7 @@ def migrate_existing_schema(conn: sqlite3.Connection, tables: Iterable[str]) -> 
             UPDATE transactions
             SET transaction_type = CASE
                 WHEN amount_cents > 0 THEN 'income'
-                ELSE 'splurge'
+                ELSE 'expense'
             END
             WHERE transaction_type IS NULL
             """
@@ -170,18 +176,19 @@ def migrate_existing_schema(conn: sqlite3.Connection, tables: Iterable[str]) -> 
         if (
             transaction_type_column is not None
             and not int(transaction_type_column[3])
-        ) or "status" in {row[1] for row in transaction_columns} or "currency" in {row[1] for row in transaction_columns}:
+        ) or "status" in {row[1] for row in transaction_columns} or "currency" in {row[1] for row in transaction_columns} or "'splurge'" in transaction_table_ddl or "'bill'" in transaction_table_ddl:
             conn.commit()
             rebuild_transactions_with_required_type(conn)
             conn.commit()
     if "transaction_import_rules" in table_set:
         rule_columns = {row[1] for row in conn.execute("PRAGMA table_info(transaction_import_rules)").fetchall()}
+        rule_table_ddl = table_ddl(conn, "transaction_import_rules")
         if "set_transaction_type" not in rule_columns:
             conn.execute(
                 """
                 ALTER TABLE transaction_import_rules
                 ADD COLUMN set_transaction_type TEXT
-                    CHECK (set_transaction_type IS NULL OR set_transaction_type IN ('income', 'bill', 'splurge'))
+                    CHECK (set_transaction_type IS NULL OR set_transaction_type IN ('income', 'expense', 'transfer'))
                 """
             )
         if "match_description" not in rule_columns:
@@ -225,6 +232,10 @@ def migrate_existing_schema(conn: sqlite3.Connection, tables: Iterable[str]) -> 
             ON transaction_import_rule_tags(tag_id)
             """
         )
+        if "'splurge'" in rule_table_ddl or "'bill'" in rule_table_ddl:
+            conn.commit()
+            rebuild_transaction_import_rules_with_expense_type(conn)
+            conn.commit()
     if "categories" in table_set:
         category_columns = {row[1] for row in conn.execute("PRAGMA table_info(categories)").fetchall()}
         if "color" not in category_columns:
@@ -243,6 +254,28 @@ def migrate_existing_schema(conn: sqlite3.Connection, tables: Iterable[str]) -> 
             rebuild_raw_imported_rows_with_importability_status(conn)
             conn.commit()
     conn.commit()
+
+
+def table_ddl(conn: sqlite3.Connection, table: str) -> str:
+    row = conn.execute(
+        """
+        SELECT sql
+        FROM sqlite_master
+        WHERE type = 'table' AND name = ?
+        """,
+        (table,),
+    ).fetchone()
+    return row[0] if row else ""
+
+
+def ensure_bill_tag(conn: sqlite3.Connection) -> int:
+    cursor = conn.execute("INSERT OR IGNORE INTO tags (name) VALUES (?)", (BILL_TAG_NAME,))
+    if cursor.lastrowid:
+        return int(cursor.lastrowid)
+    row = conn.execute("SELECT id FROM tags WHERE name = ?", (BILL_TAG_NAME,)).fetchone()
+    if row is None:
+        raise RuntimeError("Could not create bill tag.")
+    return int(row[0])
 
 
 def rebuild_accounts_without_currency(conn: sqlite3.Connection) -> None:
@@ -294,6 +327,16 @@ def rebuild_accounts_without_currency(conn: sqlite3.Connection) -> None:
 def rebuild_transactions_with_required_type(conn: sqlite3.Connection) -> None:
     conn.execute("PRAGMA foreign_keys = OFF")
     try:
+        bill_tag_id = ensure_bill_tag(conn)
+        conn.execute("DROP TABLE IF EXISTS bill_transaction_ids")
+        conn.execute(
+            """
+            CREATE TEMP TABLE bill_transaction_ids AS
+            SELECT id
+            FROM transactions
+            WHERE transaction_type = 'bill'
+            """
+        )
         conn.execute("DROP TABLE IF EXISTS transactions_rebuild")
         conn.execute(
             """
@@ -311,7 +354,7 @@ def rebuild_transactions_with_required_type(conn: sqlite3.Connection) -> None:
                 transaction_hash TEXT NOT NULL,
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-                CHECK (transaction_type IN ('income', 'bill', 'splurge')),
+                CHECK (transaction_type IN ('income', 'expense', 'transfer')),
                 UNIQUE (account_id, external_transaction_id),
                 UNIQUE (account_id, transaction_hash)
             )
@@ -340,7 +383,11 @@ def rebuild_transactions_with_required_type(conn: sqlite3.Connection) -> None:
                 category_id,
                 posted_date,
                 transaction_date,
-                COALESCE(transaction_type, CASE WHEN amount_cents > 0 THEN 'income' ELSE 'splurge' END),
+                CASE
+                    WHEN COALESCE(transaction_type, CASE WHEN amount_cents > 0 THEN 'income' ELSE 'expense' END) = 'bill' THEN 'expense'
+                    WHEN COALESCE(transaction_type, CASE WHEN amount_cents > 0 THEN 'income' ELSE 'expense' END) = 'splurge' THEN 'expense'
+                    ELSE COALESCE(transaction_type, CASE WHEN amount_cents > 0 THEN 'income' ELSE 'expense' END)
+                END,
                 clean_description,
                 amount_cents,
                 external_transaction_id,
@@ -353,6 +400,111 @@ def rebuild_transactions_with_required_type(conn: sqlite3.Connection) -> None:
         )
         conn.execute("DROP TABLE transactions")
         conn.execute("ALTER TABLE transactions_rebuild RENAME TO transactions")
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO transaction_tags (transaction_id, tag_id)
+            SELECT id, ?
+            FROM bill_transaction_ids
+            """,
+            (bill_tag_id,),
+        )
+        conn.execute("DROP TABLE bill_transaction_ids")
+    finally:
+        conn.execute("PRAGMA foreign_keys = ON")
+
+
+def rebuild_transaction_import_rules_with_expense_type(conn: sqlite3.Connection) -> None:
+    conn.execute("PRAGMA foreign_keys = OFF")
+    try:
+        bill_tag_id = ensure_bill_tag(conn)
+        conn.execute("DROP TABLE IF EXISTS bill_rule_ids")
+        conn.execute(
+            """
+            CREATE TEMP TABLE bill_rule_ids AS
+            SELECT id
+            FROM transaction_import_rules
+            WHERE set_transaction_type = 'bill'
+            """
+        )
+        conn.execute("DROP TABLE IF EXISTS transaction_import_rules_rebuild")
+        conn.execute(
+            """
+            CREATE TABLE transaction_import_rules_rebuild (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL,
+                match_field TEXT NOT NULL,
+                match_type TEXT NOT NULL DEFAULT 'contains',
+                match_value TEXT NOT NULL,
+                match_description TEXT,
+                match_category TEXT,
+                set_category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
+                set_clean_description TEXT,
+                set_transaction_type TEXT,
+                add_tag_id INTEGER REFERENCES tags(id) ON DELETE SET NULL,
+                priority INTEGER NOT NULL DEFAULT 100,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                CHECK (match_field IN ('category', 'description')),
+                CHECK (match_type IN ('contains', 'equals', 'starts_with', 'regex')),
+                CHECK (set_transaction_type IS NULL OR set_transaction_type IN ('income', 'expense', 'transfer')),
+                CHECK (is_active IN (0, 1)),
+                CHECK (set_category_id IS NOT NULL OR set_clean_description IS NOT NULL OR set_transaction_type IS NOT NULL OR add_tag_id IS NOT NULL)
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO transaction_import_rules_rebuild (
+                id,
+                name,
+                match_field,
+                match_type,
+                match_value,
+                match_description,
+                match_category,
+                set_category_id,
+                set_clean_description,
+                set_transaction_type,
+                add_tag_id,
+                priority,
+                is_active,
+                created_at,
+                updated_at
+            )
+            SELECT
+                id,
+                name,
+                match_field,
+                match_type,
+                match_value,
+                match_description,
+                match_category,
+                set_category_id,
+                set_clean_description,
+                CASE
+                    WHEN set_transaction_type IN ('bill', 'splurge') THEN 'expense'
+                    ELSE set_transaction_type
+                END,
+                add_tag_id,
+                priority,
+                is_active,
+                created_at,
+                updated_at
+            FROM transaction_import_rules
+            """
+        )
+        conn.execute("DROP TABLE transaction_import_rules")
+        conn.execute("ALTER TABLE transaction_import_rules_rebuild RENAME TO transaction_import_rules")
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO transaction_import_rule_tags (rule_id, tag_id)
+            SELECT id, ?
+            FROM bill_rule_ids
+            """,
+            (bill_tag_id,),
+        )
+        conn.execute("DROP TABLE bill_rule_ids")
     finally:
         conn.execute("PRAGMA foreign_keys = ON")
 
@@ -478,17 +630,27 @@ def schema_is_compatible(conn: sqlite3.Connection) -> bool:
         """
     ).fetchone()
     raw_imported_rows_ddl = raw_imported_rows_sql[0] if raw_imported_rows_sql else ""
+    transaction_ddl = table_ddl(conn, "transactions")
+    transaction_rule_ddl = table_ddl(conn, "transaction_import_rules")
     return (
         EXPECTED_ACCOUNT_COLUMNS.issubset(account_columns)
         and EXPECTED_CATEGORY_COLUMNS.issubset(category_columns)
         and EXPECTED_TRANSACTION_COLUMNS.issubset(transaction_columns)
         and int(transaction_column_info["transaction_type"][3]) == 1
+        and "'expense'" in transaction_ddl
+        and "'transfer'" in transaction_ddl
+        and "'splurge'" not in transaction_ddl
+        and "'bill'" not in transaction_ddl
         and "currency" not in account_columns
         and "currency" not in transaction_columns
         and "status" not in transaction_columns
         and "payee" not in transaction_columns
         and "description" not in transaction_columns
         and EXPECTED_TRANSACTION_RULE_COLUMNS.issubset(transaction_rule_columns)
+        and "'expense'" in transaction_rule_ddl
+        and "'transfer'" in transaction_rule_ddl
+        and "'splurge'" not in transaction_rule_ddl
+        and "'bill'" not in transaction_rule_ddl
         and EXPECTED_IMPORTED_SOURCE_COLUMNS.issubset(imported_source_columns)
         and "imported_source_id" not in transaction_columns
         and "import_source_file_id" not in transaction_columns

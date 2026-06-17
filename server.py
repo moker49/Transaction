@@ -54,7 +54,8 @@ app = Flask(__name__, static_folder=str(ROOT), static_url_path="")
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 DUMMY_DB_PATH = DEFAULT_DB_PATH.with_name("transactions.dummy.sqlite")
 DUMMY_RESTORE_DB_PATH = DEFAULT_DB_PATH.with_name("transactions.dummy.restore.sqlite")
-TRANSACTION_TYPES = ("income", "bill", "splurge")
+BILL_TAG_NAME = "bill"
+TRANSACTION_TYPES = ("income", "expense", "transfer")
 DEFAULT_CATEGORY_TREE = {
     "Income": ["Salary", "Bonus", "Interest", "Dividend", "Refund", "Gift Received"],
     "Housing": ["Rent", "Mortgage", "Property Tax", "HOA", "Home Insurance", "Home Maintenance"],
@@ -163,6 +164,8 @@ def create_account():
     ensure_database()
     data = request.get_json(silent=True) or {}
     name = nonempty(str(data.get("name", "")), "name")
+    if name.casefold() == BILL_TAG_NAME:
+        raise CliError(f"Tag is protected and already managed by the system: {BILL_TAG_NAME}")
     institution = optional_nonempty(data.get("institution"), "institution")
     account_type = optional_nonempty(data.get("account_type"), "account_type")
 
@@ -251,6 +254,10 @@ def update_tag(tag_id: int):
 
     with closing(connect(current_db_path())) as conn:
         tag = dict(fetch_tag_by_id(conn, tag_id))
+        if is_protected_tag(tag):
+            raise CliError(f"Tag is protected and cannot be edited: {tag['name']}")
+        if name.casefold() == BILL_TAG_NAME:
+            raise CliError(f"Tag is protected and already managed by the system: {BILL_TAG_NAME}")
         conn.execute("UPDATE tags SET name = ? WHERE id = ?", (name, tag_id))
         tag = dict(fetch_tag_by_id(conn, tag_id))
         state = read_state(conn)
@@ -264,6 +271,8 @@ def delete_tag(tag_id: int):
     ensure_database()
     with closing(connect(current_db_path())) as conn:
         tag = dict(fetch_tag_by_id(conn, tag_id))
+        if is_protected_tag(tag):
+            raise CliError(f"Tag is protected and cannot be deleted: {tag['name']}")
         require_tag_unused(conn, tag_id)
         conn.execute("DELETE FROM tags WHERE id = ?", (tag_id,))
         state = read_state(conn)
@@ -854,9 +863,9 @@ def ensure_database() -> None:
 
 
 def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
-    migrate_finance_tags_to_transaction_type(conn)
     sync_raw_row_importability_status(conn)
     ensure_default_categories(conn)
+    ensure_system_tags(conn)
     accounts = rows_to_dicts(
         conn.execute(
             """
@@ -1039,7 +1048,7 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
     for category in categories:
         category["is_default"] = category["name"] in DEFAULT_CATEGORY_NAMES
     for tag in tags:
-        tag["is_protected"] = False
+        tag["is_protected"] = is_protected_tag(tag)
     return {
         "accounts": accounts,
         "categories": categories,
@@ -1096,6 +1105,14 @@ def ensure_default_categories(conn: sqlite3.Connection) -> None:
         parent_id = ensure_category(conn, parent_name, None, DEFAULT_CATEGORY_COLORS[parent_name])
         for child_name in child_names:
             ensure_category(conn, child_name, parent_id, None)
+
+
+def ensure_system_tags(conn: sqlite3.Connection) -> None:
+    conn.execute("INSERT OR IGNORE INTO tags (name) VALUES (?)", (BILL_TAG_NAME,))
+
+
+def is_protected_tag(tag: dict[str, Any] | sqlite3.Row) -> bool:
+    return str(tag["name"]).casefold() == BILL_TAG_NAME
 
 
 def ensure_category(conn: sqlite3.Connection, name: str, parent_id: int | None, color: str | None) -> int:

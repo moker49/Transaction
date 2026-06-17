@@ -50,8 +50,8 @@
   const importableRawRowStatuses = new Set(["importable"]);
   const transactionTypes = [
     { value: "income", label: "Income" },
-    { value: "bill", label: "Bill" },
-    { value: "splurge", label: "Splurge" },
+    { value: "expense", label: "Expense" },
+    { value: "transfer", label: "Transfer" },
   ];
   const comfortableCategoryColors = [
     "#2f8f2f",
@@ -1148,7 +1148,7 @@
   }
 
   function setTypeGroupValue(input, group, value) {
-    const normalized = clean(value) || "splurge";
+    const normalized = clean(value) || "expense";
     input.value = normalized;
     group.querySelectorAll("[data-type-value]").forEach((button) => {
       const isSelected = button.dataset.typeValue === normalized;
@@ -1200,7 +1200,7 @@
     elements.ruleForm.elements.matchDescription.value = matchDescription;
     elements.ruleForm.elements.matchCategory.value = matchCategory;
     elements.ruleForm.elements.priority.value = "100";
-    setTypeGroupValue(elements.ruleTypeInput, elements.ruleTypeGroup, "splurge");
+    setTypeGroupValue(elements.ruleTypeInput, elements.ruleTypeGroup, "expense");
     setRuleCategoryValue(null);
     renderRuleTags([]);
     openModal(elements.ruleDialog);
@@ -1216,11 +1216,10 @@
     elements.ruleDeleteButton.hidden = false;
     const form = elements.ruleForm;
     const matches = ruleMatchValues(rule);
-    form.elements.name.value = rule.name || "";
     form.elements.matchDescription.value = matches.description;
     form.elements.matchCategory.value = matches.category;
     form.elements.setCleanDescription.value = rule.set_clean_description || "";
-    setTypeGroupValue(elements.ruleTypeInput, elements.ruleTypeGroup, rule.set_transaction_type || "income");
+    setTypeGroupValue(elements.ruleTypeInput, elements.ruleTypeGroup, rule.set_transaction_type || "expense");
     setRuleCategoryValue(rule.set_category_id);
     renderRuleTags(rule.tag_ids || (rule.add_tag_id === null ? [] : [rule.add_tag_id]));
     form.elements.priority.value = String(rule.priority ?? 100);
@@ -1239,6 +1238,11 @@
 
     if (!payload.match_description && !payload.match_category) {
       setModalMessage(elements.ruleMessage, "Match description, category, or both.", true);
+      return;
+    }
+
+    if (!payload.set_clean_description) {
+      setModalMessage(elements.ruleMessage, "Clean description is required.", true);
       return;
     }
 
@@ -1421,11 +1425,13 @@
   function renderDashboard() {
     const period = dashboardPeriod();
     const transactions = state.transactions.filter((transaction) => {
-      return transaction.posted_date >= period.start && transaction.posted_date < period.end;
+      return transaction.posted_date >= period.start
+        && transaction.posted_date < period.end
+        && transaction.transaction_type !== "transfer";
     });
     const income = sumTypedTransactions(transactions, "income", false);
-    const bills = sumTypedTransactions(transactions, "bill", true);
-    const splurge = sumTypedTransactions(transactions, "splurge", true);
+    const bills = sumExpenseTransactions(transactions, true);
+    const splurge = sumExpenseTransactions(transactions, false);
     const saved = income - bills - splurge;
     setText("#dashboardIncome", formatDollars(income));
     setText("#dashboardBills", formatDollars(bills));
@@ -1436,8 +1442,8 @@
       { label: "Splurge", value: splurge, color: "#7c6bc2" },
       { label: "Saved", value: Math.max(saved, 0), color: "#2f8f2f" },
     ]);
-    renderPieChart(elements.dashboardCategoryPie, elements.dashboardCategoryLegend, categorySpendingSegments(transactions, ["bill", "splurge"]));
-    renderPieChart(elements.dashboardSplurgePie, elements.dashboardSplurgeLegend, categorySpendingSegments(transactions, ["splurge"]));
+    renderPieChart(elements.dashboardCategoryPie, elements.dashboardCategoryLegend, categorySpendingSegments(transactions, "all-expenses"));
+    renderPieChart(elements.dashboardSplurgePie, elements.dashboardSplurgeLegend, categorySpendingSegments(transactions, "splurge"));
   }
 
   function renderAccounts() {
@@ -1539,7 +1545,7 @@
     elements.transactionMessage.textContent = "";
     elements.transactionMessage.classList.remove("error");
     form.elements.postedDate.value = transaction.posted_date || "";
-    setTypeGroupValue(elements.transactionTypeInput, elements.transactionTypeGroup, transaction.transaction_type || "splurge");
+    setTypeGroupValue(elements.transactionTypeInput, elements.transactionTypeGroup, transaction.transaction_type || "expense");
     setTransactionCategoryValue(transaction.category_id);
     form.elements.amount.value = transaction.amount || formatCents(transaction.amount_cents);
     form.elements.cleanDescription.value = transaction.clean_description || "";
@@ -1655,15 +1661,16 @@
 
   function buildRulePayload(formElement = elements.ruleForm) {
     const form = new FormData(formElement);
+    const setCleanDescription = clean(form.get("setCleanDescription")) || null;
     const addTagIds = [...elements.ruleTags.querySelectorAll("input[type='checkbox']:checked")]
       .map((checkbox) => Number(checkbox.value))
       .filter((tagId) => Number.isInteger(tagId) && tagId > 0);
     return {
-      name: clean(form.get("name")),
+      name: setCleanDescription,
       match_description: clean(form.get("matchDescription")) || null,
       match_category: clean(form.get("matchCategory")) || null,
       set_category_id: Number(form.get("setCategoryId")) || null,
-      set_clean_description: clean(form.get("setCleanDescription")) || null,
+      set_clean_description: setCleanDescription,
       set_transaction_type: clean(form.get("setTransactionType")) || null,
       add_tag_ids: addTagIds,
       priority: Number(form.get("priority")) || 100,
@@ -2869,14 +2876,36 @@
     }, 0);
   }
 
-  function categorySpendingSegments(transactions, transactionTypesToInclude) {
-    const includedTypes = new Set(transactionTypesToInclude);
+  function sumExpenseTransactions(transactions, billTagged) {
+    return transactions.reduce((total, transaction) => {
+      if (transaction.transaction_type !== "expense" || hasBillTag(transaction) !== billTagged) {
+        return total;
+      }
+      return total + Math.abs(Number(transaction.amount_cents) || 0);
+    }, 0);
+  }
+
+  function hasBillTag(transaction) {
+    return (transaction.tags || []).some((tag) => clean(tag.name).toLowerCase() === "bill");
+  }
+
+  function isDashboardExpense(transaction, mode) {
+    if (transaction.transaction_type !== "expense") {
+      return false;
+    }
+    if (mode === "splurge") {
+      return !hasBillTag(transaction);
+    }
+    return true;
+  }
+
+  function categorySpendingSegments(transactions, expenseMode) {
     const totals = new Map();
     transactions
-      .filter((transaction) => includedTypes.has(transaction.transaction_type))
+      .filter((transaction) => isDashboardExpense(transaction, expenseMode))
       .forEach((transaction) => {
         const parent = parentCategoryForTransaction(transaction);
-        if (!parent || parent.name === "Transfer") {
+        if (!parent) {
           return;
         }
         const amount = Math.abs(Number(transaction.amount_cents) || 0);

@@ -1768,7 +1768,7 @@ button.category-chip.manageable-chip {
   min-width: 0;
 }
 
-.rule-name-priority-row,
+.rule-match-description-row,
 .rule-match-row,
 .rule-clean-row {
   display: grid;
@@ -1786,19 +1786,19 @@ button.category-chip.manageable-chip {
   border-left: 1px solid var(--border);
 }
 
-.rule-name-priority-row {
-  grid-template-columns: minmax(0, 1fr) 118px;
+.rule-match-description-row {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .rule-match-row {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr) 118px;
 }
 
 .rule-clean-row {
   grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
 }
 
-.rule-name-priority-row > label,
+.rule-match-description-row > label,
 .rule-match-row > label,
 .rule-clean-row > label {
   min-width: 0;
@@ -2391,12 +2391,12 @@ tr.is-importable-row td {
     grid-template-columns: 1fr;
   }
 
-  .rule-name-priority-row {
-    grid-template-columns: minmax(0, 1fr) 92px;
+  .rule-match-description-row {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .rule-match-row {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr) 92px;
   }
 
   .rule-form-grid .form-divider {
