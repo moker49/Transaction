@@ -304,7 +304,7 @@ def require_account_unused(conn: sqlite3.Connection, account_id: int) -> None:
         (account_id,),
     ).fetchone()["count"]
     if transaction_count or import_count:
-        raise CliError("Account is being used and cannot be deleted.")
+        raise CliError("Account is being used.")
 
 
 def require_category_unused(conn: sqlite3.Connection, category_id: int) -> None:
@@ -316,7 +316,7 @@ def require_category_unused(conn: sqlite3.Connection, category_id: int) -> None:
     ]
     used_by = [label for label, sql in checks if conn.execute(sql, (category_id,)).fetchone()["count"]]
     if used_by:
-        raise CliError(f"Category is being used by {', '.join(used_by)} and cannot be deleted.")
+        raise CliError(f"Category is being used by {', '.join(used_by)}.")
 
 
 def require_tag_unused(conn: sqlite3.Connection, tag_id: int) -> None:
@@ -327,7 +327,7 @@ def require_tag_unused(conn: sqlite3.Connection, tag_id: int) -> None:
     ]
     used_by = [label for label, sql in checks if conn.execute(sql, (tag_id,)).fetchone()["count"]]
     if used_by:
-        raise CliError(f"Tag is being used by {', '.join(used_by)} and cannot be deleted.")
+        raise CliError(f"Tag is being used by {', '.join(used_by)}.")
 
 
 def fetch_note(conn: sqlite3.Connection, note_id: int) -> sqlite3.Row:

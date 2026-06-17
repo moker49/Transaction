@@ -2559,11 +2559,13 @@ tr.is-matched-row td {
 
   .tabs {
     position: sticky;
-    top: 0;
+    top: 68px;
     z-index: 15;
+    margin-top: -12px;
     margin-right: -10px;
+    margin-bottom: 18px;
     margin-left: -10px;
-    padding: 0 10px;
+    padding: 12px 10px 0;
     background: var(--bg);
   }
 
