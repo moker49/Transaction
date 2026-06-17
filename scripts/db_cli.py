@@ -32,7 +32,7 @@ FORBIDDEN_SQL_WORDS = {
 }
 MATCH_FIELDS = {"category", "description"}
 MATCH_TYPES = {"contains", "equals", "starts_with", "regex"}
-IMPORTABLE_RAW_ROW_STATUSES = {"new", "ready"}
+IMPORTABLE_RAW_ROW_STATUSES = {"ready"}
 TRANSACTION_TYPES = {"income", "bill", "splurge"}
 
 
@@ -626,7 +626,12 @@ def fetch_rule_tag_ids(conn: sqlite3.Connection, rule_id: int, fallback_tag_id: 
 
 
 def raw_row_has_matching_rule(conn: sqlite3.Connection, raw_row: sqlite3.Row) -> bool:
-    return apply_import_rules(conn, raw_row)["transaction_type"] is not None
+    rule_result = apply_import_rules(conn, raw_row)
+    return (
+        rule_result["category_id"] is not None
+        and rule_result["transaction_type"] is not None
+        and normalize_text(rule_result["clean_description"]) is not None
+    )
 
 
 def sync_raw_row_ready_status(conn: sqlite3.Connection) -> None:
@@ -733,7 +738,7 @@ def import_raw_rows(
         if row["import_status"] not in IMPORTABLE_RAW_ROW_STATUSES
     ]
     if unavailable_rows:
-        raise CliError(f"Only new raw rows can be imported: {', '.join(unavailable_rows)}")
+        raise CliError(f"Only ready raw rows can be imported: {', '.join(unavailable_rows)}")
 
     uncategorized_rows = []
     untyped_rows = []

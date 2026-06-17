@@ -47,7 +47,7 @@
   let popupTimer = null;
   let dashboardRangeDraft = null;
   let rawMobileImportColumnVisible = false;
-  const importableRawRowStatuses = new Set(["new", "ready"]);
+  const importableRawRowStatuses = new Set(["ready"]);
   const transactionTypes = [
     { value: "income", label: "Income" },
     { value: "bill", label: "Bill" },
@@ -2563,15 +2563,7 @@
   }
 
   function isImportableRawRow(rawRow) {
-    return importableRawRowStatuses.has(rawRow.import_status || "new") && hasMatchedCategory(rawRow) && hasMatchedType(rawRow);
-  }
-
-  function hasMatchedCategory(rawRow) {
-    return Boolean(clean(rawRow.preview_category));
-  }
-
-  function hasMatchedType(rawRow) {
-    return Boolean(clean(rawRow.preview_type));
+    return importableRawRowStatuses.has(rawRow.import_status || "new");
   }
 
   function isMatchedRawRow(rawRow) {
@@ -2611,7 +2603,7 @@
       return true;
     }
     if (filter === "new") {
-      return importableRawRowStatuses.has(rawRow.import_status || "new");
+      return importableRawRowStatuses.has(rawRow.import_status || "new") || rawRow.import_status === "new";
     }
     if (filter === "matched") {
       return isMatchedRawRow(rawRow);
