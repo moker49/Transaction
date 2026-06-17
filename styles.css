@@ -1877,7 +1877,7 @@ button.category-chip.manageable-chip {
   max-width: 100%;
   min-height: 32px;
   margin: 0;
-  padding: 0 16px;
+  padding: 0 10px;
   border: 1px solid var(--tag-chip-outline);
   border-radius: 8px;
   background: transparent;
@@ -1914,7 +1914,7 @@ button.category-chip.manageable-chip {
 }
 
 .tag-chip-select.is-selected {
-  padding-left: 42px;
+  padding-left: 34px;
 }
 
 .tag-chip-select input {
@@ -1930,7 +1930,7 @@ button.category-chip.manageable-chip {
 
 .tag-chip-select .tag-chip-check {
   position: absolute;
-  left: 16px;
+  left: 10px;
   top: 50%;
   display: inline-flex;
   opacity: 0;
