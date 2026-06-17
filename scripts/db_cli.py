@@ -1646,7 +1646,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     import_csv_parser = subparsers.add_parser(
         "import-csv",
-        help="Import CSV rows into imported_source and raw_imported_rows.",
+        help="Upload CSV rows into imported_source and raw_imported_rows.",
     )
     import_csv_parser.add_argument("csv_path", type=Path)
     import_csv_parser.add_argument("--account-id", type=positive_int, required=True)
