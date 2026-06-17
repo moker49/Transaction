@@ -229,6 +229,19 @@ def migrate_existing_schema(conn: sqlite3.Connection, tables: Iterable[str]) -> 
         category_columns = {row[1] for row in conn.execute("PRAGMA table_info(categories)").fetchall()}
         if "color" not in category_columns:
             conn.execute("ALTER TABLE categories ADD COLUMN color TEXT")
+    if "raw_imported_rows" in table_set:
+        raw_imported_rows_sql = conn.execute(
+            """
+            SELECT sql
+            FROM sqlite_master
+            WHERE type = 'table' AND name = 'raw_imported_rows'
+            """
+        ).fetchone()
+        raw_imported_rows_ddl = raw_imported_rows_sql[0] if raw_imported_rows_sql else ""
+        if "DEFAULT 'new'" in raw_imported_rows_ddl or "'ready'" in raw_imported_rows_ddl:
+            conn.commit()
+            rebuild_raw_imported_rows_with_importability_status(conn)
+            conn.commit()
     conn.commit()
 
 
@@ -344,6 +357,107 @@ def rebuild_transactions_with_required_type(conn: sqlite3.Connection) -> None:
         conn.execute("PRAGMA foreign_keys = ON")
 
 
+def rebuild_raw_imported_rows_with_importability_status(conn: sqlite3.Connection) -> None:
+    conn.execute("PRAGMA foreign_keys = OFF")
+    try:
+        conn.execute("DROP TABLE IF EXISTS raw_imported_rows_rebuild")
+        conn.execute(
+            """
+            CREATE TABLE raw_imported_rows_rebuild (
+                id INTEGER PRIMARY KEY,
+                imported_source_id INTEGER NOT NULL REFERENCES imported_source(id) ON DELETE CASCADE,
+                raw_date TEXT,
+                raw_category TEXT,
+                raw_description TEXT,
+                raw_amount TEXT,
+                parsed_transaction_id INTEGER REFERENCES transactions(id) ON DELETE SET NULL,
+                import_status TEXT NOT NULL DEFAULT 'notImportable',
+                import_error TEXT,
+                raw_row_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CHECK (import_status IN ('importable', 'notImportable', 'imported', 'duplicate', 'error')),
+                CHECK (
+                    raw_date IS NOT NULL
+                    OR raw_category IS NOT NULL
+                    OR raw_description IS NOT NULL
+                    OR raw_amount IS NOT NULL
+                )
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO raw_imported_rows_rebuild (
+                id,
+                imported_source_id,
+                raw_date,
+                raw_category,
+                raw_description,
+                raw_amount,
+                parsed_transaction_id,
+                import_status,
+                import_error,
+                raw_row_hash,
+                created_at,
+                updated_at
+            )
+            SELECT
+                id,
+                imported_source_id,
+                raw_date,
+                raw_category,
+                raw_description,
+                raw_amount,
+                parsed_transaction_id,
+                CASE import_status
+                    WHEN 'ready' THEN 'importable'
+                    WHEN 'new' THEN 'notImportable'
+                    ELSE import_status
+                END,
+                import_error,
+                raw_row_hash,
+                created_at,
+                updated_at
+            FROM raw_imported_rows
+            """
+        )
+        conn.execute("DROP TABLE raw_imported_rows")
+        conn.execute("ALTER TABLE raw_imported_rows_rebuild RENAME TO raw_imported_rows")
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_raw_imported_rows_imported_source_id
+            ON raw_imported_rows(imported_source_id)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_raw_imported_rows_status
+            ON raw_imported_rows(import_status)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_raw_imported_rows_raw_date
+            ON raw_imported_rows(raw_date)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_raw_imported_rows_parsed_transaction_id
+            ON raw_imported_rows(parsed_transaction_id)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_raw_imported_rows_hash
+            ON raw_imported_rows(imported_source_id, raw_row_hash)
+            """
+        )
+    finally:
+        conn.execute("PRAGMA foreign_keys = ON")
+
+
 def schema_is_compatible(conn: sqlite3.Connection) -> bool:
     tables = set(get_user_tables(conn))
     if not EXPECTED_TABLES.issubset(tables):
@@ -381,8 +495,10 @@ def schema_is_compatible(conn: sqlite3.Connection) -> bool:
         and "institution" not in account_columns
         and EXPECTED_RAW_IMPORTED_ROW_COLUMNS.issubset(raw_imported_row_columns)
         and "raw_type" not in raw_imported_row_columns
-        and "DEFAULT 'new'" in raw_imported_rows_ddl
-        and "'ready'" in raw_imported_rows_ddl
+        and "DEFAULT 'notImportable'" in raw_imported_rows_ddl
+        and "'importable'" in raw_imported_rows_ddl
+        and "'notImportable'" in raw_imported_rows_ddl
+        and "'ready'" not in raw_imported_rows_ddl
         and "'pending'" not in raw_imported_rows_ddl
         and "reviewed" not in raw_imported_row_columns
         and "raw_account" not in raw_imported_row_columns

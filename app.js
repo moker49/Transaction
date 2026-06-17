@@ -47,7 +47,7 @@
   let popupTimer = null;
   let dashboardRangeDraft = null;
   let rawMobileImportColumnVisible = false;
-  const importableRawRowStatuses = new Set(["ready"]);
+  const importableRawRowStatuses = new Set(["importable"]);
   const transactionTypes = [
     { value: "income", label: "Income" },
     { value: "bill", label: "Bill" },
@@ -222,7 +222,7 @@
     rawRowRuleButton: document.querySelector("#rawRowRuleButton"),
     rawRowSaveButton: document.querySelector("#rawRowSaveButton"),
     rawRowRawValues: document.querySelector("#rawRowRawValues"),
-    rawRowMatchedValues: document.querySelector("#rawRowMatchedValues"),
+    rawRowCleanValues: document.querySelector("#rawRowCleanValues"),
     rawRowImportValues: document.querySelector("#rawRowImportValues"),
     rawRowNoteInput: document.querySelector("#rawRowNoteInput"),
     categoryDialog: document.querySelector("#categoryDialog"),
@@ -1790,16 +1790,15 @@
       ["Amount", rawRow.raw_amount],
       ["Hash", rawRow.raw_row_hash],
     ]);
-    renderDefinitionList(elements.rawRowMatchedValues, [
-      ["Matched", isMatchedRawRow(rawRow) ? "Yes" : "No"],
-      ["Importable", isImportableRawRow(rawRow) ? "Yes" : "No"],
+    renderDefinitionList(elements.rawRowCleanValues, [
+      ["Type", transactionTypeLabel(rawRow.preview_type)],
       ["Category", rawRow.preview_category],
       ["Description", rawRow.preview_clean_description],
-      ["Type", transactionTypeLabel(rawRow.preview_type)],
     ]);
     renderDefinitionList(elements.rawRowImportValues, [
       ["Account", account ? accountLabel(account) : "Unknown"],
       ["Status", rawRow.import_status],
+      ["Importable", isImportableRawRow(rawRow) ? "Yes" : "No"],
       ["Error", rawRow.import_error],
       ["Source ID", rawRow.imported_source_id],
       ["Parsed transaction ID", rawRow.parsed_transaction_id],
@@ -2348,7 +2347,7 @@
     rows.slice().reverse().forEach((rawRow) => {
       const account = state.accounts.find((candidate) => candidate.id === rawRow.account_id);
       const tr = document.createElement("tr");
-      tr.classList.toggle("is-matched-row", isMatchedRawRow(rawRow));
+      tr.classList.toggle("is-importable-row", isImportableRawRow(rawRow));
       makeEditableRow(tr, `View raw transaction ${rawRow.id}`, () => openRawRowDialog(rawRow));
       const checkbox = document.createElement("input");
       checkbox.className = "row-checkbox";
@@ -2542,7 +2541,7 @@
   }
 
   function statusBadge(rawRow) {
-    const status = rawRow.import_status || "new";
+    const status = rawRow.import_status || "notImportable";
     const badge = document.createElement("span");
     badge.className = `status-badge ${statusClass(status)}`;
     badge.textContent = statusLabel(status);
@@ -2563,11 +2562,7 @@
   }
 
   function isImportableRawRow(rawRow) {
-    return importableRawRowStatuses.has(rawRow.import_status || "new");
-  }
-
-  function isMatchedRawRow(rawRow) {
-    return rawRow.import_status === "ready";
+    return rawRow.import_status === "importable";
   }
 
   function topPriorityRuleForRawRow(rawRow) {
@@ -2603,19 +2598,19 @@
       return true;
     }
     if (filter === "new") {
-      return importableRawRowStatuses.has(rawRow.import_status || "new") || rawRow.import_status === "new";
+      return ["importable", "notImportable"].includes(rawRow.import_status || "notImportable");
     }
-    if (filter === "matched") {
-      return isMatchedRawRow(rawRow);
+    if (filter === "importable") {
+      return isImportableRawRow(rawRow);
     }
-    if (filter === "unmatched") {
-      return rawRow.import_status === "new";
+    if (filter === "notImportable") {
+      return rawRow.import_status === "notImportable";
     }
     return rawRow.import_status === filter;
   }
 
   function statusClass(status) {
-    if (status === "ready") {
+    if (status === "importable" || status === "notImportable") {
       return "status-new";
     }
     return `status-${status}`;
@@ -2623,8 +2618,8 @@
 
   function statusLabel(status) {
     return {
-      new: "New",
-      ready: "New",
+      importable: "Importable",
+      notImportable: "Not importable",
       imported: "Imported",
       duplicate: "Duplicate",
       error: "Error",

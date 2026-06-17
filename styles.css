@@ -2159,7 +2159,7 @@ th[data-raw-column="select"],
   color: var(--warning);
 }
 
-tr.is-matched-row td {
+tr.is-importable-row td {
   background: color-mix(in srgb, var(--success-bg-2) 34%, transparent);
 }
 

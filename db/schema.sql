@@ -118,12 +118,12 @@ CREATE TABLE IF NOT EXISTS raw_imported_rows (
     raw_description TEXT,
     raw_amount TEXT,
     parsed_transaction_id INTEGER REFERENCES transactions(id) ON DELETE SET NULL,
-    import_status TEXT NOT NULL DEFAULT 'new',
+    import_status TEXT NOT NULL DEFAULT 'notImportable',
     import_error TEXT,
     raw_row_hash TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CHECK (import_status IN ('new', 'ready', 'imported', 'duplicate', 'error')),
+    CHECK (import_status IN ('importable', 'notImportable', 'imported', 'duplicate', 'error')),
     CHECK (
         raw_date IS NOT NULL
         OR raw_category IS NOT NULL

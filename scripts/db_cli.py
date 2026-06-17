@@ -32,7 +32,7 @@ FORBIDDEN_SQL_WORDS = {
 }
 MATCH_FIELDS = {"category", "description"}
 MATCH_TYPES = {"contains", "equals", "starts_with", "regex"}
-IMPORTABLE_RAW_ROW_STATUSES = {"ready"}
+IMPORTABLE_RAW_ROW_STATUSES = {"importable"}
 TRANSACTION_TYPES = {"income", "bill", "splurge"}
 
 
@@ -625,7 +625,7 @@ def fetch_rule_tag_ids(conn: sqlite3.Connection, rule_id: int, fallback_tag_id: 
     return [int(fallback_tag_id)] if fallback_tag_id is not None else []
 
 
-def raw_row_has_matching_rule(conn: sqlite3.Connection, raw_row: sqlite3.Row) -> bool:
+def raw_row_is_importable(conn: sqlite3.Connection, raw_row: sqlite3.Row) -> bool:
     rule_result = apply_import_rules(conn, raw_row)
     return (
         rule_result["category_id"] is not None
@@ -634,17 +634,17 @@ def raw_row_has_matching_rule(conn: sqlite3.Connection, raw_row: sqlite3.Row) ->
     )
 
 
-def sync_raw_row_ready_status(conn: sqlite3.Connection) -> None:
+def sync_raw_row_importability_status(conn: sqlite3.Connection) -> None:
     rows = conn.execute(
         """
         SELECT id, raw_category, raw_description, import_status
         FROM raw_imported_rows
-        WHERE import_status IN ('new', 'ready')
+        WHERE import_status IN ('importable', 'notImportable')
         ORDER BY id
         """
     ).fetchall()
     for row in rows:
-        next_status = "ready" if raw_row_has_matching_rule(conn, row) else "new"
+        next_status = "importable" if raw_row_is_importable(conn, row) else "notImportable"
         conn.execute(
             """
             UPDATE raw_imported_rows
@@ -726,7 +726,7 @@ def import_raw_rows(
         if normalize_text(note) is not None
     }
 
-    sync_raw_row_ready_status(conn)
+    sync_raw_row_importability_status(conn)
     raw_rows = fetch_raw_rows_for_import(conn, normalized_ids)
     found_ids = {int(row["id"]) for row in raw_rows}
     missing_ids = [row_id for row_id in normalized_ids if row_id not in found_ids]
@@ -738,20 +738,25 @@ def import_raw_rows(
         if row["import_status"] not in IMPORTABLE_RAW_ROW_STATUSES
     ]
     if unavailable_rows:
-        raise CliError(f"Only ready raw rows can be imported: {', '.join(unavailable_rows)}")
+        raise CliError(f"Only importable raw rows can be imported: {', '.join(unavailable_rows)}")
 
     uncategorized_rows = []
     untyped_rows = []
+    undescribed_rows = []
     for raw_row in raw_rows:
         rule_result = apply_import_rules(conn, raw_row)
         if rule_result["category_id"] is None:
             uncategorized_rows.append(str(raw_row["id"]))
         if rule_result["transaction_type"] is None:
             untyped_rows.append(str(raw_row["id"]))
+        if normalize_text(rule_result["clean_description"]) is None:
+            undescribed_rows.append(str(raw_row["id"]))
     if uncategorized_rows:
         raise CliError(f"Raw rows require a matched category before import: {', '.join(uncategorized_rows)}")
     if untyped_rows:
         raise CliError(f"Raw rows require a matched type before import: {', '.join(untyped_rows)}")
+    if undescribed_rows:
+        raise CliError(f"Raw rows require a matched description before import: {', '.join(undescribed_rows)}")
 
     results = []
     counts = {"imported": 0, "duplicate": 0, "error": 0}
@@ -1139,7 +1144,7 @@ def command_import_csv(args: argparse.Namespace) -> None:
                 for row in raw_rows
             ],
         )
-        sync_raw_row_ready_status(conn)
+        sync_raw_row_importability_status(conn)
         source = fetch_imported_source(conn, imported_source_id)
 
     print_json(
@@ -1428,6 +1433,7 @@ def command_add_transaction_rule(args: argparse.Namespace) -> None:
             ),
         )
         rule = fetch_transaction_rule(conn, int(cursor.lastrowid))
+        sync_raw_row_importability_status(conn)
 
     print_json({"transaction_rule": dict(rule)})
 
@@ -1579,6 +1585,7 @@ def command_update_transaction_rule(args: argparse.Namespace) -> None:
             values,
         )
         rule = fetch_transaction_rule(conn, args.id)
+        sync_raw_row_importability_status(conn)
 
     print_json({"transaction_rule": dict(rule)})
 
@@ -1587,6 +1594,7 @@ def command_delete_transaction_rule(args: argparse.Namespace) -> None:
     with connect(args.db) as conn:
         rule = fetch_transaction_rule(conn, args.id)
         conn.execute("DELETE FROM transaction_import_rules WHERE id = ?", (args.id,))
+        sync_raw_row_importability_status(conn)
 
     print_json({"status": "deleted", "transaction_rule": dict(rule)})
 

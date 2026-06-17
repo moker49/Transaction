@@ -40,7 +40,7 @@ from db_cli import (  # noqa: E402
     require_category_unused,
     require_tag_unused,
     raw_row_hash,
-    sync_raw_row_ready_status,
+    sync_raw_row_importability_status,
     validate_transaction_type,
     validate_rule_actions,
     parse_amount_cents,
@@ -543,7 +543,7 @@ def delete_transaction(transaction_id: int):
             conn.execute(
                 """
                 UPDATE raw_imported_rows
-                SET import_status = 'new',
+                SET import_status = 'notImportable',
                     import_error = NULL,
                     parsed_transaction_id = NULL,
                     updated_at = datetime('now')
@@ -551,6 +551,7 @@ def delete_transaction(transaction_id: int):
                 """,
                 (raw_row_id,),
             )
+            sync_raw_row_importability_status(conn)
         state = read_state(conn)
         conn.commit()
     return jsonify({"status": "deleted", "transaction_id": transaction_id, "state": state})
@@ -854,7 +855,7 @@ def ensure_database() -> None:
 
 def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
     migrate_finance_tags_to_transaction_type(conn)
-    sync_raw_row_ready_status(conn)
+    sync_raw_row_importability_status(conn)
     ensure_default_categories(conn)
     accounts = rows_to_dicts(
         conn.execute(
@@ -1026,7 +1027,7 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
         tags_by_rule.setdefault(rule_id, []).append(tag)
     categories_by_id = {category["id"]: category["name"] for category in categories}
     for row in raw_rows:
-        preview = apply_import_rules(conn, row) if row["import_status"] == "ready" else {}
+        preview = apply_import_rules(conn, row) if row["import_status"] == "importable" else {}
         preview_category_id = preview.get("category_id")
         row["preview_category"] = categories_by_id.get(preview_category_id) if preview_category_id is not None else None
         row["preview_clean_description"] = preview.get("clean_description")

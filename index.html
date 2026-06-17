@@ -257,8 +257,8 @@
               <select id="rawStatusFilter" aria-label="Filter by import status">
                 <option value="all">All rows</option>
                 <option value="new" selected>New</option>
-                <option value="matched">Matched</option>
-                <option value="unmatched">Unmatched</option>
+                <option value="importable">New - Importable</option>
+                <option value="notImportable">New - Not Importable</option>
                 <option value="imported">Imported</option>
                 <option value="duplicate">Duplicate</option>
                 <option value="error">Error</option>
@@ -616,11 +616,11 @@
           <dl id="rawRowRawValues" class="detail-list readonly-details"></dl>
         </section>
         <section>
-          <h3>Matched Values</h3>
-          <dl id="rawRowMatchedValues" class="detail-list readonly-details"></dl>
+          <h3>Clean Values</h3>
+          <dl id="rawRowCleanValues" class="detail-list readonly-details"></dl>
         </section>
         <section>
-          <h3>Import</h3>
+          <h3>Import Status</h3>
           <dl id="rawRowImportValues" class="detail-list readonly-details"></dl>
         </section>
         <section>
