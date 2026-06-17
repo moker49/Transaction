@@ -298,6 +298,17 @@
   elements.mobileThemeToggle.addEventListener("change", updateTheme);
   elements.mobileMenuButton.addEventListener("click", openMobileDrawer);
   elements.mobileDrawerBackdrop.addEventListener("click", closeMobileDrawer);
+  elements.appMessage.addEventListener("click", hidePopup);
+  elements.appMessage.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " " || event.key === "Escape") {
+      event.preventDefault();
+      hidePopup();
+    }
+  });
+  elements.appMessage.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    hidePopup();
+  });
   elements.mobileDashboardRangeButton.addEventListener("click", openDashboardRangeDialog);
   elements.mobileDummyDatabaseToggle.addEventListener("change", updateDatabaseMode);
   elements.mobileRegenerateDatabaseButton.addEventListener("click", regenerateDatabase);
@@ -3111,7 +3122,10 @@
     elements.appMessage.classList.add(severity);
     elements.appMessage.classList.toggle("is-visible", Boolean(message));
     if (message) {
+      showPopupLayer();
       popupTimer = window.setTimeout(hidePopup, 6000);
+    } else {
+      hidePopupLayer();
     }
   }
 
@@ -3120,8 +3134,43 @@
       window.clearTimeout(popupTimer);
       popupTimer = null;
     }
+    hidePopupLayer();
     elements.appMessage.classList.remove("is-visible", "info", "success", "warning", "error");
     elements.appMessageText.textContent = "";
+  }
+
+  function showPopupLayer() {
+    if (typeof elements.appMessage.showModal !== "function" || typeof elements.appMessage.show !== "function") {
+      return;
+    }
+    try {
+      if (!elements.appMessage.open) {
+        if (hasOpenBlockingLayer()) {
+          elements.appMessage.showModal();
+        } else {
+          elements.appMessage.show();
+        }
+      }
+    } catch (_error) {
+      elements.appMessage.classList.add("is-visible");
+    }
+  }
+
+  function hidePopupLayer() {
+    if (typeof elements.appMessage.close !== "function") {
+      return;
+    }
+    try {
+      if (elements.appMessage.open) {
+        elements.appMessage.close();
+      }
+    } catch (_error) {
+      // The class-based fallback still hides the popup below.
+    }
+  }
+
+  function hasOpenBlockingLayer() {
+    return Boolean(document.querySelector("dialog[open]:not(#appMessage)"));
   }
 
   function setMessage(message, isError = false) {

@@ -2022,11 +2022,17 @@ select:disabled {
   display: none;
   position: fixed;
   right: 18px;
+  bottom: auto;
+  left: auto;
   top: 18px;
-  z-index: 50;
+  z-index: 1000;
   align-items: flex-start;
   gap: 10px;
   width: min(420px, calc(100vw - 36px));
+  max-width: calc(100vw - 36px);
+  height: auto;
+  max-height: calc(100vh - 36px);
+  margin: 0;
   padding: 12px 14px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -2034,10 +2040,16 @@ select:disabled {
   color: var(--muted);
   font-weight: 700;
   box-shadow: var(--shadow);
+  cursor: pointer;
 }
 
-.app-message.is-visible {
+.app-message.is-visible,
+.app-message[open] {
   display: flex;
+}
+
+.app-message::backdrop {
+  background: transparent;
 }
 
 .app-message .material-symbols-outlined {
