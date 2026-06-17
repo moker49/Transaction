@@ -464,12 +464,12 @@
           </div>
           <div class="rule-clean-row">
             <label>
-              <span>Clean Category</span>
+              <span>Category</span>
               <input name="setCategoryId" type="hidden" id="ruleCategoryInput">
               <button type="button" class="category-picker-button" id="ruleCategoryButton"></button>
             </label>
             <label>
-              <span>Clean description</span>
+              <span>Description</span>
               <input name="setCleanDescription" type="text" autocomplete="off">
             </label>
           </div>
@@ -484,6 +484,59 @@
         <button type="button" class="danger-button modal-delete-button" id="ruleDeleteButton" hidden>Delete</button>
         <button type="button" class="icon-button" id="ruleDismissButton">Cancel</button>
         <button type="submit" class="primary" id="ruleSubmitButton">Create Rule</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="manualImportDialog" class="modal rule-modal" tabindex="-1">
+    <form id="manualImportForm" class="modal-panel">
+      <div class="panel-heading">
+        <h2 id="manualImportDialogTitle">Manual Import</h2>
+        <button class="icon-only" type="button" id="manualImportCloseButton" aria-label="Close">
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <div class="form-grid manual-import-grid">
+        <div class="rule-form-column">
+          <div class="type-button-row">
+            <input name="transactionType" type="hidden" id="manualImportTypeInput" value="expense">
+            <div class="connected-button-group" id="manualImportTypeGroup" role="radiogroup"
+              aria-label="Transaction type">
+              <button type="button" class="connected-button" data-type-value="income" role="radio">
+                <span class="material-symbols-outlined" aria-hidden="true">payments</span>
+                <span>Income</span>
+              </button>
+              <button type="button" class="connected-button" data-type-value="expense" role="radio">
+                <span class="material-symbols-outlined" aria-hidden="true">receipt_long</span>
+                <span>Expense</span>
+              </button>
+              <button type="button" class="connected-button" data-type-value="transfer" role="radio">
+                <span class="material-symbols-outlined" aria-hidden="true">sync_alt</span>
+                <span>Transfer</span>
+              </button>
+            </div>
+          </div>
+          <div class="rule-clean-row">
+            <label>
+              <span>Category</span>
+              <input name="categoryId" type="hidden" id="manualImportCategoryInput">
+              <button type="button" class="category-picker-button" id="manualImportCategoryButton"></button>
+            </label>
+            <label>
+              <span>Description</span>
+              <input name="cleanDescription" type="text" autocomplete="off">
+            </label>
+          </div>
+          <label class="tag-field">
+            <span>Tags</span>
+            <div id="manualImportTags" class="tag-check-list"></div>
+          </label>
+        </div>
+      </div>
+      <div id="manualImportMessage" class="modal-message" role="status" aria-live="polite"></div>
+      <div class="modal-actions">
+        <button type="button" class="icon-button" id="manualImportCancelButton">Cancel</button>
+        <button type="submit" class="primary" id="manualImportSubmitButton">Import</button>
       </div>
     </form>
   </dialog>
@@ -631,7 +684,7 @@
       </div>
       <div class="modal-actions">
         <button type="button" class="danger-button modal-delete-button" id="rawRowDeleteButton">Delete</button>
-        <button type="button" class="icon-button" id="rawRowDismissButton">Cancel</button>
+        <button type="button" class="icon-button" id="rawRowImportButton">Import</button>
         <button type="button" class="primary" id="rawRowRuleButton" hidden>Rule</button>
         <button type="submit" class="primary" id="rawRowSaveButton">Save</button>
       </div>

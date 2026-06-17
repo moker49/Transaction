@@ -44,6 +44,7 @@ from db_cli import (  # noqa: E402
     validate_transaction_type,
     validate_rule_actions,
     parse_amount_cents,
+    parse_transaction_date,
     make_transaction_hash,
     normalize_text,
 )
@@ -821,6 +822,128 @@ def import_selected_raw_rows():
                 for row_id, note in raw_row_notes.items()
             },
         )
+        state = read_state(conn)
+        conn.commit()
+
+    return jsonify({"import_result": result, "state": state})
+
+
+@app.post("/api/raw-rows/<int:raw_row_id>/manual-import")
+def manual_import_raw_row(raw_row_id: int):
+    ensure_database()
+    data = request.get_json(silent=True) or {}
+    category_id = parse_positive_int(str(data.get("category_id")), "category_id")
+    transaction_type = validate_transaction_type(data.get("transaction_type"), allow_empty=False)
+    clean_description = optional_nonempty(data.get("clean_description"), "clean_description")
+    raw_tag_ids = data.get("tag_ids") or []
+    if not isinstance(raw_tag_ids, list):
+        raise CliError("tag_ids must be a list.")
+    tag_ids = sorted({parse_positive_int(str(tag_id), "tag_id") for tag_id in raw_tag_ids})
+    note = normalize_text(data.get("note"))
+
+    with closing(connect(current_db_path())) as conn:
+        require_category(conn, category_id)
+        for tag_id in tag_ids:
+            fetch_tag_by_id(conn, tag_id)
+        raw_row = conn.execute(
+            """
+            SELECT
+                r.id,
+                s.account_id,
+                r.raw_date,
+                r.raw_description,
+                r.raw_amount,
+                r.import_status
+            FROM raw_imported_rows r
+            JOIN imported_source s ON s.id = r.imported_source_id
+            WHERE r.id = ?
+            """,
+            (raw_row_id,),
+        ).fetchone()
+        if raw_row is None:
+            raise CliError(f"Raw row not found: {raw_row_id}")
+        if raw_row["import_status"] in ("imported", "duplicate"):
+            raise CliError(f"Raw row {raw_row_id} has already been processed.")
+
+        posted_date = parse_transaction_date(raw_row["raw_date"])
+        amount_cents = parse_amount_cents(raw_row["raw_amount"])
+        transaction_hash = make_transaction_hash(
+            int(raw_row["account_id"]),
+            posted_date,
+            amount_cents,
+            clean_description,
+        )
+        duplicate = conn.execute(
+            """
+            SELECT id
+            FROM transactions
+            WHERE account_id = ? AND transaction_hash = ?
+            """,
+            (raw_row["account_id"], transaction_hash),
+        ).fetchone()
+        if duplicate is not None:
+            conn.execute(
+                """
+                UPDATE raw_imported_rows
+                SET import_status = 'duplicate',
+                    import_error = NULL,
+                    updated_at = datetime('now')
+                WHERE id = ?
+                """,
+                (raw_row_id,),
+            )
+            result = {"raw_row_id": raw_row_id, "status": "duplicate", "transaction_id": int(duplicate["id"])}
+        else:
+            cursor = conn.execute(
+                """
+                INSERT INTO transactions (
+                    account_id,
+                    category_id,
+                    posted_date,
+                    transaction_date,
+                    transaction_type,
+                    clean_description,
+                    amount_cents,
+                    raw_imported_row_id,
+                    transaction_hash
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    raw_row["account_id"],
+                    category_id,
+                    posted_date,
+                    posted_date,
+                    transaction_type,
+                    clean_description,
+                    amount_cents,
+                    raw_row_id,
+                    transaction_hash,
+                ),
+            )
+            transaction_id = int(cursor.lastrowid)
+            if note is not None:
+                conn.execute(
+                    "INSERT INTO transaction_notes (transaction_id, note) VALUES (?, ?)",
+                    (transaction_id, note),
+                )
+            conn.executemany(
+                "INSERT OR IGNORE INTO transaction_tags (transaction_id, tag_id) VALUES (?, ?)",
+                [(transaction_id, tag_id) for tag_id in tag_ids],
+            )
+            conn.execute(
+                """
+                UPDATE raw_imported_rows
+                SET import_status = 'imported',
+                    import_error = NULL,
+                    parsed_transaction_id = ?,
+                    updated_at = datetime('now')
+                WHERE id = ?
+                """,
+                (transaction_id, raw_row_id),
+            )
+            result = {"raw_row_id": raw_row_id, "status": "imported", "transaction_id": transaction_id}
+
         state = read_state(conn)
         conn.commit()
 

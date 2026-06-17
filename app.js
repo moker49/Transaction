@@ -32,6 +32,7 @@
   let editingCategoryId = null;
   let activeTransactionId = null;
   let activeRawRowId = null;
+  let activeManualImportRawRowId = null;
   let transactionEditMode = false;
   let accountDialogMode = "add";
   let ruleDialogMode = "add";
@@ -155,6 +156,18 @@
     ruleMessage: document.querySelector("#ruleMessage"),
     ruleSubmitButton: document.querySelector("#ruleSubmitButton"),
     ruleDeleteButton: document.querySelector("#ruleDeleteButton"),
+    manualImportDialog: document.querySelector("#manualImportDialog"),
+    manualImportForm: document.querySelector("#manualImportForm"),
+    manualImportDialogTitle: document.querySelector("#manualImportDialogTitle"),
+    manualImportCloseButton: document.querySelector("#manualImportCloseButton"),
+    manualImportCancelButton: document.querySelector("#manualImportCancelButton"),
+    manualImportSubmitButton: document.querySelector("#manualImportSubmitButton"),
+    manualImportMessage: document.querySelector("#manualImportMessage"),
+    manualImportCategoryInput: document.querySelector("#manualImportCategoryInput"),
+    manualImportCategoryButton: document.querySelector("#manualImportCategoryButton"),
+    manualImportTypeInput: document.querySelector("#manualImportTypeInput"),
+    manualImportTypeGroup: document.querySelector("#manualImportTypeGroup"),
+    manualImportTags: document.querySelector("#manualImportTags"),
     settingsThemeToggle: document.querySelector("#settingsThemeToggle"),
     dashboardRangeButton: document.querySelector("#dashboardRangeButton"),
     dashboardRangeLabel: document.querySelector("#dashboardRangeLabel"),
@@ -217,7 +230,7 @@
     rawRowDialogTitle: document.querySelector("#rawRowDialogTitle"),
     rawRowStatusSubtitle: document.querySelector("#rawRowStatusSubtitle"),
     rawRowCloseButton: document.querySelector("#rawRowCloseButton"),
-    rawRowDismissButton: document.querySelector("#rawRowDismissButton"),
+    rawRowImportButton: document.querySelector("#rawRowImportButton"),
     rawRowDeleteButton: document.querySelector("#rawRowDeleteButton"),
     rawRowRuleButton: document.querySelector("#rawRowRuleButton"),
     rawRowSaveButton: document.querySelector("#rawRowSaveButton"),
@@ -293,6 +306,15 @@
   elements.ruleTypeGroup.addEventListener("keydown", (event) => navigateTypeGroup(event, elements.ruleTypeInput, elements.ruleTypeGroup));
   elements.ruleDialog.addEventListener("close", () => {
     editingRuleId = null;
+  });
+  elements.manualImportForm.addEventListener("submit", importManualRawRow);
+  elements.manualImportCloseButton.addEventListener("click", closeManualImportDialog);
+  elements.manualImportCancelButton.addEventListener("click", closeManualImportDialog);
+  elements.manualImportCategoryButton.addEventListener("click", () => openCategoryPicker("manual-import"));
+  elements.manualImportTypeGroup.addEventListener("click", (event) => selectTypeFromGroup(event, elements.manualImportTypeInput, elements.manualImportTypeGroup));
+  elements.manualImportTypeGroup.addEventListener("keydown", (event) => navigateTypeGroup(event, elements.manualImportTypeInput, elements.manualImportTypeGroup));
+  elements.manualImportDialog.addEventListener("close", () => {
+    activeManualImportRawRowId = null;
   });
   elements.settingsThemeToggle.addEventListener("change", updateTheme);
   elements.mobileThemeToggle.addEventListener("change", updateTheme);
@@ -372,7 +394,7 @@
   });
   elements.rawRowForm.addEventListener("submit", saveRawRowNote);
   elements.rawRowCloseButton.addEventListener("click", closeRawRowDialog);
-  elements.rawRowDismissButton.addEventListener("click", closeRawRowDialog);
+  elements.rawRowImportButton.addEventListener("click", importActiveRawRow);
   elements.rawRowDeleteButton.addEventListener("click", deleteActiveRawRow);
   elements.rawRowRuleButton.addEventListener("click", openTopRawRowRule);
   elements.rawRowNoteInput.addEventListener("input", updateRawRowModalActions);
@@ -1662,9 +1684,7 @@
   function buildRulePayload(formElement = elements.ruleForm) {
     const form = new FormData(formElement);
     const setCleanDescription = clean(form.get("setCleanDescription")) || null;
-    const addTagIds = [...elements.ruleTags.querySelectorAll("input[type='checkbox']:checked")]
-      .map((checkbox) => Number(checkbox.value))
-      .filter((tagId) => Number.isInteger(tagId) && tagId > 0);
+    const addTagIds = selectedTagIdsFrom(elements.ruleTags);
     return {
       name: setCleanDescription,
       match_description: clean(form.get("matchDescription")) || null,
@@ -1677,11 +1697,20 @@
     };
   }
 
+  function buildManualImportPayload() {
+    const form = new FormData(elements.manualImportForm);
+    return {
+      category_id: Number(form.get("categoryId")) || null,
+      clean_description: clean(form.get("cleanDescription")) || null,
+      transaction_type: clean(form.get("transactionType")) || null,
+      tag_ids: selectedTagIdsFrom(elements.manualImportTags),
+      note: clean(elements.rawRowNoteInput.value),
+    };
+  }
+
   function buildTransactionPayload() {
     const form = new FormData(elements.transactionForm);
-    const tagIds = [...elements.transactionTags.querySelectorAll("input[type='checkbox']:checked")]
-      .map((checkbox) => Number(checkbox.value))
-      .filter((tagId) => Number.isInteger(tagId) && tagId > 0);
+    const tagIds = selectedTagIdsFrom(elements.transactionTags);
     return {
       posted_date: clean(form.get("postedDate")),
       category_id: Number(form.get("categoryId")),
@@ -1691,6 +1720,12 @@
       notes: clean(form.get("notes")),
       tag_ids: tagIds,
     };
+  }
+
+  function selectedTagIdsFrom(container) {
+    return [...container.querySelectorAll("input[type='checkbox']:checked")]
+      .map((checkbox) => Number(checkbox.value))
+      .filter((tagId) => Number.isInteger(tagId) && tagId > 0);
   }
 
   function payloadMatchesSnapshot(payload, snapshot) {
@@ -1779,8 +1814,29 @@
     elements.rawRowDialog.close();
   }
 
+  function openManualImportDialog(rawRow) {
+    activeManualImportRawRowId = rawRow.id;
+    elements.manualImportDialogTitle.textContent = `Manual Import ${rawRow.id}`;
+    elements.manualImportMessage.textContent = "";
+    elements.manualImportMessage.classList.remove("error");
+    elements.manualImportForm.reset();
+    setTypeGroupValue(elements.manualImportTypeInput, elements.manualImportTypeGroup, rawRow.preview_type || "expense");
+    setManualImportCategoryValue(null);
+    elements.manualImportForm.elements.cleanDescription.value = clean(rawRow.preview_clean_description) || clean(rawRow.raw_description) || "";
+    renderManualImportTags([]);
+    openModal(elements.manualImportDialog);
+  }
+
+  function closeManualImportDialog() {
+    elements.manualImportDialog.close();
+  }
+
   function activeRawRow() {
     return state.rawRows.find((row) => row.id === activeRawRowId) || null;
+  }
+
+  function activeManualImportRawRow() {
+    return state.rawRows.find((row) => row.id === activeManualImportRawRowId) || null;
   }
 
   function populateRawRowDialog(rawRow) {
@@ -1840,7 +1896,7 @@
     const canEditRule = isImportableRawRow(rawRow) && topRule;
     const canCreateRule = shouldOfferRuleCreation(rawRow);
     elements.rawRowRuleButton.hidden = !canEditRule && !canCreateRule;
-    elements.rawRowRuleButton.textContent = canCreateRule ? "Create Rule" : "Rule";
+    elements.rawRowRuleButton.textContent = "Rule";
   }
 
   function shouldOfferRuleCreation(rawRow) {
@@ -1916,6 +1972,75 @@
     }
   }
 
+  async function importActiveRawRow() {
+    const rawRow = activeRawRow();
+    if (!rawRow) {
+      closeRawRowDialog();
+      return;
+    }
+    if (!isImportableRawRow(rawRow)) {
+      closeRawRowDialog();
+      openManualImportDialog(rawRow);
+      return;
+    }
+    const note = clean(elements.rawRowNoteInput.value);
+    if (note) {
+      rawRowNotes.set(rawRow.id, note);
+    } else {
+      rawRowNotes.delete(rawRow.id);
+    }
+    await importRawRows([rawRow.id], {
+      successMessage: ({ counts }) => `Imported ${counts.imported}; duplicates ${counts.duplicate}; errors ${counts.error}.`,
+      onSuccess: () => {
+        selectedRawRowIds.delete(rawRow.id);
+        closeRawRowDialog();
+      },
+    });
+  }
+
+  async function importManualRawRow(event) {
+    event.preventDefault();
+    const rawRow = activeManualImportRawRow();
+    if (!rawRow) {
+      closeManualImportDialog();
+      return;
+    }
+    const payload = buildManualImportPayload();
+    if (!payload.transaction_type) {
+      setModalMessage(elements.manualImportMessage, "Type is required.", true);
+      return;
+    }
+    if (!payload.category_id) {
+      setModalMessage(elements.manualImportMessage, "Category is required.", true);
+      return;
+    }
+    if (!payload.clean_description) {
+      setModalMessage(elements.manualImportMessage, "Description is required.", true);
+      return;
+    }
+
+    elements.manualImportSubmitButton.disabled = true;
+    try {
+      const response = await apiRequest(`/api/raw-rows/${rawRow.id}/manual-import`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      rawRowNotes.delete(rawRow.id);
+      selectedRawRowIds.delete(rawRow.id);
+      closeManualImportDialog();
+      applyStateFromPayload(response);
+      const result = response.import_result;
+      setMessage(
+        result.status === "duplicate" ? "Raw row matched an existing transaction." : "Raw row imported.",
+        false,
+      );
+    } catch (error) {
+      setModalMessage(elements.manualImportMessage, error.message || "Could not import raw transaction.", true);
+    } finally {
+      elements.manualImportSubmitButton.disabled = false;
+    }
+  }
+
   function renderAccountSelects() {
     const options = state.accounts.map((account) => {
       return { value: String(account.id), label: accountLabel(account) };
@@ -1967,14 +2092,22 @@
   }
 
   function renderRuleTags(selectedTagIds) {
-    clear(elements.ruleTags);
+    renderSelectableTags(elements.ruleTags, selectedTagIds, "addTagIds");
+  }
+
+  function renderManualImportTags(selectedTagIds) {
+    renderSelectableTags(elements.manualImportTags, selectedTagIds, "tagIds");
+  }
+
+  function renderSelectableTags(container, selectedTagIds, inputName) {
+    clear(container);
     const selected = new Set(selectedTagIds.map((tagId) => Number(tagId)));
     if (!state.tags.length) {
-      elements.ruleTags.appendChild(el("span", "No tags available.", "list-meta"));
+      container.appendChild(el("span", "No tags available.", "list-meta"));
       return;
     }
     state.tags.forEach((tag) => {
-      elements.ruleTags.appendChild(selectableTagChip(tag, selected.has(Number(tag.id)), "addTagIds"));
+      container.appendChild(selectableTagChip(tag, selected.has(Number(tag.id)), inputName));
     });
   }
 
@@ -2000,6 +2133,11 @@
     renderCategoryButton(elements.ruleCategoryButton, elements.ruleCategoryInput.value);
   }
 
+  function setManualImportCategoryValue(categoryId) {
+    elements.manualImportCategoryInput.value = categoryId === null || categoryId === undefined ? "" : String(categoryId);
+    renderCategoryButton(elements.manualImportCategoryButton, elements.manualImportCategoryInput.value);
+  }
+
   function setTransactionCategoryValue(categoryId) {
     elements.transactionCategoryInput.value = categoryId === null || categoryId === undefined ? "" : String(categoryId);
     renderCategoryButton(elements.transactionCategoryButton, elements.transactionCategoryInput.value, "Select category");
@@ -2021,6 +2159,7 @@
     }
 
     renderCategoryButton(elements.ruleCategoryButton, elements.ruleCategoryInput.value);
+    renderCategoryButton(elements.manualImportCategoryButton, elements.manualImportCategoryInput.value);
     renderCategoryButton(elements.transactionCategoryButton, elements.transactionCategoryInput.value, "Select category");
     renderCategoryButton(elements.transactionCategoryFilterButton, elements.transactionCategoryFilter.value, "All categories");
     renderCategoryButton(elements.categoryParentButton, elements.categoryParentInput.value, "No parent");
@@ -2038,8 +2177,8 @@
 
   function openCategoryPicker(target) {
     categoryPickerTarget = target;
-    const canClear = target === "rule" || target === "transaction-filter" || target === "category-parent";
-    elements.categoryPickerTitle.textContent = target === "rule"
+    const canClear = target === "rule" || target === "manual-import" || target === "transaction-filter" || target === "category-parent";
+    elements.categoryPickerTitle.textContent = target === "rule" || target === "manual-import"
       ? "Select Clean Category"
       : target === "transaction-filter"
         ? "Filter By Category"
@@ -2073,7 +2212,9 @@
         ? Number(elements.transactionCategoryFilter.value) || null
         : categoryPickerTarget === "category-parent"
           ? Number(elements.categoryParentInput.value) || null
-          : Number(elements.ruleCategoryInput.value) || null;
+          : categoryPickerTarget === "manual-import"
+            ? Number(elements.manualImportCategoryInput.value) || null
+            : Number(elements.ruleCategoryInput.value) || null;
     const parentOnly = categoryPickerTarget === "category-parent";
     renderCategorySections(elements.categoryPickerList, {
       selectable: true,
@@ -2093,6 +2234,8 @@
       setTransactionCategoryFilterValue(categoryId);
     } else if (categoryPickerTarget === "rule") {
       setRuleCategoryValue(categoryId);
+    } else if (categoryPickerTarget === "manual-import") {
+      setManualImportCategoryValue(categoryId);
     } else if (categoryPickerTarget === "category-parent") {
       setCategoryParentValue(categoryId);
     }
@@ -2426,6 +2569,17 @@
     if (!rowIds.length) {
       return;
     }
+    await importRawRows(rowIds, {
+      button: elements.importSelectedRowsButton,
+      successMessage: ({ counts }) => `Imported ${counts.imported}; duplicates ${counts.duplicate}; errors ${counts.error}.`,
+      onSuccess: () => {
+        selectedRawRowIds.clear();
+      },
+      errorMessage: "Could not import selected rows.",
+    });
+  }
+
+  async function importRawRows(rowIds, options = {}) {
     const notes = rowIds.reduce((record, rowId) => {
       const note = clean(rawRowNotes.get(rowId));
       if (note) {
@@ -2434,24 +2588,33 @@
       return record;
     }, {});
 
-    elements.importSelectedRowsButton.disabled = true;
-    elements.importSelectedRowsButton.title = "Importing";
+    const button = options.button || elements.rawRowImportButton;
+    if (button) {
+      button.disabled = true;
+      button.title = "Importing";
+    }
     try {
       const payload = await apiRequest("/api/raw-rows/import", {
         method: "POST",
         body: JSON.stringify({ raw_row_ids: rowIds, raw_row_notes: notes }),
       });
       rowIds.forEach((rowId) => rawRowNotes.delete(rowId));
-      selectedRawRowIds.clear();
+      if (options.onSuccess) {
+        options.onSuccess(payload);
+      }
       applyStateFromPayload(payload);
       const counts = payload.import_result.counts;
       setMessage(
-        `Imported ${counts.imported}; duplicates ${counts.duplicate}; errors ${counts.error}.`,
+        options.successMessage ? options.successMessage(payload.import_result) : `Imported ${counts.imported}; duplicates ${counts.duplicate}; errors ${counts.error}.`,
         counts.error > 0,
       );
     } catch (error) {
-      showPopup(error.message || "Could not import selected rows.", "error");
+      showPopup(error.message || options.errorMessage || "Could not import raw rows.", "error");
     } finally {
+      if (button) {
+        button.disabled = false;
+        button.title = "";
+      }
       updateImportSelectedButton();
     }
   }
