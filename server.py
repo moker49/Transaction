@@ -18,6 +18,7 @@ SCRIPTS = ROOT / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
+import db_cli as db_cli_module  # noqa: E402
 from db_cli import (  # noqa: E402
     CliError,
     DEFAULT_DB_PATH,
@@ -50,6 +51,7 @@ from init_db import init_db  # noqa: E402
 
 
 app = Flask(__name__, static_folder=str(ROOT), static_url_path="")
+app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 DUMMY_DB_PATH = DEFAULT_DB_PATH.with_name("transactions.dummy.sqlite")
 DUMMY_RESTORE_DB_PATH = DEFAULT_DB_PATH.with_name("transactions.dummy.restore.sqlite")
 TRANSACTION_TYPES = ("income", "bill", "splurge")
@@ -120,6 +122,25 @@ def handle_sqlite_error(error: sqlite3.Error):
 @app.get("/")
 def index():
     return send_from_directory(ROOT, "index.html")
+
+
+@app.after_request
+def prevent_static_cache(response):
+    if request.path in {"/", "/index.html"} or request.path.endswith((".js", ".css")):
+        response.headers["Cache-Control"] = "no-store, max-age=0"
+    return response
+
+
+@app.get("/api/debug/runtime")
+def debug_runtime():
+    db_cli_path = Path(db_cli_module.__file__).resolve()
+    return jsonify(
+        {
+            "db_cli_path": str(db_cli_path),
+            "db_cli_mtime": db_cli_path.stat().st_mtime,
+            "server_path": str(Path(__file__).resolve()),
+        }
+    )
 
 
 @app.get("/api/health")
