@@ -80,8 +80,8 @@
   --tag-chip-selected-bg: var(--md-sys-color-secondary-container);
   --tag-chip-selected-text: var(--md-sys-color-on-secondary-container);
   --tag-chip-outline: var(--md-sys-color-outline);
-  --income: var(--md-sys-color-primary);
-  --outflow: var(--md-sys-color-error);
+  --income: color-mix(in srgb, var(--md-sys-color-inverse-primary) 90%, white);
+  --outflow: color-mix(in srgb, var(--md-sys-color-error-container) 77%, white);
 }
 
 .light,
@@ -102,7 +102,7 @@
   --md-sys-color-on-tertiary-container: rgb(36 76 90);
   --md-sys-color-error: rgb(186 26 26);
   --md-sys-color-on-error: rgb(255 255 255);
-  --md-sys-color-error-container: hsl(6, 100%, 82%);
+  --md-sys-color-error-container: hsl(6, 100%, 8%);
   --md-sys-color-on-error-container: rgb(147 0 10);
   --md-sys-color-background: rgb(245 251 245);
   --md-sys-color-on-background: rgb(23 29 25);
