@@ -3069,8 +3069,40 @@
   function formatDateRangeLabel(start, end) {
     const startDate = parseDateKey(start);
     const endDate = parseDateKey(end);
-    const formatter = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" });
+    const sameYear = startDate.getFullYear() === endDate.getFullYear();
+    const sameMonth = sameYear && startDate.getMonth() === endDate.getMonth();
+    const startsOnFirst = startDate.getDate() === 1;
+    const endsOnLast = endDate.getDate() === daysInMonth(endDate);
+
+    if (sameYear && startDate.getMonth() === 0 && endDate.getMonth() === 11 && startsOnFirst && endsOnLast) {
+      return String(startDate.getFullYear());
+    }
+
+    if (sameMonth && startsOnFirst && endsOnLast) {
+      return `${monthName(startDate, "long")} ${startDate.getFullYear()}`;
+    }
+
+    if (sameMonth) {
+      if (startDate.getDate() === endDate.getDate()) {
+        return `${monthName(startDate, "long")} ${startDate.getDate()}, ${startDate.getFullYear()}`;
+      }
+      return `${monthName(startDate, "long")} ${startDate.getDate()}-${endDate.getDate()}, ${startDate.getFullYear()}`;
+    }
+
+    if (startsOnFirst && endsOnLast) {
+      return `${monthName(startDate, "short")} ${startDate.getFullYear()} - ${monthName(endDate, "short")} ${endDate.getFullYear()}`;
+    }
+
+    const formatter = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" });
     return `${formatter.format(startDate)} - ${formatter.format(endDate)}`;
+  }
+
+  function monthName(date, width) {
+    return new Intl.DateTimeFormat("en-US", { month: width }).format(date);
+  }
+
+  function daysInMonth(date) {
+    return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
   }
 
   function firstOfMonth(date) {
