@@ -55,37 +55,22 @@
     { value: "expense", label: "Expense" },
     { value: "transfer", label: "Transfer" },
   ];
-  const comfortableCategoryColors = [
-    "#2f8f2f",
-    "#c4457c",
-    "#91a82f",
-    "#3a67c2",
-    "#d07b2f",
-    "#3f9f72",
-    "#c85d5d",
-    "#7c6bc2",
-    "#239f9f",
-    "#b68b2e",
-    "#d27da8",
-    "#4f83a8",
-    "#7a5234",
-    "#6f944f",
-    "#909499",
-  ];
+
   const defaultCategoryOrder = [
     "Income", "Salary", "Bonus", "Interest", "Dividend", "Refund", "Gift Received",
     "Housing", "Rent", "Mortgage", "Property Tax", "HOA", "Home Insurance", "Home Maintenance",
     "Utility", "Electric", "Gas", "Water", "Sewer", "Trash", "Internet", "Phone",
+    "Food", "Groceries", "Restaurant",
     "Transportation", "Car Payment", "Fuel", "Charging", "Auto Insurance", "Maintenance", "Registration", "Parking", "Toll", "Public Transit",
-    "Food & Dining", "Groceries", "Restaurant",
     "Shopping", "Clothing", "Electronic", "Household", "Furniture",
     "Health", "Medical", "Dental", "Vision", "Pharmacy", "Fitness",
-    "Entertainment", "Activity", "Streaming", "Gaming", "Movie", "Music", "Hobby",
+    "Lifestyle", "Activity", "Hobby", "Alcohol", "Substance",
+    "Entertainment", "Streaming", "Gaming", "Movie", "Music",
     "Travel", "Hotel", "Flight", "Rental",
     "Financial", "Fee", "Loan Payment", "Investment", "Tax Payment",
-    "Insurance", "Life Insurance", "Umbrella Insurance",
+    "Insurance", "Life Insurance", "Umbrella Insurance", "Protection",
     "Education", "Tuition", "Books", "Courses", "Certifications",
-    "Family & Personal", "Childcare", "Pet Expense", "Gift Given", "Personal Care",
+    "Personal", "Childcare", "Pet Expense", "Gift Given", "Personal Care", "Reinbursement",
     "Business", "Software", "Equipment", "Service", "Office Expense",
     "Transfer", "Internal Transfer", "Card Payment",
   ];
@@ -989,7 +974,7 @@
   }
 
   function setCategoryDialogColor(color) {
-    const normalizedColor = normalizeHexColor(color) || comfortableCategoryColors[0];
+    const normalizedColor = normalizeHexColor(color);
     elements.categoryColorInput.value = normalizedColor;
   }
 
@@ -999,7 +984,7 @@
   }
 
   function openCategoryColorPicker() {
-    categoryColorDraft = normalizeHexColor(elements.categoryColorInput.value) || comfortableCategoryColors[0];
+    categoryColorDraft = normalizeHexColor(elements.categoryColorInput.value);
     syncCategoryColorPickerFromHex(categoryColorDraft);
     openModal(elements.categoryColorDialog);
   }
@@ -1042,7 +1027,7 @@
   }
 
   function syncCategoryColorPickerFromHex(color, { keepHexInput = false } = {}) {
-    const normalizedColor = normalizeHexColor(color) || comfortableCategoryColors[0];
+    const normalizedColor = normalizeHexColor(color);
     const hsl = hexToHsl(normalizedColor);
     elements.categoryColorHue.value = String(Math.round(hsl.h));
     elements.categoryColorSaturation.value = String(Math.round(hsl.s));
@@ -1081,7 +1066,7 @@
   }
 
   function hexToHsl(hex) {
-    const normalized = normalizeHexColor(hex) || comfortableCategoryColors[0];
+    const normalized = normalizeHexColor(hex);
     const r = parseInt(normalized.slice(1, 3), 16) / 255;
     const g = parseInt(normalized.slice(3, 5), 16) / 255;
     const b = parseInt(normalized.slice(5, 7), 16) / 255;
@@ -2360,7 +2345,7 @@
       return category.color;
     }
     const parent = state.categories.find((candidate) => candidate.id === category.parent_id);
-    return parent?.color || comfortableCategoryColors[0];
+    return parent?.color;
   }
 
   function orderedCategories() {

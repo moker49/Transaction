@@ -61,16 +61,17 @@ DEFAULT_CATEGORY_TREE = {
     "Income": ["Salary", "Bonus", "Interest", "Dividend", "Refund", "Gift Received"],
     "Housing": ["Rent", "Mortgage", "Property Tax", "HOA", "Home Insurance", "Home Maintenance"],
     "Utility": ["Electric", "Gas", "Water", "Sewer", "Trash", "Internet", "Phone"],
+    "Food": ["Groceries", "Restaurant"],
     "Transportation": ["Car Payment", "Fuel", "Charging", "Auto Insurance", "Maintenance", "Registration", "Parking", "Toll", "Public Transit"],
-    "Food & Dining": ["Groceries", "Restaurant"],
     "Shopping": ["Clothing", "Electronic", "Household", "Furniture"],
     "Health": ["Medical", "Dental", "Vision", "Pharmacy", "Fitness"],
-    "Entertainment": ["Activity", "Streaming", "Gaming", "Movie", "Music", "Hobby"],
+    "Lifestyle": ["Activity", "Hobby", "Alcohol", "Substance"],
+    "Entertainment": ["Streaming", "Gaming", "Movie", "Music"],
     "Travel": ["Hotel", "Flight", "Rental"],
     "Financial": ["Fee", "Loan Payment", "Investment", "Tax Payment"],
-    "Insurance": ["Life Insurance", "Umbrella Insurance"],
+    "Insurance": ["Life Insurance", "Umbrella Insurance", "Protection"],
     "Education": ["Tuition", "Books", "Courses", "Certifications"],
-    "Family & Personal": ["Childcare", "Pet Expense", "Gift Given", "Personal Care"],
+    "Personal": ["Childcare", "Pet Expense", "Gift Given", "Personal Care", "Reimbursement"],
     "Business": ["Software", "Equipment", "Service", "Office Expense"],
     "Transfer": ["Internal Transfer", "Card Payment"],
 }
@@ -78,16 +79,17 @@ DEFAULT_CATEGORY_COLORS = {
     "Income": "#208020",
     "Housing": "#c4588e",
     "Utility": "#91a82f",
+    "Food": "#d16630",
     "Transportation": "#3a67c2",
-    "Food & Dining": "#d16630",
-    "Shopping": "#36b36a",
+    "Shopping": "#8161c2",
     "Health": "#ad3131",
-    "Entertainment": "#7c6bc2",
+    "Lifestyle": "#36b36a",
+    "Entertainment": "#602699",
     "Travel": "#109e9e",
     "Financial": "#b68b2e",
     "Insurance": "#d18eb0",
     "Education": "#4d8fbf",
-    "Family & Personal": "#7a5234",
+    "Personal": "#7a5234",
     "Business": "#60943b",
     "Transfer": "#909499",
 }
@@ -1224,10 +1226,32 @@ def validate_category_color(value: Any) -> str:
 
 
 def ensure_default_categories(conn: sqlite3.Connection) -> None:
+    migrate_default_category_name(conn, "Food & Dining", "Food", DEFAULT_CATEGORY_COLORS["Food"])
+    migrate_default_category_name(conn, "Family & Personal", "Personal", DEFAULT_CATEGORY_COLORS["Personal"])
     for parent_name, child_names in DEFAULT_CATEGORY_TREE.items():
         parent_id = ensure_category(conn, parent_name, None, DEFAULT_CATEGORY_COLORS[parent_name])
         for child_name in child_names:
             ensure_category(conn, child_name, parent_id, None)
+
+
+def migrate_default_category_name(conn: sqlite3.Connection, old_name: str, new_name: str, color: str) -> None:
+    old_row = conn.execute("SELECT id FROM categories WHERE name = ?", (old_name,)).fetchone()
+    if old_row is None:
+        return
+    new_row = conn.execute("SELECT id FROM categories WHERE name = ?", (new_name,)).fetchone()
+    old_id = int(old_row["id"])
+    if new_row is None:
+        conn.execute(
+            "UPDATE categories SET name = ?, parent_id = NULL, color = ? WHERE id = ?",
+            (new_name, color, old_id),
+        )
+        return
+
+    new_id = int(new_row["id"])
+    conn.execute("UPDATE categories SET parent_id = ?, color = NULL WHERE parent_id = ?", (new_id, old_id))
+    conn.execute("UPDATE transactions SET category_id = ? WHERE category_id = ?", (new_id, old_id))
+    conn.execute("UPDATE transaction_import_rules SET set_category_id = ? WHERE set_category_id = ?", (new_id, old_id))
+    conn.execute("DELETE FROM categories WHERE id = ?", (old_id,))
 
 
 def ensure_system_tags(conn: sqlite3.Connection) -> None:
