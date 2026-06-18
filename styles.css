@@ -8,19 +8,25 @@
   --white: rgb(240 245 240);
   --black: rgb(5 10 5);
 
-  --bg: color-mix(in srgb, var(--primary) 7%, var(--black));
-  --surface: color-mix(in srgb, var(--primary) 11%, var(--black));
-  --surface-muted: color-mix(in srgb, var(--primary) 17%, var(--black));
-  --input-bg: color-mix(in srgb, var(--primary) 5%, var(--black));
-  --item-bg: color-mix(in srgb, var(--primary) 13%, var(--black));
+  /* Tune how much primary color is mixed into neutral UI structure. */
+  --background-saturation: 7%;
+  --surface-saturation: 11%;
+  --border-saturation: 40%;
+
+  --bg: color-mix(in srgb, var(--primary) var(--background-saturation), var(--black));
+  --surface: color-mix(in srgb, var(--primary) var(--surface-saturation), var(--black));
+  --surface-muted: color-mix(in srgb, var(--primary) calc(var(--surface-saturation) + 6%), var(--black));
+  --input-bg: color-mix(in srgb, var(--primary) max(0%, calc(var(--surface-saturation) - 6%)), var(--black));
+  --item-bg: color-mix(in srgb, var(--primary) calc(var(--surface-saturation) + 2%), var(--black));
   --text: color-mix(in srgb, var(--white) 92%, var(--primary));
   --muted: color-mix(in srgb, var(--white) 64%, var(--secondary));
-  --border: color-mix(in srgb, var(--black) 60%, var(--primary));
+  --border: color-mix(in srgb, var(--primary) var(--border-saturation), var(--black));
+  --control-border: color-mix(in srgb, var(--primary) 50%, var(--black));
 
   --accent: color-mix(in srgb, var(--primary) 42%, var(--black));
   --accent-dark: color-mix(in srgb, var(--primary) 80%, var(--white));
   --accent-contrast: color-mix(in srgb, var(--white) 84%, var(--primary));
-  --focus: color-mix(in srgb, var(--primary) 32%, transparent);
+  --focus: color-mix(in srgb, var(--primary) 75%, transparent);
 
   --danger: color-mix(in srgb, var(--error) 84%, var(--white));
   --danger-bg: color-mix(in srgb, var(--error) 48%, var(--black));
@@ -195,7 +201,7 @@ h2 {
 
 .icon-button {
   background: transparent;
-  border: 1px solid var(--border);
+  border: 1px solid var(--control-border);
   color: var(--accent-dark);
 }
 
@@ -207,7 +213,7 @@ h2 {
   height: 42px;
   border-radius: 999px;
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: 1px solid var(--control-border);
   color: var(--text);
   box-shadow: var(--shadow);
 }
@@ -239,7 +245,7 @@ h2 {
   justify-content: space-between;
   width: 74px;
   height: 38px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--control-border);
   border-radius: 999px;
   background: var(--surface);
   padding: 0 9px;
@@ -752,7 +758,7 @@ input,
 select {
   width: 100%;
   min-height: 38px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--control-border);
   border-radius: 7px;
   background: var(--input-bg);
   color: var(--text);
@@ -839,6 +845,7 @@ input[type="file"]::file-selector-button {
 
 input:focus,
 select:focus,
+textarea:focus,
 button:focus-visible {
   outline: 3px solid var(--focus);
   outline-offset: 2px;
@@ -1139,7 +1146,7 @@ td.amount {
   padding: 0 16px;
   background: transparent;
   color: var(--accent-dark);
-  border: 1px solid var(--border);
+  border: 1px solid var(--control-border);
   border-radius: 20px;
   font-weight: 760;
   text-align: left;
@@ -1207,9 +1214,9 @@ td.amount {
   padding-top: 5px;
   padding-bottom: 5px;
   border-radius: 7px;
-  border-color: color-mix(in srgb, var(--category-color) 54%, var(--border));
-  background: color-mix(in srgb, var(--category-color) 20%, var(--surface-muted));
-  color: color-mix(in srgb, var(--category-color) 70%, var(--text));
+  border-color: color-mix(in srgb, var(--category-color) 65%, white);
+  background: color-mix(in srgb, var(--category-color) 65%, black);
+  color: color-mix(in srgb, var(--category-color) 55%, white);
 }
 
 button.category-chip.manageable-chip {
@@ -1848,7 +1855,7 @@ button.category-chip.manageable-chip {
 
 textarea {
   width: 100%;
-  border: 1px solid var(--border);
+  border: 1px solid var(--control-border);
   border-radius: 7px;
   background: var(--input-bg);
   color: var(--text);
