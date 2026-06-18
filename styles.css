@@ -7,21 +7,28 @@
   --warning: hsl(35, 90%, 65%);
   --white: rgb(240 245 240);
   --black: rgb(5 10 5);
+  --neutral-bg: hsl(150, 13%, 9%);
+  --neutral-surface: hsl(144, 9%, 13%);
+  --neutral-surface-muted: hsl(140, 7%, 16%);
+  --neutral-input: hsl(140, 11%, 5%);
+  --neutral-item: hsl(144, 8%, 12%);
+  --neutral-border: hsl(142, 6%, 22%);
 
   /* Tune how much primary color is mixed into neutral UI structure. */
-  --background-saturation: 7%;
-  --surface-saturation: 11%;
-  --border-saturation: 40%;
+  --background-saturation: 3%;
+  --surface-saturation: 3%;
+  --border-saturation: 20%;
 
-  --bg: color-mix(in srgb, var(--primary) var(--background-saturation), var(--black));
-  --surface: color-mix(in srgb, var(--primary) var(--surface-saturation), var(--black));
-  --surface-muted: color-mix(in srgb, var(--primary) calc(var(--surface-saturation) + 6%), var(--black));
-  --input-bg: color-mix(in srgb, var(--primary) max(0%, calc(var(--surface-saturation) - 6%)), var(--black));
-  --item-bg: color-mix(in srgb, var(--primary) calc(var(--surface-saturation) + 2%), var(--black));
+  --bg: color-mix(in srgb, var(--primary) var(--background-saturation), var(--neutral-bg));
+  --surface: color-mix(in srgb, var(--primary) var(--surface-saturation), var(--neutral-surface));
+  --surface-muted: color-mix(in srgb, var(--primary) var(--surface-saturation), var(--neutral-surface-muted));
+  --input-bg: color-mix(in srgb, var(--primary) max(0%, calc(var(--surface-saturation) - 6%)), var(--neutral-input));
+  --item-bg: color-mix(in srgb, var(--primary) var(--surface-saturation), var(--neutral-item));
   --text: color-mix(in srgb, var(--white) 92%, var(--primary));
   --muted: color-mix(in srgb, var(--white) 64%, var(--secondary));
-  --border: color-mix(in srgb, var(--primary) var(--border-saturation), var(--black));
-  --control-border: color-mix(in srgb, var(--primary) 50%, var(--black));
+  --border: color-mix(in srgb, var(--primary) var(--border-saturation), var(--neutral-border));
+  --control-border: color-mix(in srgb, var(--primary) var(--border-saturation), var(--neutral-border));
+  /* --control-border: color-mix(in srgb, var(--primary) 50%, var(--black)); */
 
   --accent: color-mix(in srgb, var(--primary) 42%, var(--black));
   --accent-dark: color-mix(in srgb, var(--primary) 80%, var(--white));
@@ -614,6 +621,12 @@ h2 {
   gap: 18px;
   padding: 18px;
 }
+
+/* .metric,
+.stacked-bar-panel,
+.chart-panel {
+  border: none;
+} */
 
 .pie-chart {
   width: 170px;
