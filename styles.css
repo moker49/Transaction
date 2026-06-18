@@ -524,7 +524,7 @@ h2 {
 
 .tab.is-active {
   color: var(--accent-dark);
-  border-color: var(--accent);
+  border-color: var(--border);
 }
 
 .tab[hidden] {

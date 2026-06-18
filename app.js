@@ -6,6 +6,7 @@
   const DASHBOARD_CUSTOM_END_KEY = "transaction-dashboard-custom-end";
   const DEFAULT_DASHBOARD_RANGE = "last-month";
   const CUSTOM_DASHBOARD_RANGE = "custom";
+  const MOBILE_LAYOUT_QUERY = "(max-width: 860px)";
   const dashboardRangePresets = [
     { value: "this-month", label: "This month" },
     { value: "last-month", label: "Last month" },
@@ -49,6 +50,7 @@
   let popupTimer = null;
   let dashboardRangeDraft = null;
   let rawMobileImportColumnVisible = false;
+  let mobileDrawerHistoryActive = false;
   const importableRawRowStatuses = new Set(["importable"]);
   const transactionTypes = [
     { value: "income", label: "Income" },
@@ -401,6 +403,20 @@
       closeMobileDrawer();
     }
   });
+  window.addEventListener("popstate", (event) => {
+    if (elements.mobileNavDrawer.classList.contains("is-open") && !event.state?.mobileDrawerOpen) {
+      closeMobileDrawer({ skipHistory: true });
+      return;
+    }
+    if (!elements.mobileNavDrawer.classList.contains("is-open") && event.state?.mobileDrawerOpen) {
+      openMobileDrawer({ skipHistory: true });
+    }
+  });
+  window.matchMedia(MOBILE_LAYOUT_QUERY).addEventListener("change", () => {
+    if (dashboardRangeDraft) {
+      renderDashboardCalendars();
+    }
+  });
 
   initializeDashboardRange();
   initializeDatabaseMode();
@@ -516,10 +532,11 @@
   function renderDashboardCalendars() {
     clear(elements.dashboardCalendarGrid);
     const viewDate = dashboardRangeDraft?.viewDate || firstOfMonth(new Date());
-    elements.dashboardCalendarGrid.append(
-      calendarMonthElement(viewDate, -1),
-      calendarMonthElement(addMonths(viewDate, 1), 1),
-    );
+    if (window.matchMedia(MOBILE_LAYOUT_QUERY).matches) {
+      elements.dashboardCalendarGrid.append(calendarMonthElement(viewDate, 0));
+      return;
+    }
+    elements.dashboardCalendarGrid.append(calendarMonthElement(viewDate, -1), calendarMonthElement(addMonths(viewDate, 1), 1));
   }
 
   function calendarMonthElement(monthDate, direction) {
@@ -530,7 +547,7 @@
     const previous = calendarNavButton("chevron_left", () => shiftDashboardCalendar(-1));
     const next = calendarNavButton("chevron_right", () => shiftDashboardCalendar(1));
     const title = el("strong", monthDate.toLocaleDateString(undefined, { month: "short", year: "numeric" }));
-    header.append(direction < 0 ? previous : document.createElement("span"), title, direction > 0 ? next : document.createElement("span"));
+    header.append(direction <= 0 ? previous : document.createElement("span"), title, direction >= 0 ? next : document.createElement("span"));
 
     const grid = document.createElement("div");
     grid.className = "calendar-grid";
@@ -551,6 +568,10 @@
       button.classList.toggle("is-range-edge", key === dashboardRangeDraft?.start || key === dashboardRangeDraft?.end);
       button.addEventListener("click", () => selectDashboardCustomDay(key));
       grid.appendChild(button);
+    }
+    const renderedDayCells = firstDay.getDay() + days;
+    for (let index = renderedDayCells; index < 42; index += 1) {
+      grid.appendChild(el("span", "", "calendar-empty-day"));
     }
     container.append(header, grid);
     return container;
@@ -631,18 +652,34 @@
     elements.mobileDummyDatabaseDescription.textContent = "Using primary database";
   }
 
-  function openMobileDrawer() {
+  function openMobileDrawer({ skipHistory = false } = {}) {
+    if (elements.mobileNavDrawer.classList.contains("is-open")) {
+      return;
+    }
+    if (!skipHistory) {
+      history.pushState({ ...(history.state || {}), mobileDrawerOpen: true }, "");
+      mobileDrawerHistoryActive = true;
+    }
     elements.mobileDrawerBackdrop.hidden = false;
     elements.mobileNavDrawer.classList.add("is-open");
     elements.mobileNavDrawer.setAttribute("aria-hidden", "false");
     document.body.classList.add("drawer-open");
   }
 
-  function closeMobileDrawer() {
+  function closeMobileDrawer({ skipHistory = false } = {}) {
+    const wasOpen = elements.mobileNavDrawer.classList.contains("is-open");
     elements.mobileNavDrawer.classList.remove("is-open");
     elements.mobileNavDrawer.setAttribute("aria-hidden", "true");
     elements.mobileDrawerBackdrop.hidden = true;
     document.body.classList.remove("drawer-open");
+    if (wasOpen && !skipHistory && mobileDrawerHistoryActive && history.state?.mobileDrawerOpen) {
+      mobileDrawerHistoryActive = false;
+      history.back();
+      return;
+    }
+    if (skipHistory || !history.state?.mobileDrawerOpen) {
+      mobileDrawerHistoryActive = false;
+    }
   }
 
   async function loadInitialState() {
