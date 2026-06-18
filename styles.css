@@ -1862,6 +1862,23 @@ button.category-chip.manageable-chip {
   gap: 8px;
 }
 
+.tag-field-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tag-edit-button,
+.tag-edit-button:hover {
+  background: transparent;
+  color: var(--muted);
+}
+
+.tag-edit-button:hover {
+  color: var(--text);
+}
+
 .tag-check-list {
   display: flex;
   flex-wrap: wrap;

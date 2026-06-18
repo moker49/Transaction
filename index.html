@@ -556,15 +556,15 @@
               <input name="transactionType" type="hidden" id="transactionTypeInput" value="expense">
               <div class="connected-button-group" id="transactionTypeGroup" role="radiogroup"
                 aria-label="Transaction type">
-                <button type="button" class="connected-button" data-type-value="income" role="radio" disabled>
+                <button type="button" class="connected-button" data-type-value="income" role="radio">
                   <span class="material-symbols-outlined" aria-hidden="true">payments</span>
                   <span>Income</span>
                 </button>
-                <button type="button" class="connected-button" data-type-value="expense" role="radio" disabled>
+                <button type="button" class="connected-button" data-type-value="expense" role="radio">
                   <span class="material-symbols-outlined" aria-hidden="true">receipt_long</span>
                   <span>Expense</span>
                 </button>
-                <button type="button" class="connected-button" data-type-value="transfer" role="radio" disabled>
+                <button type="button" class="connected-button" data-type-value="transfer" role="radio">
                   <span class="material-symbols-outlined" aria-hidden="true">sync_alt</span>
                   <span>Transfer</span>
                 </button>
@@ -574,30 +574,35 @@
               <label>
                 <span>Category</span>
                 <input name="categoryId" type="hidden" id="transactionCategoryInput">
-                <button type="button" class="category-picker-button" id="transactionCategoryButton" disabled></button>
+                <button type="button" class="category-picker-button" id="transactionCategoryButton"></button>
               </label>
               <label>
                 <span>Date</span>
-                <input name="postedDate" type="date" data-editable-field readonly>
+                <input name="postedDate" type="date" data-editable-field>
               </label>
             </div>
             <div class="detail-row detail-row-amount-description">
               <label>
                 <span>Amount</span>
-                <input name="amount" type="text" inputmode="decimal" data-editable-field readonly>
+                <input name="amount" type="text" inputmode="decimal" data-editable-field>
               </label>
               <label>
                 <span>Description</span>
-                <input name="cleanDescription" type="text" data-editable-field readonly>
+                <input name="cleanDescription" type="text" data-editable-field>
               </label>
             </div>
-            <label class="tag-field">
-              <span>Tags</span>
+            <div class="tag-field">
+              <span class="tag-field-heading">
+                <span>Tags</span>
+                <button type="button" class="icon-only tag-edit-button" id="transactionTagsEditButton" aria-label="Edit tags">
+                  <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+                </button>
+              </span>
               <div id="transactionTags" class="tag-check-list"></div>
-            </label>
+            </div>
             <label>
               <span>Notes</span>
-              <textarea name="notes" rows="4" data-editable-field readonly></textarea>
+              <textarea name="notes" rows="4" data-editable-field></textarea>
             </label>
           </div>
         </section>
@@ -611,9 +616,8 @@
       <div id="transactionMessage" class="modal-message" role="status" aria-live="polite"></div>
       <div class="modal-actions">
         <button type="button" class="danger-button modal-delete-button" id="transactionDeleteButton">Delete</button>
-        <button type="button" class="icon-button" id="transactionCancelButton" hidden>Cancel</button>
-        <button type="button" class="icon-button" id="transactionEditButton">Edit</button>
-        <button type="submit" class="primary" id="transactionSaveButton" hidden>Save</button>
+        <button type="button" class="icon-button" id="transactionCancelButton">Cancel</button>
+        <button type="submit" class="primary" id="transactionSaveButton">Save</button>
       </div>
     </form>
   </dialog>

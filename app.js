@@ -33,7 +33,8 @@
   let activeTransactionId = null;
   let activeRawRowId = null;
   let activeManualImportRawRowId = null;
-  let transactionEditMode = false;
+  let transactionTagsEditMode = false;
+  let transactionTagDraftIds = null;
   let accountDialogMode = "add";
   let ruleDialogMode = "add";
   let accountEditSnapshot = null;
@@ -218,10 +219,10 @@
     transactionCategoryFilter: document.querySelector("#transactionCategoryFilter"),
     transactionSearch: document.querySelector("#transactionSearch"),
     transactionTags: document.querySelector("#transactionTags"),
+    transactionTagsEditButton: document.querySelector("#transactionTagsEditButton"),
     transactionRawValues: document.querySelector("#transactionRawValues"),
     transactionMetadata: document.querySelector("#transactionMetadata"),
     transactionMessage: document.querySelector("#transactionMessage"),
-    transactionEditButton: document.querySelector("#transactionEditButton"),
     transactionCancelButton: document.querySelector("#transactionCancelButton"),
     transactionSaveButton: document.querySelector("#transactionSaveButton"),
     transactionDeleteButton: document.querySelector("#transactionDeleteButton"),
@@ -374,24 +375,14 @@
   elements.transactionForm.addEventListener("submit", saveTransaction);
   elements.transactionCategoryFilterButton.addEventListener("click", () => openCategoryPicker("transaction-filter"));
   elements.transactionCloseButton.addEventListener("click", closeTransactionDialog);
-  elements.transactionEditButton.addEventListener("click", () => setTransactionEditMode(true));
-  elements.transactionCancelButton.addEventListener("click", cancelTransactionDialogAction);
+  elements.transactionCancelButton.addEventListener("click", closeTransactionDialog);
+  elements.transactionTagsEditButton.addEventListener("click", toggleTransactionTagsEditMode);
   elements.transactionDeleteButton.addEventListener("click", deleteActiveTransaction);
   elements.transactionCategoryButton.addEventListener("click", () => {
-    if (transactionEditMode) {
-      openCategoryPicker("transaction");
-    }
+    openCategoryPicker("transaction");
   });
-  elements.transactionTypeGroup.addEventListener("click", (event) => {
-    if (transactionEditMode) {
-      selectTypeFromGroup(event, elements.transactionTypeInput, elements.transactionTypeGroup);
-    }
-  });
-  elements.transactionTypeGroup.addEventListener("keydown", (event) => {
-    if (transactionEditMode) {
-      navigateTypeGroup(event, elements.transactionTypeInput, elements.transactionTypeGroup);
-    }
-  });
+  elements.transactionTypeGroup.addEventListener("click", (event) => selectTypeFromGroup(event, elements.transactionTypeInput, elements.transactionTypeGroup));
+  elements.transactionTypeGroup.addEventListener("keydown", (event) => navigateTypeGroup(event, elements.transactionTypeInput, elements.transactionTypeGroup));
   elements.rawRowForm.addEventListener("submit", saveRawRowNote);
   elements.rawRowCloseButton.addEventListener("click", closeRawRowDialog);
   elements.rawRowImportButton.addEventListener("click", importActiveRawRow);
@@ -404,7 +395,9 @@
   elements.transactionSearch.addEventListener("input", renderTransactions);
   elements.transactionDialog.addEventListener("close", () => {
     activeTransactionId = null;
-    transactionEditMode = false;
+    transactionTagsEditMode = false;
+    transactionTagDraftIds = null;
+    transactionEditSnapshot = null;
   });
   elements.categoryDialogForm.addEventListener("submit", saveCategory);
   elements.categoryCloseButton.addEventListener("click", closeCategoryDialog);
@@ -1532,7 +1525,7 @@
       row.classList.add("clickable-row");
       row.tabIndex = 0;
       row.setAttribute("role", "button");
-      row.setAttribute("aria-label", `View transaction ${transaction.clean_description || transaction.id}`);
+      row.setAttribute("aria-label", `Edit transaction ${transaction.clean_description || transaction.id}`);
       row.addEventListener("click", () => openTransactionDialog(transaction));
       row.addEventListener("keydown", (event) => {
         if (event.key === "Enter" || event.key === " ") {
@@ -1546,10 +1539,10 @@
 
   function openTransactionDialog(transaction) {
     activeTransactionId = transaction.id;
-    transactionEditMode = false;
+    transactionTagsEditMode = false;
     transactionEditSnapshot = null;
     populateTransactionDialog(transaction);
-    setTransactionEditMode(false);
+    transactionEditSnapshot = buildTransactionPayload();
     openModal(elements.transactionDialog);
   }
 
@@ -1572,6 +1565,8 @@
     form.elements.amount.value = transaction.amount || formatCents(transaction.amount_cents);
     form.elements.cleanDescription.value = transaction.clean_description || "";
     form.elements.notes.value = transaction.notes || "";
+    transactionTagsEditMode = false;
+    transactionTagDraftIds = transactionTagIds(transaction);
     renderTransactionTags(transaction);
     renderDefinitionList(elements.transactionRawValues, [
       ["Raw date", transaction.raw_date],
@@ -1595,39 +1590,32 @@
     ]);
   }
 
-  function setTransactionEditMode(isEditing) {
-    transactionEditMode = isEditing;
+  function toggleTransactionTagsEditMode() {
     const transaction = activeTransaction();
-    if (transaction) {
-      renderTransactionTags(transaction);
+    if (!transaction) {
+      return;
     }
-    elements.transactionForm.querySelectorAll("[data-editable-field]").forEach((field) => {
-      if (field.tagName === "SELECT") {
-        field.disabled = !isEditing;
-      } else {
-        field.readOnly = !isEditing;
-      }
-    });
-    elements.transactionTags.querySelectorAll("input[type='checkbox']").forEach((checkbox) => {
-      checkbox.disabled = !isEditing;
-    });
-    elements.transactionCategoryButton.disabled = !isEditing;
-    setTypeGroupDisabled(elements.transactionTypeGroup, !isEditing);
-    elements.transactionEditButton.hidden = isEditing;
-    elements.transactionCancelButton.hidden = false;
-    elements.transactionSaveButton.hidden = !isEditing;
-    transactionEditSnapshot = isEditing ? buildTransactionPayload() : null;
+    if (transactionTagsEditMode) {
+      transactionTagDraftIds = selectedTagIdsFrom(elements.transactionTags);
+    } else if (!transactionTagDraftIds) {
+      transactionTagDraftIds = transactionTagIds(transaction);
+    }
+    transactionTagsEditMode = !transactionTagsEditMode;
+    renderTransactionTags(transaction);
   }
 
   function renderTransactionTags(transaction) {
     clear(elements.transactionTags);
-    const selectedTagIds = new Set((transaction.tags || []).map((tag) => Number(tag.id)));
-    if (!transactionEditMode) {
-      if (!transaction.tags?.length) {
+    elements.transactionTagsEditButton.querySelector(".material-symbols-outlined").textContent = transactionTagsEditMode ? "check" : "edit";
+    elements.transactionTagsEditButton.setAttribute("aria-label", transactionTagsEditMode ? "Done editing tags" : "Edit tags");
+    elements.transactionTagsEditButton.setAttribute("aria-pressed", transactionTagsEditMode ? "true" : "false");
+    const selectedTagIds = new Set(transactionTagDraftIds || transactionTagIds(transaction));
+    if (!transactionTagsEditMode) {
+      if (!selectedTagIds.size) {
         elements.transactionTags.appendChild(el("span", "-", "list-meta"));
         return;
       }
-      transaction.tags.forEach((tag) => {
+      state.tags.filter((tag) => selectedTagIds.has(Number(tag.id))).forEach((tag) => {
         elements.transactionTags.appendChild(staticTagChip(tag.name));
       });
       return;
@@ -1641,22 +1629,10 @@
     });
   }
 
-  function cancelTransactionEdit() {
-    const transaction = activeTransaction();
-    if (!transaction) {
-      return;
-    }
-    populateTransactionDialog(transaction);
-    setTransactionEditMode(false);
-  }
-
-  function cancelTransactionDialogAction() {
-    if (transactionEditMode) {
-      cancelTransactionEdit();
-      suppressButtonState(elements.transactionCancelButton);
-      return;
-    }
-    closeTransactionDialog();
+  function transactionTagIds(transaction) {
+    return (transaction.tags || [])
+      .map((tag) => Number(tag.id))
+      .filter((tagId) => Number.isInteger(tagId) && tagId > 0);
   }
 
   function accountTypeValues() {
@@ -1710,7 +1686,9 @@
 
   function buildTransactionPayload() {
     const form = new FormData(elements.transactionForm);
-    const tagIds = selectedTagIdsFrom(elements.transactionTags);
+    const tagIds = transactionTagsEditMode
+      ? selectedTagIdsFrom(elements.transactionTags)
+      : (transactionTagDraftIds || []);
     return {
       posted_date: clean(form.get("postedDate")),
       category_id: Number(form.get("categoryId")),
@@ -1756,12 +1734,12 @@
   async function saveTransaction(event) {
     event.preventDefault();
     const transaction = activeTransaction();
-    if (!transaction || !transactionEditMode) {
+    if (!transaction) {
       return;
     }
     const payload = buildTransactionPayload();
     if (payloadMatchesSnapshot(payload, transactionEditSnapshot)) {
-      closeTransactionDialog();
+      setModalMessage(elements.transactionMessage, "No changes to save.", false);
       return;
     }
     try {
@@ -1772,7 +1750,8 @@
       applyStateFromPayload(response);
       activeTransactionId = response.transaction.id;
       populateTransactionDialog(response.transaction);
-      setTransactionEditMode(false);
+      transactionEditSnapshot = buildTransactionPayload();
+      setModalMessage(elements.transactionMessage, "Saved.", false);
     } catch (error) {
       setModalMessage(elements.transactionMessage, error.message || "Could not update transaction.", true);
     }
