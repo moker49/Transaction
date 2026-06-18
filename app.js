@@ -72,7 +72,6 @@
     mobileDummyDatabaseToggle: document.querySelector("#mobileDummyDatabaseToggle"),
     mobileDummyDatabaseLabel: document.querySelector("#mobileDummyDatabaseLabel"),
     mobileDummyDatabaseDescription: document.querySelector("#mobileDummyDatabaseDescription"),
-    mobileThemeToggle: document.querySelector("#mobileThemeToggle"),
     mobileRegenerateDatabaseButton: document.querySelector("#mobileRegenerateDatabaseButton"),
     mobileDevMessage: document.querySelector("#mobileDevMessage"),
     dashboardTypeBar: document.querySelector("#dashboardTypeBar"),
@@ -135,7 +134,6 @@
     manualImportTypeInput: document.querySelector("#manualImportTypeInput"),
     manualImportTypeGroup: document.querySelector("#manualImportTypeGroup"),
     manualImportTags: document.querySelector("#manualImportTags"),
-    settingsThemeToggle: document.querySelector("#settingsThemeToggle"),
     dashboardRangeButton: document.querySelector("#dashboardRangeButton"),
     dashboardRangeLabel: document.querySelector("#dashboardRangeLabel"),
     dashboardRangeDialog: document.querySelector("#dashboardRangeDialog"),
@@ -283,8 +281,6 @@
   elements.manualImportDialog.addEventListener("close", () => {
     activeManualImportRawRowId = null;
   });
-  elements.settingsThemeToggle.addEventListener("change", updateTheme);
-  elements.mobileThemeToggle.addEventListener("change", updateTheme);
   elements.mobileMenuButton.addEventListener("click", openMobileDrawer);
   elements.mobileDrawerBackdrop.addEventListener("click", closeMobileDrawer);
   elements.appMessage.addEventListener("click", hidePopup);
@@ -406,28 +402,10 @@
     }
   });
 
-  initializeTheme();
   initializeDashboardRange();
   initializeDatabaseMode();
   activateView("overview");
   loadInitialState();
-
-  function initializeTheme() {
-    const theme = localStorage.getItem("transaction-theme") || "dark";
-    setTheme(theme);
-  }
-
-  function setTheme(theme) {
-    document.documentElement.dataset.theme = theme;
-    localStorage.setItem("transaction-theme", theme);
-    const isDark = theme === "dark";
-    elements.settingsThemeToggle.checked = isDark;
-    elements.mobileThemeToggle.checked = isDark;
-  }
-
-  function updateTheme(event) {
-    setTheme(event.currentTarget.checked ? "dark" : "light");
-  }
 
   function initializeDashboardRange() {
     const savedRange = localStorage.getItem(DASHBOARD_RANGE_KEY) || DEFAULT_DASHBOARD_RANGE;

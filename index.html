@@ -5,9 +5,6 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Personal Finances</title>
-  <script>
-    document.documentElement.dataset.theme = localStorage.getItem("transaction-theme") || "dark";
-  </script>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:FILL@0..1">
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -33,25 +30,12 @@
           <strong id="mobileDummyDatabaseLabel">Database</strong>
           <span class="setting-note" id="mobileDummyDatabaseDescription">Using primary database</span>
         </div>
-        <label class="theme-toggle" title="Use dummy database">
+        <label class="switch-toggle" title="Use dummy database">
           <input type="checkbox" id="mobileDummyDatabaseToggle" aria-label="Use dummy database">
-          <span class="theme-track" aria-hidden="true">
-            <span class="theme-thumb"></span>
-            <span class="theme-icon theme-icon-light material-symbols-outlined">database</span>
-            <span class="theme-icon theme-icon-dark material-symbols-outlined">science</span>
-          </span>
-        </label>
-      </div>
-      <div class="setting-row">
-        <div>
-          <strong>Theme</strong>
-        </div>
-        <label class="theme-toggle" title="Toggle theme">
-          <input type="checkbox" id="mobileThemeToggle" checked aria-label="Use dark theme">
-          <span class="theme-track" aria-hidden="true">
-            <span class="theme-thumb"></span>
-            <span class="theme-icon theme-icon-light material-symbols-outlined">light_mode</span>
-            <span class="theme-icon theme-icon-dark material-symbols-outlined">dark_mode</span>
+          <span class="switch-track" aria-hidden="true">
+            <span class="switch-thumb"></span>
+            <span class="switch-icon switch-icon-off material-symbols-outlined">database</span>
+            <span class="switch-icon switch-icon-on material-symbols-outlined">science</span>
           </span>
         </label>
       </div>
@@ -245,12 +229,12 @@
             <div class="controls raw-controls">
               <button type="button" class="text-button raw-select-all-button" id="selectVisibleRowsButton">Select
                 all</button>
-              <label class="theme-toggle raw-column-toggle mobile-only" title="Show import column">
+              <label class="switch-toggle raw-column-toggle mobile-only" title="Show import column">
                 <input type="checkbox" id="rawColumnToggleInput" aria-label="Show import column">
-                <span class="theme-track" aria-hidden="true">
-                  <span class="theme-thumb"></span>
-                  <span class="theme-icon theme-icon-light material-symbols-outlined">calendar_today</span>
-                  <span class="theme-icon theme-icon-dark material-symbols-outlined">select_all</span>
+                <span class="switch-track" aria-hidden="true">
+                  <span class="switch-thumb"></span>
+                  <span class="switch-icon switch-icon-off material-symbols-outlined">calendar_today</span>
+                  <span class="switch-icon switch-icon-on material-symbols-outlined">select_all</span>
                 </span>
               </label>
               <select id="rawAccountFilter" aria-label="Filter by account"></select>
@@ -329,25 +313,12 @@
                 <span class="setting-note" id="dummyDatabaseDescription">Route all reads, writes, imports, and dev
                   actions to a separate dummy SQLite file.</span>
               </div>
-              <label class="theme-toggle" title="Use dummy database">
+              <label class="switch-toggle" title="Use dummy database">
                 <input type="checkbox" id="dummyDatabaseToggle" aria-label="Use dummy database">
-                <span class="theme-track" aria-hidden="true">
-                  <span class="theme-thumb"></span>
-                  <span class="theme-icon theme-icon-light material-symbols-outlined">database</span>
-                  <span class="theme-icon theme-icon-dark material-symbols-outlined">science</span>
-                </span>
-              </label>
-            </div>
-            <div class="setting-row">
-              <div>
-                <strong>Theme</strong>
-              </div>
-              <label class="theme-toggle" title="Toggle theme">
-                <input type="checkbox" id="settingsThemeToggle" checked aria-label="Use dark theme">
-                <span class="theme-track" aria-hidden="true">
-                  <span class="theme-thumb"></span>
-                  <span class="theme-icon theme-icon-light material-symbols-outlined">light_mode</span>
-                  <span class="theme-icon theme-icon-dark material-symbols-outlined">dark_mode</span>
+                <span class="switch-track" aria-hidden="true">
+                  <span class="switch-thumb"></span>
+                  <span class="switch-icon switch-icon-off material-symbols-outlined">database</span>
+                  <span class="switch-icon switch-icon-on material-symbols-outlined">science</span>
                 </span>
               </label>
             </div>
