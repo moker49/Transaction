@@ -15,8 +15,8 @@
   --neutral-border: hsl(142, 6%, 22%);
 
   /* Tune how much primary color is mixed into neutral UI structure. */
-  --background-saturation: 3%;
-  --surface-saturation: 3%;
+  --background-saturation: 1%;
+  --surface-saturation: 1%;
   --border-saturation: 20%;
 
   --bg: color-mix(in srgb, var(--primary) var(--background-saturation), var(--neutral-bg));
@@ -227,7 +227,7 @@ h2 {
 
 .profile-button:hover,
 .profile-button.is-active {
-  background: var(--success-bg);
+  background: var(--accent);
   color: var(--accent-dark);
 }
 
@@ -492,7 +492,7 @@ h2 {
 }
 
 .nav-item.is-active {
-  background: var(--success-bg);
+  background: var(--accent);
   color: var(--accent-dark);
 }
 
@@ -1349,7 +1349,7 @@ button.category-chip.manageable-chip {
 
 .icon-only.is-active {
   color: var(--accent-dark);
-  background: var(--success-bg);
+  background: var(--accent);
 }
 
 .icon-only.danger {
@@ -1453,7 +1453,7 @@ button.category-chip.manageable-chip {
   width: 56px;
   height: 56px;
   border-radius: 16px;
-  background: var(--success-bg);
+  background: var(--accent);
   color: var(--accent-dark);
 }
 
@@ -1511,7 +1511,7 @@ button.category-chip.manageable-chip {
 .file-upload-field.is-dragging .file-upload-surface {
   border-style: solid;
   border-color: var(--accent);
-  background: var(--success-bg);
+  background: var(--accent);
   color: var(--text);
 }
 
@@ -1631,7 +1631,7 @@ button.category-chip.manageable-chip {
 }
 
 .calendar-day.is-in-range {
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  background: color-mix(in srgb, var(--accent-contrast) 8%, transparent);
 }
 
 .calendar-day.is-range-edge {
@@ -2073,7 +2073,7 @@ th[data-raw-column="select"],
 }
 
 tr.is-importable-row td {
-  background: color-mix(in srgb, var(--success-bg) 34%, transparent);
+  background: color-mix(in srgb, var(--accent) 25%, transparent);
 }
 
 .raw-note-input {
@@ -2104,11 +2104,6 @@ tr.is-importable-row td {
 .clickable-row {
   cursor: pointer;
   height: 56px;
-}
-
-.clickable-row:hover td,
-.clickable-row:focus-visible td {
-  background: var(--surface-muted);
 }
 
 @media (max-width: 860px) {
