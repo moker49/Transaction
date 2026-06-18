@@ -2300,6 +2300,10 @@ tr.is-importable-row td {
     min-width: 0;
   }
 
+  #rawRowsTableElement {
+    table-layout: fixed;
+  }
+
   th,
   td {
     padding-right: 8px;
@@ -2419,6 +2423,28 @@ tr.is-importable-row td {
     width: 111px;
     min-width: 111px;
     max-width: 111px;
+  }
+
+  #rawRowsTableElement th[data-raw-column="amount"],
+  #rawRowsTable td[data-raw-column="amount"] {
+    width: 80px;
+    min-width: 80px;
+    max-width: 80px;
+  }
+
+  #rawRowsTableElement th[data-raw-column="description"],
+  #rawRowsTable td[data-raw-column="description"] {
+    width: auto;
+    min-width: 0;
+    max-width: none;
+  }
+
+  #rawRowsTable td[data-raw-column="description"],
+  #rawRowsTable td[data-raw-column="description"] .raw-value,
+  #rawRowsTable td[data-raw-column="description"] .rule-preview {
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 
   .metric-grid {
