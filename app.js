@@ -56,25 +56,6 @@
     { value: "transfer", label: "Transfer" },
   ];
 
-  const defaultCategoryOrder = [
-    "Income", "Salary", "Bonus", "Interest", "Dividend", "Refund", "Gift Received",
-    "Housing", "Rent", "Mortgage", "Property Tax", "HOA", "Home Insurance", "Home Maintenance",
-    "Utility", "Electric", "Gas", "Water", "Sewer", "Trash", "Internet", "Phone",
-    "Food", "Groceries", "Restaurant",
-    "Transportation", "Car Payment", "Fuel", "Charging", "Auto Insurance", "Maintenance", "Registration", "Parking", "Toll", "Public Transit",
-    "Shopping", "Clothing", "Electronic", "Household", "Furniture",
-    "Health", "Medical", "Dental", "Vision", "Pharmacy", "Fitness",
-    "Lifestyle", "Activity", "Hobby", "Alcohol", "Substance",
-    "Entertainment", "Streaming", "Gaming", "Movie", "Music",
-    "Travel", "Hotel", "Flight", "Rental",
-    "Financial", "Fee", "Loan Payment", "Investment", "Tax Payment",
-    "Insurance", "Life Insurance", "Umbrella Insurance", "Protection",
-    "Education", "Tuition", "Books", "Courses", "Certifications",
-    "Personal", "Childcare", "Pet Expense", "Gift Given", "Personal Care", "Reinbursement",
-    "Business", "Software", "Equipment", "Service", "Office Expense",
-    "Transfer", "Internal Transfer", "Card Payment",
-  ];
-
   const elements = {
     navItems: document.querySelectorAll(".nav-item"),
     tabNav: document.querySelector(".tabs"),
@@ -2355,11 +2336,15 @@
   function categorySortKey(category) {
     const parent = state.categories.find((candidate) => candidate.id === category.parent_id);
     const parentName = parent?.name || category.name;
-    const parentIndex = defaultCategoryOrder.indexOf(parentName);
-    const categoryIndex = defaultCategoryOrder.indexOf(category.name);
-    const parentRank = parentIndex === -1 ? 999 : parentIndex;
-    const categoryRank = category.parent_id === null ? -1 : categoryIndex === -1 ? 999 : categoryIndex;
-    return `${String(parentRank).padStart(3, "0")}:${parentName}:${String(categoryRank).padStart(3, "0")}:${category.name}`;
+    const parentRank = Number.isFinite(Number(parent?.sort_order ?? category.sort_order))
+      ? Number(parent?.sort_order ?? category.sort_order)
+      : 999999;
+    const categoryRank = category.parent_id === null
+      ? -1
+      : Number.isFinite(Number(category.sort_order))
+        ? Number(category.sort_order)
+        : 999999;
+    return `${String(parentRank).padStart(6, "0")}:${parentName}:${String(categoryRank).padStart(6, "0")}:${category.name}`;
   }
 
   function categoryLabel(category) {

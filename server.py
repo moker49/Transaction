@@ -57,46 +57,37 @@ DUMMY_DB_PATH = DEFAULT_DB_PATH.with_name("transactions.dummy.sqlite")
 DUMMY_RESTORE_DB_PATH = DEFAULT_DB_PATH.with_name("transactions.dummy.restore.sqlite")
 BILL_TAG_NAME = "bill"
 TRANSACTION_TYPES = ("income", "expense", "transfer")
-DEFAULT_CATEGORY_TREE = {
-    "Income": ["Salary", "Bonus", "Interest", "Dividend", "Refund", "Gift Received"],
-    "Housing": ["Rent", "Mortgage", "Property Tax", "HOA", "Home Insurance", "Home Maintenance"],
-    "Utility": ["Electric", "Gas", "Water", "Sewer", "Trash", "Internet", "Phone"],
-    "Food": ["Groceries", "Restaurant"],
-    "Transportation": ["Car Payment", "Fuel", "Charging", "Auto Insurance", "Maintenance", "Registration", "Parking", "Toll", "Public Transit"],
-    "Shopping": ["Clothing", "Electronic", "Household", "Furniture"],
-    "Health": ["Medical", "Dental", "Vision", "Pharmacy", "Fitness"],
-    "Lifestyle": ["Activity", "Hobby", "Alcohol", "Substance"],
-    "Entertainment": ["Streaming", "Gaming", "Movie", "Music"],
-    "Travel": ["Hotel", "Flight", "Rental"],
-    "Financial": ["Fee", "Loan Payment", "Investment", "Tax Payment"],
-    "Insurance": ["Life Insurance", "Umbrella Insurance", "Protection"],
-    "Education": ["Tuition", "Books", "Courses", "Certifications"],
-    "Personal": ["Childcare", "Pet Expense", "Gift Given", "Personal Care", "Reimbursement"],
-    "Business": ["Software", "Equipment", "Service", "Office Expense"],
-    "Transfer": ["Internal Transfer", "Card Payment"],
-}
-DEFAULT_CATEGORY_COLORS = {
-    "Income": "#208020",
-    "Housing": "#c4588e",
-    "Utility": "#91a82f",
-    "Food": "#d16630",
-    "Transportation": "#3a67c2",
-    "Shopping": "#8161c2",
-    "Health": "#ad3131",
-    "Lifestyle": "#36b36a",
-    "Entertainment": "#602699",
-    "Travel": "#109e9e",
-    "Financial": "#b68b2e",
-    "Insurance": "#d18eb0",
-    "Education": "#4d8fbf",
-    "Personal": "#7a5234",
-    "Business": "#60943b",
-    "Transfer": "#909499",
-}
-DEFAULT_CATEGORY_NAMES = frozenset(
-    [parent for parent in DEFAULT_CATEGORY_TREE]
-    + [child for children in DEFAULT_CATEGORY_TREE.values() for child in children]
+DEFAULT_CATEGORIES = (
+    {"name": "Income", "color": "#208020", "children": ("Salary", "Bonus", "Interest", "Dividend", "Refund", "Gift Received")},
+    {"name": "Housing", "color": "#c4588e", "children": ("Rent", "Mortgage", "Property Tax", "HOA", "Home Insurance", "Home Maintenance")},
+    {"name": "Utility", "color": "#91a82f", "children": ("Electric", "Gas", "Water", "Sewer", "Trash", "Internet", "Phone")},
+    {"name": "Food", "color": "#d16630", "children": ("Groceries", "Restaurant")},
+    {"name": "Transportation", "color": "#3a67c2", "children": ("Car Payment", "Fuel", "Charging", "Auto Insurance", "Maintenance", "Registration", "Parking", "Toll", "Public Transit")},
+    {"name": "Shopping", "color": "#8161c2", "children": ("Clothing", "Electronic", "Household", "Furniture")},
+    {"name": "Health", "color": "#ad3131", "children": ("Medical", "Dental", "Vision", "Pharmacy", "Fitness")},
+    {"name": "Lifestyle", "color": "#36b36a", "children": ("Activity", "Hobby", "Alcohol", "Substance")},
+    {"name": "Entertainment", "color": "#602699", "children": ("Streaming", "Gaming", "Movie", "Music")},
+    {"name": "Travel", "color": "#109e9e", "children": ("Hotel", "Flight", "Rental")},
+    {"name": "Financial", "color": "#b68b2e", "children": ("Fee", "Loan Payment", "Investment", "Tax Payment")},
+    {"name": "Insurance", "color": "#d18eb0", "children": ("Life Insurance", "Umbrella Insurance", "Protection")},
+    {"name": "Education", "color": "#4d8fbf", "children": ("Tuition", "Books", "Courses", "Certifications")},
+    {"name": "Personal", "color": "#7a5234", "children": ("Childcare", "Pet Expense", "Gift Given", "Personal Care", "Reimbursement")},
+    {"name": "Business", "color": "#60943b", "children": ("Software", "Equipment", "Service", "Office Expense")},
+    {"name": "Transfer", "color": "#909499", "children": ("Internal Transfer", "Card Payment")},
 )
+DEFAULT_CATEGORY_NAMES = frozenset(
+    name
+    for category in DEFAULT_CATEGORIES
+    for name in (str(category["name"]), *tuple(str(child) for child in category["children"]))
+)
+DEFAULT_CATEGORY_SORT_ORDER = {
+    str(category["name"]): index * 1000
+    for index, category in enumerate(DEFAULT_CATEGORIES)
+} | {
+    str(child): index * 1000 + child_index + 1
+    for index, category in enumerate(DEFAULT_CATEGORIES)
+    for child_index, child in enumerate(category["children"])
+}
 
 
 @app.errorhandler(CliError)
@@ -1172,6 +1163,7 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
         rule["tag_ids"] = [tag["id"] for tag in rule["tags"]]
     for category in categories:
         category["is_default"] = category["name"] in DEFAULT_CATEGORY_NAMES
+        category["sort_order"] = DEFAULT_CATEGORY_SORT_ORDER.get(category["name"], 999999)
     for tag in tags:
         tag["is_protected"] = is_protected_tag(tag)
     return {
@@ -1226,12 +1218,20 @@ def validate_category_color(value: Any) -> str:
 
 
 def ensure_default_categories(conn: sqlite3.Connection) -> None:
-    migrate_default_category_name(conn, "Food & Dining", "Food", DEFAULT_CATEGORY_COLORS["Food"])
-    migrate_default_category_name(conn, "Family & Personal", "Personal", DEFAULT_CATEGORY_COLORS["Personal"])
-    for parent_name, child_names in DEFAULT_CATEGORY_TREE.items():
-        parent_id = ensure_category(conn, parent_name, None, DEFAULT_CATEGORY_COLORS[parent_name])
-        for child_name in child_names:
+    migrate_default_category_name(conn, "Food & Dining", "Food", default_category_color("Food"))
+    migrate_default_category_name(conn, "Family & Personal", "Personal", default_category_color("Personal"))
+    for category in DEFAULT_CATEGORIES:
+        parent_name = str(category["name"])
+        parent_id = ensure_category(conn, parent_name, None, str(category["color"]))
+        for child_name in category["children"]:
             ensure_category(conn, child_name, parent_id, None)
+
+
+def default_category_color(name: str) -> str:
+    category = next((item for item in DEFAULT_CATEGORIES if item["name"] == name), None)
+    if category is None:
+        raise CliError(f"Default category not found: {name}")
+    return str(category["color"])
 
 
 def migrate_default_category_name(conn: sqlite3.Connection, old_name: str, new_name: str, color: str) -> None:
