@@ -3516,15 +3516,15 @@
     const text = String(value);
     const isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
     if (isoMatch) {
-      return `${isoMatch[3]}-${isoMatch[2]}-${isoMatch[1]}`;
+      return `${isoMatch[2]}-${isoMatch[3]}-${isoMatch[1]}`;
     }
     const date = new Date(text);
     if (Number.isNaN(date.getTime())) {
       return text;
     }
     return [
-      String(date.getDate()).padStart(2, "0"),
       String(date.getMonth() + 1).padStart(2, "0"),
+      String(date.getDate()).padStart(2, "0"),
       date.getFullYear(),
     ].join("-");
   }
