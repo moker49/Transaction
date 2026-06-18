@@ -1387,7 +1387,7 @@ button.category-chip.manageable-chip {
   width: min(980px, calc(100vw - 28px));
 }
 
-.dashboard-range-modal {
+.date-range-modal {
   width: min(1040px, calc(100vw - 28px));
 }
 
@@ -1519,7 +1519,7 @@ button.category-chip.manageable-chip {
   max-width: max-content;
 }
 
-.dashboard-range-picker {
+.date-range-picker {
   display: grid;
   grid-template-columns: 190px minmax(0, 1fr);
   gap: 18px;
@@ -2482,7 +2482,7 @@ tr.is-importable-row td {
     padding: 12px;
   }
 
-  .dashboard-range-picker {
+  .date-range-picker {
     grid-template-columns: 1fr;
     padding: 12px;
   }

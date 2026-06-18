@@ -153,6 +153,28 @@ def get_state():
         return jsonify(state)
 
 
+@app.get("/api/reference-data")
+def get_reference_data():
+    ensure_database()
+    with closing(connect(current_db_path())) as conn:
+        state = read_state(conn)
+        conn.commit()
+    return jsonify({"referenceData": reference_data_from_state(state)})
+
+
+@app.get("/api/transactions")
+def get_transaction_data():
+    ensure_database()
+    start_date = parse_date_query_param(request.args.get("startDate"), "startDate")
+    end_date = parse_date_query_param(request.args.get("endDate"), "endDate")
+    if start_date > end_date:
+        raise CliError("startDate must be on or before endDate.")
+    with closing(connect(current_db_path())) as conn:
+        state = read_state(conn)
+        conn.commit()
+    return jsonify({"transactionData": transaction_data_from_state(state, start_date, end_date)})
+
+
 @app.post("/api/accounts")
 def create_account():
     ensure_database()
@@ -978,6 +1000,149 @@ def ensure_database() -> None:
     init_db(current_db_path())
 
 
+def parse_date_query_param(value: str | None, field_name: str) -> str:
+    if value is None:
+        raise CliError(f"{field_name} is required.")
+    return parse_transaction_date(value)
+
+
+def reference_data_from_state(state: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "accounts": state["accounts"],
+        "categories": state["categories"],
+        "tags": state["tags"],
+        "rules": state["rules"],
+        "imports": state["imports"],
+    }
+
+
+def transaction_data_from_state(state: dict[str, Any], start_date: str, end_date: str) -> dict[str, Any]:
+    real_transactions = [
+        transaction
+        for transaction in state["transactions"]
+        if start_date <= str(transaction["posted_date"]) <= end_date
+    ]
+    raw_transactions = [
+        raw_row
+        for raw_row in state["rawRows"]
+        if raw_row["import_status"] in ("importable", "notImportable")
+        or raw_row_in_date_range(raw_row, start_date, end_date)
+    ]
+    return {
+        "startDate": start_date,
+        "endDate": end_date,
+        "dashboard": dashboard_data(real_transactions, state["categories"]),
+        "realTransactions": real_transactions,
+        "rawTransactions": raw_transactions,
+    }
+
+
+def raw_row_in_date_range(raw_row: dict[str, Any], start_date: str, end_date: str) -> bool:
+    try:
+        raw_date = parse_transaction_date(raw_row.get("raw_date"))
+    except Exception:
+        return False
+    return start_date <= raw_date <= end_date
+
+
+def dashboard_data(transactions: list[dict[str, Any]], categories: list[dict[str, Any]]) -> dict[str, Any]:
+    dashboard_transactions = [
+        transaction for transaction in transactions if transaction["transaction_type"] != "transfer"
+    ]
+    income = sum_typed_transactions(dashboard_transactions, "income", False)
+    bills = sum_expense_transactions(dashboard_transactions, True)
+    splurge = sum_expense_transactions(dashboard_transactions, False)
+    return {
+        "income": income,
+        "bills": bills,
+        "splurge": splurge,
+        "saved": income - bills - splurge,
+        "typeSegments": [
+            {"label": "Bills", "value": bills, "color": "#c85d5d"},
+            {"label": "Splurge", "value": splurge, "color": "#7c6bc2"},
+            {"label": "Saved", "value": max(income - bills - splurge, 0), "color": "#2f8f2f"},
+        ],
+        "categorySegments": category_spending_segments(dashboard_transactions, categories, "all-expenses"),
+        "splurgeSegments": category_spending_segments(dashboard_transactions, categories, "splurge"),
+    }
+
+
+def sum_typed_transactions(transactions: list[dict[str, Any]], transaction_type: str, use_absolute_value: bool) -> int:
+    total = 0
+    for transaction in transactions:
+        if transaction["transaction_type"] != transaction_type:
+            continue
+        amount = int(transaction["amount_cents"] or 0)
+        total += abs(amount) if use_absolute_value else amount
+    return total
+
+
+def sum_expense_transactions(transactions: list[dict[str, Any]], bill_tagged: bool) -> int:
+    total = 0
+    for transaction in transactions:
+        if transaction["transaction_type"] != "expense" or has_bill_tag(transaction) != bill_tagged:
+            continue
+        total += abs(int(transaction["amount_cents"] or 0))
+    return total
+
+
+def has_bill_tag(transaction: dict[str, Any]) -> bool:
+    return any(str(tag["name"]).casefold() == BILL_TAG_NAME for tag in transaction.get("tags", []))
+
+
+def category_spending_segments(
+    transactions: list[dict[str, Any]],
+    categories: list[dict[str, Any]],
+    expense_mode: str,
+) -> list[dict[str, Any]]:
+    categories_by_id = {int(category["id"]): category for category in categories}
+    totals: dict[int, dict[str, Any]] = {}
+    for transaction in transactions:
+        if not is_dashboard_expense(transaction, expense_mode):
+            continue
+        parent = parent_category_for_transaction(transaction, categories_by_id)
+        if parent is None:
+            continue
+        parent_id = int(parent["id"])
+        totals[parent_id] = {
+            "label": parent["name"],
+            "value": totals.get(parent_id, {}).get("value", 0) + abs(int(transaction["amount_cents"] or 0)),
+            "color": parent.get("color") or "#000000",
+        }
+    segments = sorted(totals.values(), key=lambda item: item["value"], reverse=True)
+    if len(segments) <= 6:
+        return segments
+    visible = segments[:5]
+    visible.append({
+        "label": "Other",
+        "value": sum(segment["value"] for segment in segments[5:]),
+        "color": "#888888",
+    })
+    return visible
+
+
+def is_dashboard_expense(transaction: dict[str, Any], mode: str) -> bool:
+    if transaction["transaction_type"] != "expense":
+        return False
+    if mode == "splurge":
+        return not has_bill_tag(transaction)
+    return True
+
+
+def parent_category_for_transaction(
+    transaction: dict[str, Any],
+    categories_by_id: dict[int, dict[str, Any]],
+) -> dict[str, Any] | None:
+    category_id = transaction.get("category_id")
+    if category_id is None:
+        return None
+    category = categories_by_id.get(int(category_id))
+    if category is None:
+        return None
+    parent_id = category.get("parent_id")
+    return categories_by_id.get(int(parent_id)) if parent_id is not None else category
+
+
 def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
     sync_raw_row_importability_status(conn)
     ensure_default_categories(conn)
@@ -992,10 +1157,14 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
                 i.name AS institution,
                 a.account_type,
                 a.external_account_id,
+                COUNT(rr.id) AS raw_row_count,
                 a.created_at,
                 a.updated_at
             FROM accounts a
             LEFT JOIN institutions i ON i.id = a.institution_id
+            LEFT JOIN imported_source src ON src.account_id = a.id
+            LEFT JOIN raw_imported_rows rr ON rr.imported_source_id = src.id
+            GROUP BY a.id
             ORDER BY a.name, a.id
             """
         ).fetchall()

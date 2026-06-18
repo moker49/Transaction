@@ -527,6 +527,15 @@ def parse_transaction_date(value: str | None) -> str:
     raise CliError(f"raw_date is not a supported date: {raw_value}")
 
 
+def parse_cli_date(value: str | None, field_name: str) -> str | None:
+    if value is None:
+        return None
+    try:
+        return parse_transaction_date(value)
+    except CliError as exc:
+        raise CliError(str(exc).replace("raw_date", field_name, 1)) from exc
+
+
 def parse_amount_cents(value: str | None) -> int:
     raw_value = normalize_text(value)
     if raw_value is None:
@@ -958,10 +967,24 @@ def command_query_readonly(args: argparse.Namespace) -> None:
 def command_recent(args: argparse.Namespace) -> None:
     if args.limit < 1:
         raise CliError("--limit must be greater than 0.")
+    start_date = parse_cli_date(args.start_date, "start_date")
+    end_date = parse_cli_date(args.end_date, "end_date")
+    if start_date and end_date and start_date > end_date:
+        raise CliError("--start-date must be on or before --end-date.")
+
+    filters: list[str] = []
+    values: list[Any] = []
+    if start_date:
+        filters.append("t.posted_date >= ?")
+        values.append(start_date)
+    if end_date:
+        filters.append("t.posted_date <= ?")
+        values.append(end_date)
+    where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
 
     with connect(args.db, readonly=True) as conn:
         rows = conn.execute(
-            """
+            f"""
             SELECT
                 t.id,
                 t.posted_date,
@@ -974,12 +997,18 @@ def command_recent(args: argparse.Namespace) -> None:
             FROM transactions t
             JOIN accounts a ON a.id = t.account_id
             LEFT JOIN categories c ON c.id = t.category_id
+            {where_clause}
             ORDER BY t.posted_date DESC, t.id DESC
             LIMIT ?
             """,
-            (args.limit,),
+            (*values, args.limit),
         ).fetchall()
-    print_json({"limit": args.limit, "transactions": rows_to_dicts(rows)})
+    print_json({
+        "limit": args.limit,
+        "start_date": start_date,
+        "end_date": end_date,
+        "transactions": rows_to_dicts(rows),
+    })
 
 
 def command_accounts(args: argparse.Namespace) -> None:
@@ -1648,6 +1677,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     recent_parser = subparsers.add_parser("recent", help="Show recent transactions as JSON.")
     recent_parser.add_argument("--limit", type=int, default=20)
+    recent_parser.add_argument("--start-date")
+    recent_parser.add_argument("--end-date")
     recent_parser.set_defaults(func=command_recent)
 
     accounts_parser = subparsers.add_parser("accounts", help="List accounts as JSON.")

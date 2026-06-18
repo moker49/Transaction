@@ -1,13 +1,15 @@
 (function () {
   const API_BASE = window.location.protocol === "file:" ? "http://127.0.0.1:5050" : "";
   const DUMMY_DATABASE_KEY = "transaction-use-dummy-database";
-  const DASHBOARD_RANGE_KEY = "transaction-dashboard-range";
-  const DASHBOARD_CUSTOM_START_KEY = "transaction-dashboard-custom-start";
-  const DASHBOARD_CUSTOM_END_KEY = "transaction-dashboard-custom-end";
-  const DEFAULT_DASHBOARD_RANGE = "last-month";
-  const CUSTOM_DASHBOARD_RANGE = "custom";
+  const DATE_RANGE_KEY = "transaction-date-range";
+  const DATE_RANGE_CUSTOM_START_KEY = "transaction-date-range-custom-start";
+  const DATE_RANGE_CUSTOM_END_KEY = "transaction-date-range-custom-end";
+  const LEGACY_DATE_RANGE_CUSTOM_START_KEY = "transaction-dashboard-custom-start";
+  const LEGACY_DATE_RANGE_CUSTOM_END_KEY = "transaction-dashboard-custom-end";
+  const DEFAULT_DATE_RANGE = "last-month";
+  const CUSTOM_DATE_RANGE = "custom";
   const MOBILE_LAYOUT_QUERY = "(max-width: 860px)";
-  const dashboardRangePresets = [
+  const dateRangePresets = [
     { value: "this-month", label: "This month" },
     { value: "last-month", label: "Last month" },
     { value: "this-year", label: "This year" },
@@ -22,6 +24,8 @@
     imports: [],
     transactions: [],
     rawRows: [],
+    dashboard: null,
+    activeDateRange: null,
   };
 
   let state = structuredClone(defaultState);
@@ -48,7 +52,7 @@
   let categoryPickerTarget = null;
   let categoryColorDraft = "#2f8f2f";
   let popupTimer = null;
-  let dashboardRangeDraft = null;
+  let dateRangeDraft = null;
   let rawMobileImportColumnVisible = false;
   let mobileDrawerHistoryActive = false;
   const importableRawRowStatuses = new Set(["importable"]);
@@ -67,8 +71,8 @@
     appMessageIcon: document.querySelector("#appMessageIcon"),
     appMessageText: document.querySelector("#appMessageText"),
     mobileMenuButton: document.querySelector("#mobileMenuButton"),
-    mobileDashboardRangeButton: document.querySelector("#mobileDashboardRangeButton"),
-    mobileDashboardRangeLabel: document.querySelector("#mobileDashboardRangeLabel"),
+    mobileDateRangeButton: document.querySelector("#mobileDateRangeButton"),
+    mobileDateRangeLabel: document.querySelector("#mobileDateRangeLabel"),
     mobileDrawerBackdrop: document.querySelector("#mobileDrawerBackdrop"),
     mobileNavDrawer: document.querySelector("#mobileNavDrawer"),
     mobileDummyDatabaseToggle: document.querySelector("#mobileDummyDatabaseToggle"),
@@ -136,17 +140,17 @@
     manualImportTypeInput: document.querySelector("#manualImportTypeInput"),
     manualImportTypeGroup: document.querySelector("#manualImportTypeGroup"),
     manualImportTags: document.querySelector("#manualImportTags"),
-    dashboardRangeButton: document.querySelector("#dashboardRangeButton"),
-    dashboardRangeLabel: document.querySelector("#dashboardRangeLabel"),
-    dashboardRangeDialog: document.querySelector("#dashboardRangeDialog"),
-    dashboardRangeForm: document.querySelector("#dashboardRangeForm"),
-    dashboardRangeCloseButton: document.querySelector("#dashboardRangeCloseButton"),
-    dashboardRangePresetList: document.querySelector("#dashboardRangePresetList"),
-    dashboardCalendarGrid: document.querySelector("#dashboardCalendarGrid"),
-    dashboardRangeCancelButton: document.querySelector("#dashboardRangeCancelButton"),
-    dashboardRangeApplyButton: document.querySelector("#dashboardRangeApplyButton"),
-    dashboardCustomStart: document.querySelector("#dashboardCustomStart"),
-    dashboardCustomEnd: document.querySelector("#dashboardCustomEnd"),
+    dateRangeButton: document.querySelector("#dateRangeButton"),
+    dateRangeLabel: document.querySelector("#dateRangeLabel"),
+    dateRangeDialog: document.querySelector("#dateRangeDialog"),
+    dateRangeForm: document.querySelector("#dateRangeForm"),
+    dateRangeCloseButton: document.querySelector("#dateRangeCloseButton"),
+    dateRangePresetList: document.querySelector("#dateRangePresetList"),
+    dateRangeCalendarGrid: document.querySelector("#dateRangeCalendarGrid"),
+    dateRangeCancelButton: document.querySelector("#dateRangeCancelButton"),
+    dateRangeApplyButton: document.querySelector("#dateRangeApplyButton"),
+    dateRangeCustomStart: document.querySelector("#dateRangeCustomStart"),
+    dateRangeCustomEnd: document.querySelector("#dateRangeCustomEnd"),
     accountDialog: document.querySelector("#accountDialog"),
     accountDialogTitle: document.querySelector("#accountDialogTitle"),
     accountTypeInput: document.querySelector("#accountTypeInput"),
@@ -296,18 +300,18 @@
     event.preventDefault();
     hidePopup();
   });
-  elements.mobileDashboardRangeButton.addEventListener("click", openDashboardRangeDialog);
+  elements.mobileDateRangeButton.addEventListener("click", openDateRangeDialog);
   elements.mobileDummyDatabaseToggle.addEventListener("change", updateDatabaseMode);
   elements.mobileRegenerateDatabaseButton.addEventListener("click", regenerateDatabase);
-  elements.dashboardRangeButton.addEventListener("click", openDashboardRangeDialog);
-  elements.dashboardRangeForm.addEventListener("submit", applyDashboardRange);
-  elements.dashboardRangeCloseButton.addEventListener("click", closeDashboardRangeDialog);
-  elements.dashboardRangeCancelButton.addEventListener("click", closeDashboardRangeDialog);
-  elements.dashboardCustomStart.addEventListener("change", updateDashboardCustomRange);
-  elements.dashboardCustomEnd.addEventListener("change", updateDashboardCustomRange);
-  elements.dashboardRangeDialog.addEventListener("cancel", (event) => {
+  elements.dateRangeButton.addEventListener("click", openDateRangeDialog);
+  elements.dateRangeForm.addEventListener("submit", applyDateRange);
+  elements.dateRangeCloseButton.addEventListener("click", closeDateRangeDialog);
+  elements.dateRangeCancelButton.addEventListener("click", closeDateRangeDialog);
+  elements.dateRangeCustomStart.addEventListener("change", updateDateRangeCustomRange);
+  elements.dateRangeCustomEnd.addEventListener("change", updateDateRangeCustomRange);
+  elements.dateRangeDialog.addEventListener("cancel", (event) => {
     event.preventDefault();
-    closeDashboardRangeDialog();
+    closeDateRangeDialog();
   });
   elements.accountCancelButton.addEventListener("click", closeAccountDialog);
   elements.accountDismissButton.addEventListener("click", closeAccountDialog);
@@ -413,130 +417,141 @@
     }
   });
   window.matchMedia(MOBILE_LAYOUT_QUERY).addEventListener("change", () => {
-    if (dashboardRangeDraft) {
-      renderDashboardCalendars();
+    if (dateRangeDraft) {
+      renderDateRangeCalendars();
     }
   });
 
-  initializeDashboardRange();
+  initializeDateRange();
   initializeDatabaseMode();
   activateView("overview");
   loadInitialState();
 
-  function initializeDashboardRange() {
-    const savedRange = localStorage.getItem(DASHBOARD_RANGE_KEY) || DEFAULT_DASHBOARD_RANGE;
-    const validRange = dashboardRangeValues().has(savedRange) ? savedRange : DEFAULT_DASHBOARD_RANGE;
-    localStorage.setItem(DASHBOARD_RANGE_KEY, validRange);
-    renderDashboardRangeButton();
+  function initializeDateRange() {
+    const savedRange = localStorage.getItem(DATE_RANGE_KEY) || DEFAULT_DATE_RANGE;
+    const validRange = dateRangeValues().has(savedRange) ? savedRange : DEFAULT_DATE_RANGE;
+    localStorage.setItem(DATE_RANGE_KEY, validRange);
+    migrateLegacyDateRangeStorage();
+    renderDateRangeButton();
   }
 
-  function dashboardRangeValues() {
-    return new Set([...dashboardRangePresets.map((preset) => preset.value), CUSTOM_DASHBOARD_RANGE]);
+  function migrateLegacyDateRangeStorage() {
+    if (!localStorage.getItem(DATE_RANGE_CUSTOM_START_KEY) && localStorage.getItem(LEGACY_DATE_RANGE_CUSTOM_START_KEY)) {
+      localStorage.setItem(DATE_RANGE_CUSTOM_START_KEY, localStorage.getItem(LEGACY_DATE_RANGE_CUSTOM_START_KEY));
+    }
+    if (!localStorage.getItem(DATE_RANGE_CUSTOM_END_KEY) && localStorage.getItem(LEGACY_DATE_RANGE_CUSTOM_END_KEY)) {
+      localStorage.setItem(DATE_RANGE_CUSTOM_END_KEY, localStorage.getItem(LEGACY_DATE_RANGE_CUSTOM_END_KEY));
+    }
   }
 
-  function openDashboardRangeDialog() {
-    dashboardRangeDraft = currentDashboardRangeState();
-    elements.dashboardCustomStart.value = dashboardRangeDraft.start || "";
-    elements.dashboardCustomEnd.value = dashboardRangeDraft.end || "";
-    renderDashboardRangeDialog();
-    openModal(elements.dashboardRangeDialog);
+  function dateRangeValues() {
+    return new Set([...dateRangePresets.map((preset) => preset.value), CUSTOM_DATE_RANGE]);
   }
 
-  function closeDashboardRangeDialog() {
-    dashboardRangeDraft = null;
-    elements.dashboardRangeDialog.close();
+  function openDateRangeDialog() {
+    dateRangeDraft = currentDateRangeState();
+    elements.dateRangeCustomStart.value = dateRangeDraft.start || "";
+    elements.dateRangeCustomEnd.value = dateRangeDraft.end || "";
+    renderDateRangeDialog();
+    openModal(elements.dateRangeDialog);
   }
 
-  function applyDashboardRange(event) {
+  function closeDateRangeDialog() {
+    dateRangeDraft = null;
+    elements.dateRangeDialog.close();
+  }
+
+  async function applyDateRange(event) {
     event.preventDefault();
-    if (!dashboardRangeDraft) {
+    if (!dateRangeDraft) {
       return;
     }
-    localStorage.setItem(DASHBOARD_RANGE_KEY, dashboardRangeDraft.range);
-    if (dashboardRangeDraft.range === CUSTOM_DASHBOARD_RANGE) {
-      localStorage.setItem(DASHBOARD_CUSTOM_START_KEY, dashboardRangeDraft.start || "");
-      localStorage.setItem(DASHBOARD_CUSTOM_END_KEY, dashboardRangeDraft.end || "");
+    localStorage.setItem(DATE_RANGE_KEY, dateRangeDraft.range);
+    if (dateRangeDraft.range === CUSTOM_DATE_RANGE) {
+      localStorage.setItem(DATE_RANGE_CUSTOM_START_KEY, dateRangeDraft.start || "");
+      localStorage.setItem(DATE_RANGE_CUSTOM_END_KEY, dateRangeDraft.end || "");
     }
-    renderDashboardRangeButton();
-    renderDashboard();
-    closeDashboardRangeDialog();
+    renderDateRangeButton();
+    await loadTransactionData();
+    closeDateRangeDialog();
   }
 
-  function updateDashboardCustomRange() {
-    if (!dashboardRangeDraft) {
+  function updateDateRangeCustomRange() {
+    if (!dateRangeDraft) {
       return;
     }
-    dashboardRangeDraft.range = CUSTOM_DASHBOARD_RANGE;
-    dashboardRangeDraft.start = elements.dashboardCustomStart.value;
-    dashboardRangeDraft.end = elements.dashboardCustomEnd.value;
-    dashboardRangeDraft.viewDate = dashboardRangeDraft.start ? firstOfMonth(parseDateKey(dashboardRangeDraft.start)) : dashboardRangeDraft.viewDate;
-    renderDashboardRangeDialog();
+    dateRangeDraft.range = CUSTOM_DATE_RANGE;
+    const start = elements.dateRangeCustomStart.value;
+    const end = elements.dateRangeCustomEnd.value;
+    dateRangeDraft.start = start && end && end < start ? end : start;
+    dateRangeDraft.end = start && end && end < start ? start : end;
+    elements.dateRangeCustomStart.value = dateRangeDraft.start;
+    elements.dateRangeCustomEnd.value = dateRangeDraft.end;
+    dateRangeDraft.viewDate = dateRangeDraft.start ? firstOfMonth(parseDateKey(dateRangeDraft.start)) : dateRangeDraft.viewDate;
+    renderDateRangeDialog();
   }
 
-  function currentDashboardRangeState() {
-    const savedRange = localStorage.getItem(DASHBOARD_RANGE_KEY) || DEFAULT_DASHBOARD_RANGE;
-    const range = dashboardRangeValues().has(savedRange) ? savedRange : DEFAULT_DASHBOARD_RANGE;
-    return dashboardRangeState(range);
+  function currentDateRangeState() {
+    const savedRange = localStorage.getItem(DATE_RANGE_KEY) || DEFAULT_DATE_RANGE;
+    const range = dateRangeValues().has(savedRange) ? savedRange : DEFAULT_DATE_RANGE;
+    return dateRangeState(range);
   }
 
-  function dashboardRangeState(range) {
-    const period = dashboardPeriodForRange(range);
-    const inclusiveEnd = formatDateKey(addDays(parseDateKey(period.end), -1));
-    const customStart = localStorage.getItem(DASHBOARD_CUSTOM_START_KEY) || "";
-    const customEnd = localStorage.getItem(DASHBOARD_CUSTOM_END_KEY) || "";
+  function dateRangeState(range) {
+    const period = dateRangePeriodForRange(range);
     return {
       range,
-      start: range === CUSTOM_DASHBOARD_RANGE ? customStart : period.start,
-      end: range === CUSTOM_DASHBOARD_RANGE ? customEnd : inclusiveEnd,
+      start: period.start,
+      end: period.end,
       viewDate: firstOfMonth(rangeStartDate(range)),
     };
   }
 
-  function renderDashboardRangeButton() {
-    const period = dashboardPeriod();
-    elements.dashboardRangeLabel.textContent = formatDateRangeLabel(period.start, period.end);
-    elements.mobileDashboardRangeLabel.textContent = formatDateRangeLabel(period.start, period.end);
+  function renderDateRangeButton() {
+    const range = currentDateRangeState();
+    elements.dateRangeLabel.textContent = formatDateRangeLabel(range.start, range.end);
+    elements.mobileDateRangeLabel.textContent = formatDateRangeLabel(range.start, range.end);
   }
 
-  function renderDashboardRangeDialog() {
-    renderDashboardRangePresets();
-    renderDashboardCalendars();
-    elements.dashboardRangeApplyButton.disabled =
-      dashboardRangeDraft?.range === CUSTOM_DASHBOARD_RANGE && (!dashboardRangeDraft.start || !dashboardRangeDraft.end);
+  function renderDateRangeDialog() {
+    renderDateRangePresets();
+    renderDateRangeCalendars();
+    elements.dateRangeApplyButton.disabled =
+      dateRangeDraft?.range === CUSTOM_DATE_RANGE && (!dateRangeDraft.start || !dateRangeDraft.end);
   }
 
-  function renderDashboardRangePresets() {
-    clear(elements.dashboardRangePresetList);
-    dashboardRangePresets.forEach((preset) => {
+  function renderDateRangePresets() {
+    clear(elements.dateRangePresetList);
+    dateRangePresets.forEach((preset) => {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "range-preset-button";
-      button.classList.toggle("is-active", dashboardRangeDraft?.range === preset.value);
+      button.classList.toggle("is-active", dateRangeDraft?.range === preset.value);
       button.textContent = preset.label;
-      button.addEventListener("click", () => selectDashboardRangePreset(preset.value));
-      elements.dashboardRangePresetList.appendChild(button);
+      button.addEventListener("click", () => selectDateRangePreset(preset.value));
+      elements.dateRangePresetList.appendChild(button);
     });
   }
 
-  function selectDashboardRangePreset(range) {
-    dashboardRangeDraft.range = range;
-    const period = dashboardPeriodForRange(range);
-    dashboardRangeDraft.start = period.start;
-    dashboardRangeDraft.end = formatDateKey(addDays(parseDateKey(period.end), -1));
-    dashboardRangeDraft.viewDate = firstOfMonth(parseDateKey(period.start));
-    elements.dashboardCustomStart.value = dashboardRangeDraft.start || "";
-    elements.dashboardCustomEnd.value = dashboardRangeDraft.end || "";
-    renderDashboardRangeDialog();
+  function selectDateRangePreset(range) {
+    dateRangeDraft.range = range;
+    const period = dateRangePeriodForRange(range);
+    dateRangeDraft.start = period.start;
+    dateRangeDraft.end = period.end;
+    dateRangeDraft.viewDate = firstOfMonth(parseDateKey(period.start));
+    elements.dateRangeCustomStart.value = dateRangeDraft.start || "";
+    elements.dateRangeCustomEnd.value = dateRangeDraft.end || "";
+    renderDateRangeDialog();
   }
 
-  function renderDashboardCalendars() {
-    clear(elements.dashboardCalendarGrid);
-    const viewDate = dashboardRangeDraft?.viewDate || firstOfMonth(new Date());
+  function renderDateRangeCalendars() {
+    clear(elements.dateRangeCalendarGrid);
+    const viewDate = dateRangeDraft?.viewDate || firstOfMonth(new Date());
     if (window.matchMedia(MOBILE_LAYOUT_QUERY).matches) {
-      elements.dashboardCalendarGrid.append(calendarMonthElement(viewDate, 0));
+      elements.dateRangeCalendarGrid.append(calendarMonthElement(viewDate, 0));
       return;
     }
-    elements.dashboardCalendarGrid.append(calendarMonthElement(viewDate, -1), calendarMonthElement(addMonths(viewDate, 1), 1));
+    elements.dateRangeCalendarGrid.append(calendarMonthElement(viewDate, -1), calendarMonthElement(addMonths(viewDate, 1), 1));
   }
 
   function calendarMonthElement(monthDate, direction) {
@@ -544,8 +559,8 @@
     container.className = "calendar-month";
     const header = document.createElement("div");
     header.className = "calendar-month-header";
-    const previous = calendarNavButton("chevron_left", () => shiftDashboardCalendar(-1));
-    const next = calendarNavButton("chevron_right", () => shiftDashboardCalendar(1));
+    const previous = calendarNavButton("chevron_left", () => shiftDateRangeCalendar(-1));
+    const next = calendarNavButton("chevron_right", () => shiftDateRangeCalendar(1));
     const title = el("strong", monthDate.toLocaleDateString(undefined, { month: "short", year: "numeric" }));
     header.append(direction <= 0 ? previous : document.createElement("span"), title, direction >= 0 ? next : document.createElement("span"));
 
@@ -565,8 +580,8 @@
       button.className = "calendar-day";
       button.textContent = String(day);
       button.classList.toggle("is-in-range", isDraftDateInRange(key));
-      button.classList.toggle("is-range-edge", key === dashboardRangeDraft?.start || key === dashboardRangeDraft?.end);
-      button.addEventListener("click", () => selectDashboardCustomDay(key));
+      button.classList.toggle("is-range-edge", key === dateRangeDraft?.start || key === dateRangeDraft?.end);
+      button.addEventListener("click", () => selectDateRangeCustomDay(key));
       grid.appendChild(button);
     }
     const renderedDayCells = firstDay.getDay() + days;
@@ -587,33 +602,41 @@
     return button;
   }
 
-  function shiftDashboardCalendar(months) {
-    dashboardRangeDraft.viewDate = addMonths(dashboardRangeDraft.viewDate, months);
-    renderDashboardRangeDialog();
+  function shiftDateRangeCalendar(months) {
+    dateRangeDraft.viewDate = addMonths(dateRangeDraft.viewDate, months);
+    renderDateRangeDialog();
   }
 
-  function selectDashboardCustomDay(key) {
-    dashboardRangeDraft.range = CUSTOM_DASHBOARD_RANGE;
-    if (!dashboardRangeDraft.start || dashboardRangeDraft.end) {
-      dashboardRangeDraft.start = key;
-      dashboardRangeDraft.end = "";
-    } else if (key < dashboardRangeDraft.start) {
-      dashboardRangeDraft.end = dashboardRangeDraft.start;
-      dashboardRangeDraft.start = key;
+  function selectDateRangeCustomDay(key) {
+    dateRangeDraft.range = CUSTOM_DATE_RANGE;
+    if (!dateRangeDraft.start || dateRangeDraft.end) {
+      dateRangeDraft.start = key;
+      dateRangeDraft.end = "";
+    } else if (key < dateRangeDraft.start) {
+      dateRangeDraft.end = dateRangeDraft.start;
+      dateRangeDraft.start = key;
     } else {
-      dashboardRangeDraft.end = key;
+      dateRangeDraft.end = key;
     }
-    elements.dashboardCustomStart.value = dashboardRangeDraft.start;
-    elements.dashboardCustomEnd.value = dashboardRangeDraft.end;
-    renderDashboardRangeDialog();
+    elements.dateRangeCustomStart.value = dateRangeDraft.start;
+    elements.dateRangeCustomEnd.value = dateRangeDraft.end;
+    renderDateRangeDialog();
   }
 
   function isDraftDateInRange(key) {
-    if (!dashboardRangeDraft?.start) {
+    if (!dateRangeDraft?.start) {
       return false;
     }
-    const end = dashboardRangeDraft.end || dashboardRangeDraft.start;
-    return key >= dashboardRangeDraft.start && key <= end;
+    const end = dateRangeDraft.end || dateRangeDraft.start;
+    return key >= dateRangeDraft.start && key <= end;
+  }
+
+  function dateRangeQuery() {
+    const range = currentDateRangeState();
+    return new URLSearchParams({
+      startDate: range.start,
+      endDate: range.end,
+    }).toString();
   }
 
   function initializeDatabaseMode() {
@@ -684,12 +707,27 @@
 
   async function loadInitialState() {
     try {
-      state = normalizeState(await apiRequest("/api/state"));
+      const [referencePayload, transactionPayload] = await Promise.all([
+        apiRequest("/api/reference-data"),
+        apiRequest(`/api/transactions?${dateRangeQuery()}`),
+      ]);
+      applyReferenceData(referencePayload.referenceData, { shouldRender: false });
+      applyTransactionData(transactionPayload.transactionData, { shouldRender: false });
       render();
     } catch (error) {
       showPopup(error.message || "Could not load server data.", "error");
       render();
     }
+  }
+
+  async function loadTransactionData({ shouldRender = true } = {}) {
+    const payload = await apiRequest(`/api/transactions?${dateRangeQuery()}`);
+    applyTransactionData(payload.transactionData, { shouldRender });
+  }
+
+  async function loadReferenceData({ shouldRender = true } = {}) {
+    const payload = await apiRequest("/api/reference-data");
+    applyReferenceData(payload.referenceData, { shouldRender });
   }
 
   async function apiRequest(path, options = {}) {
@@ -710,15 +748,95 @@
   }
 
   function normalizeState(payload) {
+    const normalizedPayload = {
+      ...(payload || {}),
+    };
+    if (normalizedPayload.realTransactions && !normalizedPayload.transactions) {
+      normalizedPayload.transactions = normalizedPayload.realTransactions;
+    }
+    if (normalizedPayload.rawTransactions && !normalizedPayload.rawRows) {
+      normalizedPayload.rawRows = normalizedPayload.rawTransactions;
+    }
     return {
       ...structuredClone(defaultState),
-      ...(payload || {}),
+      ...normalizedPayload,
     };
   }
 
   function applyStateFromPayload(payload) {
-    state = normalizeState(payload.state || payload);
+    const nextPayload = payload.state || payload;
+    if (payload.referenceData || payload.transactionData) {
+      if (payload.referenceData) {
+        applyReferenceData(payload.referenceData, { shouldRender: false });
+      }
+      if (payload.transactionData) {
+        applyTransactionData(payload.transactionData, { shouldRender: false });
+      }
+    } else {
+      state = normalizeState({
+        ...state,
+        ...nextPayload,
+        ...transactionSliceForCurrentDateRange(nextPayload),
+      });
+    }
     hidePopup();
+    pruneRawRowUiState();
+    render();
+  }
+
+  function applyReferenceData(referenceData, { shouldRender = true } = {}) {
+    state = normalizeState({
+      ...state,
+      ...(referenceData || {}),
+    });
+    if (shouldRender) {
+      render();
+    }
+  }
+
+  function applyTransactionData(transactionData, { shouldRender = true } = {}) {
+    state = normalizeState({
+      ...state,
+      dashboard: transactionData?.dashboard || null,
+      activeDateRange: transactionData
+        ? { startDate: transactionData.startDate, endDate: transactionData.endDate }
+        : state.activeDateRange,
+      transactions: transactionData?.realTransactions || [],
+      rawRows: transactionData?.rawTransactions || [],
+    });
+    pruneRawRowUiState();
+    if (shouldRender) {
+      render();
+    }
+  }
+
+  function transactionSliceForCurrentDateRange(payload) {
+    if (!payload?.transactions && !payload?.rawRows) {
+      return {};
+    }
+    const range = currentDateRangeState();
+    const transactions = (payload.transactions || state.transactions).filter((transaction) => (
+      transaction.posted_date >= range.start && transaction.posted_date <= range.end
+    ));
+    const rawRows = (payload.rawRows || state.rawRows).filter((row) => (
+      row.import_status === "importable"
+      || row.import_status === "notImportable"
+      || isRawRowInCurrentDateRange(row, range)
+    ));
+    return {
+      transactions,
+      rawRows,
+      dashboard: null,
+      activeDateRange: { startDate: range.start, endDate: range.end },
+    };
+  }
+
+  function isRawRowInCurrentDateRange(row, range) {
+    const rawDate = clean(row.raw_date);
+    return rawDate >= range.start && rawDate <= range.end;
+  }
+
+  function pruneRawRowUiState() {
     const visibleIds = new Set(state.rawRows.map((row) => row.id));
     [...selectedRawRowIds].forEach((rowId) => {
       if (!visibleIds.has(rowId)) {
@@ -730,7 +848,6 @@
         rawRowNotes.delete(rowId);
       }
     });
-    render();
   }
 
   function activateView(viewName) {
@@ -1419,27 +1536,14 @@
   }
 
   function renderDashboard() {
-    const period = dashboardPeriod();
-    const transactions = state.transactions.filter((transaction) => {
-      return transaction.posted_date >= period.start
-        && transaction.posted_date < period.end
-        && transaction.transaction_type !== "transfer";
-    });
-    const income = sumTypedTransactions(transactions, "income", false);
-    const bills = sumExpenseTransactions(transactions, true);
-    const splurge = sumExpenseTransactions(transactions, false);
-    const saved = income - bills - splurge;
-    setText("#dashboardIncome", formatDollars(income));
-    setText("#dashboardBills", formatDollars(bills));
-    setText("#dashboardSplurge", formatDollars(splurge));
-    setText("#dashboardSaved", formatDollars(saved));
-    renderStackedBar(elements.dashboardTypeBar, elements.dashboardTypeBarLegend, [
-      { label: "Bills", value: bills, color: "#c85d5d" },
-      { label: "Splurge", value: splurge, color: "#7c6bc2" },
-      { label: "Saved", value: Math.max(saved, 0), color: "#2f8f2f" },
-    ]);
-    renderPieChart(elements.dashboardCategoryPie, elements.dashboardCategoryLegend, categorySpendingSegments(transactions, "all-expenses"));
-    renderPieChart(elements.dashboardSplurgePie, elements.dashboardSplurgeLegend, categorySpendingSegments(transactions, "splurge"));
+    const dashboard = state.dashboard || dashboardFromTransactions(state.transactions);
+    setText("#dashboardIncome", formatDollars(dashboard.income || 0));
+    setText("#dashboardBills", formatDollars(dashboard.bills || 0));
+    setText("#dashboardSplurge", formatDollars(dashboard.splurge || 0));
+    setText("#dashboardSaved", formatDollars(dashboard.saved || 0));
+    renderStackedBar(elements.dashboardTypeBar, elements.dashboardTypeBarLegend, dashboard.typeSegments || []);
+    renderPieChart(elements.dashboardCategoryPie, elements.dashboardCategoryLegend, dashboard.categorySegments || []);
+    renderPieChart(elements.dashboardSplurgePie, elements.dashboardSplurgeLegend, dashboard.splurgeSegments || []);
   }
 
   function renderAccounts() {
@@ -1451,7 +1555,7 @@
     }
 
     state.accounts.forEach((account) => {
-      const rowCount = state.rawRows.filter((row) => row.account_id === account.id).length;
+      const rowCount = account.raw_row_count ?? state.rawRows.filter((row) => row.account_id === account.id).length;
       const row = tableRow([
         account.name,
         account.institution || "-",
@@ -2890,55 +2994,49 @@
     return account.institution ? `${account.name} - ${account.institution}` : account.name;
   }
 
-  function dashboardPeriod() {
-    const savedRange = localStorage.getItem(DASHBOARD_RANGE_KEY) || DEFAULT_DASHBOARD_RANGE;
-    const range = dashboardRangeValues().has(savedRange) ? savedRange : DEFAULT_DASHBOARD_RANGE;
-    return dashboardPeriodForRange(range);
-  }
-
-  function dashboardPeriodForRange(range) {
+  function dateRangePeriodForRange(range) {
     const today = startOfDay(new Date());
     if (range === "this-month") {
       return {
         start: formatDateKey(new Date(today.getFullYear(), today.getMonth(), 1)),
-        end: formatDateKey(new Date(today.getFullYear(), today.getMonth() + 1, 1)),
+        end: formatDateKey(new Date(today.getFullYear(), today.getMonth() + 1, 0)),
       };
     }
     if (range === "this-year") {
       return {
         start: formatDateKey(new Date(today.getFullYear(), 0, 1)),
-        end: formatDateKey(new Date(today.getFullYear() + 1, 0, 1)),
+        end: formatDateKey(new Date(today.getFullYear(), 11, 31)),
       };
     }
     if (range === "last-year") {
       return lastFullYearPeriod();
     }
-    if (range === CUSTOM_DASHBOARD_RANGE) {
-      return customDashboardPeriod() || lastFullMonthPeriod();
+    if (range === CUSTOM_DATE_RANGE) {
+      return customDateRangePeriod() || lastFullMonthPeriod();
     }
     return lastFullMonthPeriod();
   }
 
   function rangeStartDate(range) {
-    return parseDateKey(dashboardPeriodForRange(range).start);
+    return parseDateKey(dateRangePeriodForRange(range).start);
   }
 
-  function customDashboardPeriod() {
-    const start = localStorage.getItem(DASHBOARD_CUSTOM_START_KEY) || "";
-    const end = localStorage.getItem(DASHBOARD_CUSTOM_END_KEY) || "";
+  function customDateRangePeriod() {
+    const start = localStorage.getItem(DATE_RANGE_CUSTOM_START_KEY) || "";
+    const end = localStorage.getItem(DATE_RANGE_CUSTOM_END_KEY) || "";
     if (!start || !end) {
       return null;
     }
     return {
-      start,
-      end: formatDateKey(addDays(parseDateKey(end), 1)),
+      start: end < start ? end : start,
+      end: end < start ? start : end,
     };
   }
 
   function lastFullYearPeriod() {
     const now = new Date();
     const start = new Date(now.getFullYear() - 1, 0, 1);
-    const end = new Date(now.getFullYear(), 0, 1);
+    const end = new Date(now.getFullYear() - 1, 11, 31);
     return {
       start: formatDateKey(start),
       end: formatDateKey(end),
@@ -2948,7 +3046,7 @@
   function lastFullMonthPeriod() {
     const now = new Date();
     const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const end = new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = new Date(now.getFullYear(), now.getMonth(), 0);
     return {
       start: formatDateKey(start),
       end: formatDateKey(end),
@@ -2968,9 +3066,9 @@
     return new Date(year, month - 1, day);
   }
 
-  function formatDateRangeLabel(start, exclusiveEnd) {
+  function formatDateRangeLabel(start, end) {
     const startDate = parseDateKey(start);
-    const endDate = addDays(parseDateKey(exclusiveEnd), -1);
+    const endDate = parseDateKey(end);
     const formatter = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" });
     return `${formatter.format(startDate)} - ${formatter.format(endDate)}`;
   }
@@ -3014,6 +3112,27 @@
 
   function hasBillTag(transaction) {
     return (transaction.tags || []).some((tag) => clean(tag.name).toLowerCase() === "bill");
+  }
+
+  function dashboardFromTransactions(transactions) {
+    const dashboardTransactions = transactions.filter((transaction) => transaction.transaction_type !== "transfer");
+    const income = sumTypedTransactions(dashboardTransactions, "income", false);
+    const bills = sumExpenseTransactions(dashboardTransactions, true);
+    const splurge = sumExpenseTransactions(dashboardTransactions, false);
+    const saved = income - bills - splurge;
+    return {
+      income,
+      bills,
+      splurge,
+      saved,
+      typeSegments: [
+        { label: "Bills", value: bills, color: "#c85d5d" },
+        { label: "Splurge", value: splurge, color: "#7c6bc2" },
+        { label: "Saved", value: Math.max(saved, 0), color: "#2f8f2f" },
+      ],
+      categorySegments: categorySpendingSegments(dashboardTransactions, "all-expenses"),
+      splurgeSegments: categorySpendingSegments(dashboardTransactions, "splurge"),
+    };
   }
 
   function isDashboardExpense(transaction, mode) {

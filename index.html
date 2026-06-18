@@ -14,8 +14,8 @@
     <button type="button" class="mobile-menu-button" id="mobileMenuButton" aria-label="Open settings">
       <span class="material-symbols-outlined" aria-hidden="true">menu</span>
     </button>
-    <button type="button" class="mobile-range-button" id="mobileDashboardRangeButton">
-      <span id="mobileDashboardRangeLabel">Last month</span>
+    <button type="button" class="mobile-range-button" id="mobileDateRangeButton">
+      <span id="mobileDateRangeLabel">Last month</span>
     </button>
   </div>
 
@@ -322,12 +322,12 @@
                 </span>
               </label>
             </div>
-            <div class="setting-row dashboard-range-row">
+            <div class="setting-row date-range-row">
               <div>
-                <strong>Dashboard</strong>
+                <strong>Date range</strong>
               </div>
-              <button type="button" class="range-setting-button" id="dashboardRangeButton">
-                <span id="dashboardRangeLabel">Last month</span>
+              <button type="button" class="range-setting-button" id="dateRangeButton">
+                <span id="dateRangeLabel">Last month</span>
                 <span class="material-symbols-outlined" aria-hidden="true">calendar_month</span>
               </button>
             </div>
@@ -793,27 +793,27 @@
     </form>
   </dialog>
 
-  <dialog id="dashboardRangeDialog" class="modal dashboard-range-modal" tabindex="-1">
-    <form id="dashboardRangeForm" class="modal-panel">
+  <dialog id="dateRangeDialog" class="modal date-range-modal" tabindex="-1">
+    <form id="dateRangeForm" class="modal-panel">
       <div class="panel-heading">
-        <h2>Dashboard range</h2>
-        <button class="icon-only" type="button" id="dashboardRangeCloseButton" aria-label="Close">
+        <h2>Date range</h2>
+        <button class="icon-only" type="button" id="dateRangeCloseButton" aria-label="Close">
           <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
-      <div class="dashboard-range-picker">
-        <div class="range-preset-list" id="dashboardRangePresetList" aria-label="Dashboard range presets"></div>
+      <div class="date-range-picker">
+        <div class="range-preset-list" id="dateRangePresetList" aria-label="Date range presets"></div>
         <div class="calendar-range-area">
           <div class="calendar-range-fields">
-            <input type="date" id="dashboardCustomStart" aria-label="Custom start date">
-            <input type="date" id="dashboardCustomEnd" aria-label="Custom end date">
+            <input type="date" id="dateRangeCustomStart" aria-label="Custom start date">
+            <input type="date" id="dateRangeCustomEnd" aria-label="Custom end date">
           </div>
-          <div class="calendar-range-grid" id="dashboardCalendarGrid"></div>
+          <div class="calendar-range-grid" id="dateRangeCalendarGrid"></div>
         </div>
       </div>
       <div class="modal-actions">
-        <button type="button" class="icon-button" id="dashboardRangeCancelButton">Cancel</button>
-        <button type="submit" class="primary" id="dashboardRangeApplyButton">Apply</button>
+        <button type="button" class="icon-button" id="dateRangeCancelButton">Cancel</button>
+        <button type="submit" class="primary" id="dateRangeApplyButton">Apply</button>
       </div>
     </form>
   </dialog>
