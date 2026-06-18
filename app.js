@@ -55,6 +55,12 @@
   let dateRangeDraft = null;
   let rawMobileImportColumnVisible = false;
   let mobileDrawerHistoryActive = false;
+  const tableSortState = {
+    transactions: { key: "date", direction: "desc", type: "date" },
+    accounts: { key: "name", direction: "asc", type: "text" },
+    rawRows: { key: "date", direction: "desc", type: "date" },
+    rules: { key: "priority", direction: "asc", type: "number" },
+  };
   const importableRawRowStatuses = new Set(["importable"]);
   const transactionTypes = [
     { value: "income", label: "Income" },
@@ -246,6 +252,8 @@
   elements.tabs.forEach((tab) => {
     tab.addEventListener("click", () => activateView(tab.dataset.view));
   });
+
+  initializeSortableTables();
 
   elements.accountAddButton.addEventListener("click", openAccountAddDialog);
   elements.accountForm.addEventListener("submit", saveAccount);
@@ -873,6 +881,55 @@
     });
     elements.tabNav.hidden = visibleTabCount === 0;
     elements.views.forEach((view) => view.classList.toggle("is-active", view.id === `${viewName}View`));
+  }
+
+  function initializeSortableTables() {
+    document.querySelectorAll("th[data-sort-table][data-sort-key]").forEach((header) => {
+      header.classList.add("sortable-header");
+      header.tabIndex = 0;
+      header.setAttribute("role", "button");
+      header.addEventListener("click", () => setTableSort(header));
+      header.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          setTableSort(header);
+        }
+      });
+    });
+    updateSortableHeaders();
+  }
+
+  function setTableSort(header) {
+    const table = header.dataset.sortTable;
+    const key = header.dataset.sortKey;
+    const type = header.dataset.sortType || "text";
+    const current = tableSortState[table];
+    const defaultDirection = type === "text" ? "asc" : "desc";
+    tableSortState[table] = {
+      key,
+      type,
+      direction: current?.key === key && current.direction === defaultDirection
+        ? oppositeSortDirection(defaultDirection)
+        : defaultDirection,
+    };
+    updateSortableHeaders();
+    render();
+  }
+
+  function updateSortableHeaders() {
+    document.querySelectorAll("th[data-sort-table][data-sort-key]").forEach((header) => {
+      const stateForTable = tableSortState[header.dataset.sortTable];
+      const isActive = stateForTable?.key === header.dataset.sortKey;
+      header.classList.toggle("is-sorted", isActive);
+      header.dataset.sortDirection = isActive ? stateForTable.direction : "";
+      header.setAttribute("aria-sort", isActive
+        ? (stateForTable.direction === "asc" ? "ascending" : "descending")
+        : "none");
+    });
+  }
+
+  function oppositeSortDirection(direction) {
+    return direction === "asc" ? "desc" : "asc";
   }
 
   function openAccountAddDialog() {
@@ -1554,7 +1611,7 @@
       return;
     }
 
-    state.accounts.forEach((account) => {
+    sortedTableRows("accounts", state.accounts).forEach((account) => {
       const rowCount = account.raw_row_count ?? state.rawRows.filter((row) => row.account_id === account.id).length;
       const row = tableRow([
         account.name,
@@ -1594,7 +1651,7 @@
       return;
     }
 
-    transactions.forEach((transaction) => {
+    sortedTableRows("transactions", transactions).forEach((transaction) => {
       const category = state.categories.find((candidate) => candidate.id === transaction.category_id)
         || state.categories.find((candidate) => candidate.name === transaction.category);
       const row = tableRow([
@@ -2493,9 +2550,7 @@
       return;
     }
 
-    state.rules
-      .slice()
-      .sort((a, b) => a.priority - b.priority || a.id - b.id)
+    sortedTableRows("rules", state.rules)
       .forEach((rule) => {
         const category = state.categories.find((candidate) => candidate.id === rule.set_category_id);
         const row = tableRow([
@@ -2554,7 +2609,8 @@
       }
       return true;
     });
-    visibleRawRows = rows;
+    const sortedRows = sortedTableRows("rawRows", rows);
+    visibleRawRows = sortedRows;
     if (!rows.length) {
       tbody.appendChild(emptyTableRow(rawColumnCount));
       updateImportSelectedButton();
@@ -2562,7 +2618,7 @@
       return;
     }
 
-    rows.slice().reverse().forEach((rawRow) => {
+    sortedRows.forEach((rawRow) => {
       const account = state.accounts.find((candidate) => candidate.id === rawRow.account_id);
       const tr = document.createElement("tr");
       tr.classList.toggle("is-importable-row", isImportableRawRow(rawRow));
@@ -3681,5 +3737,144 @@
 
   function formatMaybeDateTime(value) {
     return value ? formatDateTime(value) : "-";
+  }
+
+  function sortedTableRows(table, rows) {
+    const sortState = tableSortState[table];
+    if (!sortState) {
+      return rows.slice();
+    }
+    return rows
+      .slice()
+      .sort((left, right) => {
+        const comparison = compareSortValues(
+          tableSortValue(table, left, sortState.key),
+          tableSortValue(table, right, sortState.key),
+          sortState.type,
+          sortState.direction,
+        );
+        if (comparison !== 0) {
+          return comparison;
+        }
+        return compareSortValues(tableSortValue(table, left, "id"), tableSortValue(table, right, "id"), "number");
+      });
+  }
+
+  function tableSortValue(table, item, key) {
+    if (key === "id") {
+      return item.id;
+    }
+    if (table === "accounts") {
+      return {
+        name: item.name,
+        institution: item.institution,
+        type: item.account_type,
+        records: item.raw_row_count ?? state.rawRows.filter((row) => row.account_id === item.id).length,
+      }[key];
+    }
+    if (table === "transactions") {
+      return {
+        date: item.posted_date,
+        category: item.category || categoryLabelById(item.category_id),
+        description: item.clean_description,
+        amount: item.amount_cents,
+        account: item.account,
+        notes: item.notes,
+      }[key];
+    }
+    if (table === "rawRows") {
+      const account = state.accounts.find((candidate) => candidate.id === item.account_id);
+      return {
+        date: item.raw_date,
+        category: clean(item.preview_category) || item.raw_category,
+        description: clean(item.preview_clean_description) || item.raw_description,
+        amount: item.raw_amount,
+        account: account?.name,
+        status: statusLabel(item.import_status),
+        notes: rawRowNotes.get(item.id),
+      }[key];
+    }
+    if (table === "rules") {
+      const matches = ruleMatchValues(item);
+      return {
+        priority: item.priority,
+        name: item.name,
+        match: `${matches.description} ${matches.category}`.trim(),
+      }[key];
+    }
+    return null;
+  }
+
+  function categoryLabelById(categoryId) {
+    const category = state.categories.find((candidate) => candidate.id === categoryId);
+    return category ? categoryLabel(category) : "";
+  }
+
+  function compareSortValues(left, right, type, direction = "asc") {
+    const leftValue = normalizeSortValue(left, type);
+    const rightValue = normalizeSortValue(right, type);
+    const leftMissing = leftValue === null || leftValue === "";
+    const rightMissing = rightValue === null || rightValue === "";
+    if (leftMissing && rightMissing) {
+      return 0;
+    }
+    if (leftMissing) {
+      return 1;
+    }
+    if (rightMissing) {
+      return -1;
+    }
+    if (type === "number" || type === "date") {
+      const comparison = leftValue - rightValue;
+      return direction === "asc" ? comparison : -comparison;
+    }
+    const comparison = String(leftValue).localeCompare(String(rightValue), undefined, { numeric: true, sensitivity: "base" });
+    return direction === "asc" ? comparison : -comparison;
+  }
+
+  function normalizeSortValue(value, type) {
+    if (value === null || value === undefined || value === "-") {
+      return null;
+    }
+    if (type === "number") {
+      const number = parseSortableNumber(value);
+      return Number.isFinite(number) ? number : null;
+    }
+    if (type === "date") {
+      const time = parseSortableDate(value);
+      return Number.isFinite(time) ? time : null;
+    }
+    return clean(value).toLowerCase();
+  }
+
+  function parseSortableNumber(value) {
+    if (typeof value === "number") {
+      return value;
+    }
+    const text = clean(value);
+    if (!text) {
+      return Number.NaN;
+    }
+    const isParenthetical = /^\(.*\)$/.test(text);
+    const number = Number(text.replace(/[,$()]/g, ""));
+    return isParenthetical ? -number : number;
+  }
+
+  function parseSortableDate(value) {
+    const text = clean(value);
+    if (!text) {
+      return Number.NaN;
+    }
+    const isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (isoMatch) {
+      return Date.UTC(Number(isoMatch[1]), Number(isoMatch[2]) - 1, Number(isoMatch[3]));
+    }
+    const slashMatch = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+    if (slashMatch) {
+      const year = Number(slashMatch[3].length === 2 ? `20${slashMatch[3]}` : slashMatch[3]);
+      return Date.UTC(year, Number(slashMatch[1]) - 1, Number(slashMatch[2]));
+    }
+    const parsed = new Date(text);
+    return parsed.getTime();
   }
 })();

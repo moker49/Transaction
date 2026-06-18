@@ -997,6 +997,45 @@ th {
   text-transform: uppercase;
 }
 
+th.sortable-header {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+th.sortable-header:hover,
+th.sortable-header:focus-visible,
+th.sortable-header.is-sorted {
+  color: var(--text);
+}
+
+th.sortable-header:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+th.sortable-header::after {
+  content: "unfold_more";
+  display: inline-block;
+  margin-left: 4px;
+  font-family: "Material Symbols Outlined";
+  font-size: 1rem;
+  font-weight: normal;
+  line-height: 1;
+  text-transform: none;
+  vertical-align: -0.18em;
+  opacity: 0.54;
+}
+
+th.sortable-header.is-sorted::after {
+  content: "arrow_upward";
+  opacity: 1;
+}
+
+th.sortable-header.is-sorted[data-sort-direction="desc"]::after {
+  content: "arrow_downward";
+}
+
 td {
   font-size: 0.9rem;
 }

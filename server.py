@@ -73,7 +73,7 @@ DEFAULT_CATEGORIES = (
     {"name": "Education", "color": "#4d8fbf", "children": ("Tuition", "Books", "Courses", "Certifications")},
     {"name": "Personal", "color": "#7a5234", "children": ("Childcare", "Pet Expense", "Gift Given", "Personal Care", "Reimbursement")},
     {"name": "Business", "color": "#60943b", "children": ("Software", "Equipment", "Service", "Office Expense")},
-    {"name": "Transfer", "color": "#909499", "children": ("Internal Transfer", "Card Payment")},
+    {"name": "Transfer", "color": "#787b80", "children": ("Internal Transfer", "Card Payment")},
 )
 DEFAULT_CATEGORY_NAMES = frozenset(
     name

@@ -144,12 +144,12 @@
             <table>
               <thead>
                 <tr>
-                  <th>Date</th>
-                  <th>Category</th>
-                  <th>Description</th>
-                  <th>Amount</th>
-                  <th>Account</th>
-                  <th>Notes</th>
+                  <th data-sort-table="transactions" data-sort-key="date" data-sort-type="date">Date</th>
+                  <th data-sort-table="transactions" data-sort-key="category">Category</th>
+                  <th data-sort-table="transactions" data-sort-key="description">Description</th>
+                  <th data-sort-table="transactions" data-sort-key="amount" data-sort-type="number">Amount</th>
+                  <th data-sort-table="transactions" data-sort-key="account">Account</th>
+                  <th data-sort-table="transactions" data-sort-key="notes">Notes</th>
                 </tr>
               </thead>
               <tbody id="transactionsTable"></tbody>
@@ -165,10 +165,10 @@
               <table>
                 <thead>
                   <tr>
-                    <th>Name</th>
-                    <th>Institution</th>
-                    <th>Account type</th>
-                    <th>Records</th>
+                    <th data-sort-table="accounts" data-sort-key="name">Name</th>
+                    <th data-sort-table="accounts" data-sort-key="institution">Institution</th>
+                    <th data-sort-table="accounts" data-sort-key="type">Account type</th>
+                    <th data-sort-table="accounts" data-sort-key="records" data-sort-type="number">Records</th>
                   </tr>
                 </thead>
                 <tbody id="accountsTable"></tbody>
@@ -258,13 +258,13 @@
               <thead>
                 <tr>
                   <th data-raw-column="select"></th>
-                  <th data-raw-column="date">Date</th>
-                  <th data-raw-column="category">Category</th>
-                  <th data-raw-column="description">Description</th>
-                  <th data-raw-column="amount">Amount</th>
-                  <th data-raw-column="account">Account</th>
-                  <th data-raw-column="status">Status</th>
-                  <th data-raw-column="notes">Notes</th>
+                  <th data-raw-column="date" data-sort-table="rawRows" data-sort-key="date" data-sort-type="date">Date</th>
+                  <th data-raw-column="category" data-sort-table="rawRows" data-sort-key="category">Category</th>
+                  <th data-raw-column="description" data-sort-table="rawRows" data-sort-key="description">Description</th>
+                  <th data-raw-column="amount" data-sort-table="rawRows" data-sort-key="amount" data-sort-type="number">Amount</th>
+                  <th data-raw-column="account" data-sort-table="rawRows" data-sort-key="account">Account</th>
+                  <th data-raw-column="status" data-sort-table="rawRows" data-sort-key="status">Status</th>
+                  <th data-raw-column="notes" data-sort-table="rawRows" data-sort-key="notes">Notes</th>
                 </tr>
               </thead>
               <tbody id="rawRowsTable"></tbody>
@@ -285,8 +285,8 @@
               <table>
                 <thead>
                   <tr>
-                    <th>Name</th>
-                    <th>Match</th>
+                    <th data-sort-table="rules" data-sort-key="name">Name</th>
+                    <th data-sort-table="rules" data-sort-key="match">Match</th>
                     <th>Effects</th>
                   </tr>
                 </thead>
