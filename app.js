@@ -1167,6 +1167,7 @@
     event.preventDefault();
     const normalizedColor = normalizeHexColor(categoryColorDraft);
     if (!normalizedColor) {
+      closeCategoryColorPicker();
       return;
     }
     setCategoryDialogColor(normalizedColor);
@@ -1881,7 +1882,7 @@
     }
     const payload = buildTransactionPayload();
     if (payloadMatchesSnapshot(payload, transactionEditSnapshot)) {
-      setModalMessage(elements.transactionMessage, "No changes to save.", false);
+      closeTransactionDialog();
       return;
     }
     try {
@@ -1891,9 +1892,7 @@
       });
       applyStateFromPayload(response);
       activeTransactionId = response.transaction.id;
-      populateTransactionDialog(response.transaction);
-      transactionEditSnapshot = buildTransactionPayload();
-      setModalMessage(elements.transactionMessage, "Saved.", false);
+      closeTransactionDialog();
     } catch (error) {
       setModalMessage(elements.transactionMessage, error.message || "Could not update transaction.", true);
     }
@@ -3399,6 +3398,7 @@
     event.preventDefault();
     const value = clean(elements.textInputForm.elements.value.value);
     if (!value) {
+      closeTextInputDialog(null);
       return;
     }
     closeTextInputDialog(value);
