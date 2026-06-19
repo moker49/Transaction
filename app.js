@@ -153,6 +153,7 @@
     dateRangeCloseButton: document.querySelector("#dateRangeCloseButton"),
     dateRangePresetList: document.querySelector("#dateRangePresetList"),
     dateRangeCalendarGrid: document.querySelector("#dateRangeCalendarGrid"),
+    dateRangeAllTimeButton: document.querySelector("#dateRangeAllTimeButton"),
     dateRangeCancelButton: document.querySelector("#dateRangeCancelButton"),
     dateRangeApplyButton: document.querySelector("#dateRangeApplyButton"),
     dateRangeCustomStart: document.querySelector("#dateRangeCustomStart"),
@@ -314,6 +315,7 @@
   elements.dateRangeButton.addEventListener("click", openDateRangeDialog);
   elements.dateRangeForm.addEventListener("submit", applyDateRange);
   elements.dateRangeCloseButton.addEventListener("click", closeDateRangeDialog);
+  elements.dateRangeAllTimeButton.addEventListener("click", applyAllTimeDateRange);
   elements.dateRangeCancelButton.addEventListener("click", closeDateRangeDialog);
   elements.dateRangeCustomStart.addEventListener("change", updateDateRangeCustomRange);
   elements.dateRangeCustomEnd.addEventListener("change", updateDateRangeCustomRange);
@@ -474,6 +476,24 @@
     if (!dateRangeDraft) {
       return;
     }
+    await commitDateRangeDraft();
+  }
+
+  async function applyAllTimeDateRange() {
+    const period = allTimeDateRangePeriod();
+    dateRangeDraft = {
+      range: CUSTOM_DATE_RANGE,
+      start: period.start,
+      end: period.end,
+      viewDate: firstOfMonth(parseDateKey(period.start)),
+    };
+    elements.dateRangeCustomStart.value = dateRangeDraft.start;
+    elements.dateRangeCustomEnd.value = dateRangeDraft.end;
+    renderDateRangeDialog();
+    await commitDateRangeDraft();
+  }
+
+  async function commitDateRangeDraft() {
     localStorage.setItem(DATE_RANGE_KEY, dateRangeDraft.range);
     if (dateRangeDraft.range === CUSTOM_DATE_RANGE) {
       localStorage.setItem(DATE_RANGE_CUSTOM_START_KEY, dateRangeDraft.start || "");
@@ -3070,6 +3090,14 @@
       return customDateRangePeriod() || lastFullMonthPeriod();
     }
     return lastFullMonthPeriod();
+  }
+
+  function allTimeDateRangePeriod() {
+    const today = startOfDay(new Date());
+    return {
+      start: "2020-01-01",
+      end: formatDateKey(new Date(today.getFullYear(), 11, 31)),
+    };
   }
 
   function rangeStartDate(range) {

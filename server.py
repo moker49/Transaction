@@ -58,7 +58,7 @@ DUMMY_RESTORE_DB_PATH = DEFAULT_DB_PATH.with_name("transactions.dummy.restore.sq
 BILL_TAG_NAME = "bill"
 TRANSACTION_TYPES = ("income", "expense", "transfer")
 DEFAULT_CATEGORIES = (
-    {"name": "Income", "color": "#208020", "children": ("Salary", "Bonus", "Interest", "Dividend", "Refund", "Gift Received")},
+    {"name": "Income", "color": "#208020", "children": ("Salary", "Bonus", "Interest", "Dividend", "Refund", "Gift Received", "Resale")},
     {"name": "Housing", "color": "#c4588e", "children": ("Rent", "Mortgage", "Property Tax", "HOA", "Home Insurance", "Home Maintenance")},
     {"name": "Utility", "color": "#91a82f", "children": ("Electric", "Gas", "Water", "Sewer", "Trash", "Internet", "Phone")},
     {"name": "Food", "color": "#d16630", "children": ("Groceries", "Restaurant")},
