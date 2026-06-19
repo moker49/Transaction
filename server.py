@@ -70,7 +70,7 @@ DEFAULT_CATEGORIES = (
     {"name": "Lifestyle", "color": "#36b36a", "children": ("Activity", "Hobby", "Alcohol", "Substance")},
     {"name": "Entertainment", "color": "#602699", "children": ("Streaming", "Gaming", "Movie", "Music", "App")},
     {"name": "Travel", "color": "#109e9e", "children": ("Hotel", "Flight", "Rental")},
-    {"name": "Financial", "color": "#b68b2e", "children": ("Fee", "Loan Payment", "Investment", "Tax Payment")},
+    {"name": "Financial", "color": "#b68b2e", "children": ("Fee", "Loan Payment", "Investment", "Tax Payment", "Fine", "Loss")},
     {"name": "Insurance", "color": "#d18eb0", "children": ("Life Insurance", "Umbrella Insurance", "Protection")},
     {"name": "Education", "color": "#4d8fbf", "children": ("Tuition", "Books", "Courses", "Certifications")},
     {"name": "Personal", "color": "#7a5234", "children": ("Childcare", "Pet Expense", "Gift Given", "Personal Care", "Reimbursement")},
