@@ -64,7 +64,7 @@ python scripts/db_cli.py add-tag --name reimbursable
 python scripts/db_cli.py tag-transaction --transaction-id 1 --tag reimbursable
 python scripts/db_cli.py untag-transaction --transaction-id 1 --tag reimbursable
 python scripts/db_cli.py add-transaction-rule --name Coffee --match-description Starbucks --set-clean-description Starbucks
-python scripts/db_cli.py update-transaction-rule 1 --priority 10 --inactive
+python scripts/db_cli.py update-transaction-rule 1 --inactive
 ```
 
 Use `--db <path>` before the command to point at another SQLite database:
@@ -148,14 +148,14 @@ The CLI intentionally does not include broad destructive commands or delete comm
 
 ```powershell
 python scripts/db_cli.py describe transaction_import_rules
-python scripts/db_cli.py query-readonly "SELECT * FROM transaction_import_rules WHERE is_active = 1 ORDER BY priority, id"
+python scripts/db_cli.py query-readonly "SELECT * FROM transaction_import_rules WHERE is_active = 1 ORDER BY id"
 ```
 
 Create or update rules through the CLI so input validation is repeatable:
 
 ```powershell
-python scripts/db_cli.py add-transaction-rule --name Coffee --match-description Starbucks --set-clean-description Starbucks --priority 25
-python scripts/db_cli.py update-transaction-rule 1 --match-description Starbucks --match-category Dining --priority 10 --active
+python scripts/db_cli.py add-transaction-rule --name Coffee --match-description Starbucks --set-clean-description Starbucks
+python scripts/db_cli.py update-transaction-rule 1 --match-description Starbucks --match-category Dining --active
 python scripts/db_cli.py update-transaction-rule 1 --set-category-id 2 --add-tag-id 3
 python scripts/db_cli.py update-transaction-rule 1 --clear-category --clear-tag
 ```
@@ -170,7 +170,7 @@ Each rule must keep at least one action: `--set-category-id`, `--set-clean-descr
 - `imported_source.account_id` records the account supplied at upload/import time.
 - `raw_date`, `raw_category`, `raw_description`, and `raw_amount` preserve the source values as text.
 - `parsed_transaction_id` links to the resulting transaction after parsing.
-- `import_status` tracks whether the raw row is `importable`, `notImportable`, `imported`, `duplicate`, or `error`. The app's "New" filter combines `importable` and `notImportable` rows; importability is recomputed from active rules.
+- `import_status` tracks whether the raw row is `auto-importable`, `manual`, `pre-fill`, `imported`, `duplicate`, or `error`. The app's "New" filter combines `auto-importable`, `manual`, and `pre-fill` rows; importability is recomputed from active rules.
 
 At least one raw field must be present. The table intentionally keeps raw values as `TEXT`; parsing into dates, cents, categories, and tags happens later.
 

@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS tags (
 CREATE TABLE IF NOT EXISTS transaction_import_rules (
     id INTEGER PRIMARY KEY,
     name TEXT NOT NULL,
+    rule_type TEXT NOT NULL DEFAULT 'auto-import',
     match_field TEXT NOT NULL,
     match_type TEXT NOT NULL,
     match_value TEXT NOT NULL,
@@ -65,10 +66,10 @@ CREATE TABLE IF NOT EXISTS transaction_import_rules (
     set_clean_description TEXT,
     set_transaction_type TEXT,
     add_tag_id INTEGER REFERENCES tags(id) ON DELETE SET NULL,
-    priority INTEGER NOT NULL DEFAULT 100,
     is_active INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    CHECK (rule_type IN ('auto-import', 'template')),
     CHECK (match_field IN ('category', 'description')),
     CHECK (match_type IN ('contains', 'equals', 'starts_with', 'regex')),
     CHECK (set_transaction_type IS NULL OR set_transaction_type IN ('income', 'expense', 'transfer')),
@@ -118,12 +119,12 @@ CREATE TABLE IF NOT EXISTS raw_imported_rows (
     raw_description TEXT,
     raw_amount TEXT,
     parsed_transaction_id INTEGER REFERENCES transactions(id) ON DELETE SET NULL,
-    import_status TEXT NOT NULL DEFAULT 'notImportable',
+    import_status TEXT NOT NULL DEFAULT 'manual',
     import_error TEXT,
     raw_row_hash TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CHECK (import_status IN ('importable', 'notImportable', 'imported', 'duplicate', 'error')),
+    CHECK (import_status IN ('auto-importable', 'manual', 'pre-fill', 'imported', 'duplicate', 'error')),
     CHECK (
         raw_date IS NOT NULL
         OR raw_category IS NOT NULL
@@ -149,7 +150,10 @@ CREATE INDEX IF NOT EXISTS idx_transactions_category_date ON transactions(catego
 CREATE INDEX IF NOT EXISTS idx_transactions_posted_date ON transactions(posted_date DESC);
 CREATE INDEX IF NOT EXISTS idx_transactions_clean_description ON transactions(clean_description);
 CREATE INDEX IF NOT EXISTS idx_transactions_hash ON transactions(account_id, transaction_hash);
-CREATE INDEX IF NOT EXISTS idx_transaction_import_rules_active_priority ON transaction_import_rules(is_active, priority, id);
+CREATE INDEX IF NOT EXISTS idx_transaction_import_rules_active_type ON transaction_import_rules(is_active, rule_type, id);
+CREATE INDEX IF NOT EXISTS idx_transaction_import_rules_type_active ON transaction_import_rules(rule_type, is_active, id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_transaction_import_rules_unique_match
+ON transaction_import_rules(rule_type, COALESCE(match_description, ''), COALESCE(match_category, ''));
 CREATE INDEX IF NOT EXISTS idx_transaction_import_rules_match ON transaction_import_rules(match_field, match_type);
 CREATE INDEX IF NOT EXISTS idx_transaction_import_rules_set_category_id ON transaction_import_rules(set_category_id);
 CREATE INDEX IF NOT EXISTS idx_transaction_import_rules_add_tag_id ON transaction_import_rules(add_tag_id);

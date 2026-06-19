@@ -44,6 +44,7 @@ EXPECTED_TRANSACTION_COLUMNS = {
 EXPECTED_TRANSACTION_RULE_COLUMNS = {
     "id",
     "name",
+    "rule_type",
     "match_field",
     "match_type",
     "match_value",
@@ -53,7 +54,6 @@ EXPECTED_TRANSACTION_RULE_COLUMNS = {
     "set_clean_description",
     "set_transaction_type",
     "add_tag_id",
-    "priority",
     "is_active",
     "created_at",
     "updated_at",
@@ -83,6 +83,7 @@ EXPECTED_RAW_IMPORTED_ROW_COLUMNS = {
     "updated_at",
 }
 NEW_TRANSACTION_TYPES = ("income", "expense", "transfer")
+RULE_TYPES = ("auto-import", "template")
 BILL_TAG_NAME = "bill"
 
 
@@ -183,6 +184,14 @@ def migrate_existing_schema(conn: sqlite3.Connection, tables: Iterable[str]) -> 
     if "transaction_import_rules" in table_set:
         rule_columns = {row[1] for row in conn.execute("PRAGMA table_info(transaction_import_rules)").fetchall()}
         rule_table_ddl = table_ddl(conn, "transaction_import_rules")
+        if "rule_type" not in rule_columns:
+            conn.execute(
+                """
+                ALTER TABLE transaction_import_rules
+                ADD COLUMN rule_type TEXT NOT NULL DEFAULT 'auto-import'
+                    CHECK (rule_type IN ('auto-import', 'template'))
+                """
+            )
         if "set_transaction_type" not in rule_columns:
             conn.execute(
                 """
@@ -232,7 +241,9 @@ def migrate_existing_schema(conn: sqlite3.Connection, tables: Iterable[str]) -> 
             ON transaction_import_rule_tags(tag_id)
             """
         )
-        if "'splurge'" in rule_table_ddl or "'bill'" in rule_table_ddl:
+        rule_columns = {row[1] for row in conn.execute("PRAGMA table_info(transaction_import_rules)").fetchall()}
+        rule_table_ddl = table_ddl(conn, "transaction_import_rules")
+        if "priority" in rule_columns or "'auto-import'" not in rule_table_ddl or "'template'" not in rule_table_ddl or "'splurge'" in rule_table_ddl or "'bill'" in rule_table_ddl:
             conn.commit()
             rebuild_transaction_import_rules_with_expense_type(conn)
             conn.commit()
@@ -249,10 +260,19 @@ def migrate_existing_schema(conn: sqlite3.Connection, tables: Iterable[str]) -> 
             """
         ).fetchone()
         raw_imported_rows_ddl = raw_imported_rows_sql[0] if raw_imported_rows_sql else ""
-        if "DEFAULT 'new'" in raw_imported_rows_ddl or "'ready'" in raw_imported_rows_ddl:
+        if (
+            "DEFAULT 'new'" in raw_imported_rows_ddl
+            or "DEFAULT 'notImportable'" in raw_imported_rows_ddl
+            or "'ready'" in raw_imported_rows_ddl
+            or "'importable'" in raw_imported_rows_ddl
+            or "'notImportable'" in raw_imported_rows_ddl
+            or "'template'" in raw_imported_rows_ddl
+            or "'pre-fill'" not in raw_imported_rows_ddl
+        ):
             conn.commit()
             rebuild_raw_imported_rows_with_importability_status(conn)
             conn.commit()
+        normalize_raw_imported_row_spaces(conn)
     conn.commit()
 
 
@@ -432,6 +452,7 @@ def rebuild_transaction_import_rules_with_expense_type(conn: sqlite3.Connection)
             CREATE TABLE transaction_import_rules_rebuild (
                 id INTEGER PRIMARY KEY,
                 name TEXT NOT NULL,
+                rule_type TEXT NOT NULL DEFAULT 'auto-import',
                 match_field TEXT NOT NULL,
                 match_type TEXT NOT NULL DEFAULT 'contains',
                 match_value TEXT NOT NULL,
@@ -441,10 +462,10 @@ def rebuild_transaction_import_rules_with_expense_type(conn: sqlite3.Connection)
                 set_clean_description TEXT,
                 set_transaction_type TEXT,
                 add_tag_id INTEGER REFERENCES tags(id) ON DELETE SET NULL,
-                priority INTEGER NOT NULL DEFAULT 100,
                 is_active INTEGER NOT NULL DEFAULT 1,
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                CHECK (rule_type IN ('auto-import', 'template')),
                 CHECK (match_field IN ('category', 'description')),
                 CHECK (match_type IN ('contains', 'equals', 'starts_with', 'regex')),
                 CHECK (set_transaction_type IS NULL OR set_transaction_type IN ('income', 'expense', 'transfer')),
@@ -458,6 +479,7 @@ def rebuild_transaction_import_rules_with_expense_type(conn: sqlite3.Connection)
             INSERT INTO transaction_import_rules_rebuild (
                 id,
                 name,
+                rule_type,
                 match_field,
                 match_type,
                 match_value,
@@ -467,7 +489,6 @@ def rebuild_transaction_import_rules_with_expense_type(conn: sqlite3.Connection)
                 set_clean_description,
                 set_transaction_type,
                 add_tag_id,
-                priority,
                 is_active,
                 created_at,
                 updated_at
@@ -475,6 +496,10 @@ def rebuild_transaction_import_rules_with_expense_type(conn: sqlite3.Connection)
             SELECT
                 id,
                 name,
+                CASE COALESCE(rule_type, 'auto-import')
+                    WHEN 'rule' THEN 'auto-import'
+                    ELSE COALESCE(rule_type, 'auto-import')
+                END,
                 match_field,
                 match_type,
                 match_value,
@@ -487,15 +512,34 @@ def rebuild_transaction_import_rules_with_expense_type(conn: sqlite3.Connection)
                     ELSE set_transaction_type
                 END,
                 add_tag_id,
-                priority,
                 is_active,
                 created_at,
                 updated_at
             FROM transaction_import_rules
+            WHERE id IN (
+                SELECT MIN(id)
+                FROM transaction_import_rules
+                GROUP BY
+                    CASE COALESCE(rule_type, 'auto-import')
+                        WHEN 'rule' THEN 'auto-import'
+                        ELSE COALESCE(rule_type, 'auto-import')
+                    END,
+                    COALESCE(match_description, ''),
+                    COALESCE(match_category, '')
+            )
             """
         )
         conn.execute("DROP TABLE transaction_import_rules")
         conn.execute("ALTER TABLE transaction_import_rules_rebuild RENAME TO transaction_import_rules")
+        conn.execute(
+            """
+            DELETE FROM transaction_import_rule_tags
+            WHERE rule_id NOT IN (
+                SELECT id
+                FROM transaction_import_rules
+            )
+            """
+        )
         conn.execute(
             """
             INSERT OR IGNORE INTO transaction_import_rule_tags (rule_id, tag_id)
@@ -523,12 +567,12 @@ def rebuild_raw_imported_rows_with_importability_status(conn: sqlite3.Connection
                 raw_description TEXT,
                 raw_amount TEXT,
                 parsed_transaction_id INTEGER REFERENCES transactions(id) ON DELETE SET NULL,
-                import_status TEXT NOT NULL DEFAULT 'notImportable',
+                import_status TEXT NOT NULL DEFAULT 'manual',
                 import_error TEXT,
                 raw_row_hash TEXT NOT NULL,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                CHECK (import_status IN ('importable', 'notImportable', 'imported', 'duplicate', 'error')),
+                CHECK (import_status IN ('auto-importable', 'manual', 'pre-fill', 'imported', 'duplicate', 'error')),
                 CHECK (
                     raw_date IS NOT NULL
                     OR raw_category IS NOT NULL
@@ -563,8 +607,12 @@ def rebuild_raw_imported_rows_with_importability_status(conn: sqlite3.Connection
                 raw_amount,
                 parsed_transaction_id,
                 CASE import_status
-                    WHEN 'ready' THEN 'importable'
-                    WHEN 'new' THEN 'notImportable'
+                    WHEN 'ready' THEN 'auto-importable'
+                    WHEN 'importable' THEN 'auto-importable'
+                    WHEN 'new' THEN 'manual'
+                    WHEN 'notImportable' THEN 'manual'
+                    WHEN 'template' THEN 'pre-fill'
+                    WHEN 'pre-fill' THEN 'pre-fill'
                     ELSE import_status
                 END,
                 import_error,
@@ -610,6 +658,20 @@ def rebuild_raw_imported_rows_with_importability_status(conn: sqlite3.Connection
         conn.execute("PRAGMA foreign_keys = ON")
 
 
+def normalize_raw_imported_row_spaces(conn: sqlite3.Connection) -> None:
+    for column in ("raw_category", "raw_description"):
+        while True:
+            cursor = conn.execute(
+                f"""
+                UPDATE raw_imported_rows
+                SET {column} = replace({column}, '  ', ' ')
+                WHERE {column} LIKE '%  %'
+                """
+            )
+            if cursor.rowcount == 0:
+                break
+
+
 def schema_is_compatible(conn: sqlite3.Connection) -> bool:
     tables = set(get_user_tables(conn))
     if not EXPECTED_TABLES.issubset(tables):
@@ -647,8 +709,12 @@ def schema_is_compatible(conn: sqlite3.Connection) -> bool:
         and "payee" not in transaction_columns
         and "description" not in transaction_columns
         and EXPECTED_TRANSACTION_RULE_COLUMNS.issubset(transaction_rule_columns)
+        and "rule_type" in transaction_rule_columns
+        and "priority" not in transaction_rule_columns
+        and "'auto-import'" in transaction_rule_ddl
         and "'expense'" in transaction_rule_ddl
         and "'transfer'" in transaction_rule_ddl
+        and "'template'" in transaction_rule_ddl
         and "'splurge'" not in transaction_rule_ddl
         and "'bill'" not in transaction_rule_ddl
         and EXPECTED_IMPORTED_SOURCE_COLUMNS.issubset(imported_source_columns)
@@ -657,9 +723,13 @@ def schema_is_compatible(conn: sqlite3.Connection) -> bool:
         and "institution" not in account_columns
         and EXPECTED_RAW_IMPORTED_ROW_COLUMNS.issubset(raw_imported_row_columns)
         and "raw_type" not in raw_imported_row_columns
-        and "DEFAULT 'notImportable'" in raw_imported_rows_ddl
-        and "'importable'" in raw_imported_rows_ddl
-        and "'notImportable'" in raw_imported_rows_ddl
+        and "DEFAULT 'manual'" in raw_imported_rows_ddl
+        and "'auto-importable'" in raw_imported_rows_ddl
+        and "'manual'" in raw_imported_rows_ddl
+        and "'pre-fill'" in raw_imported_rows_ddl
+        and "'importable'" not in raw_imported_rows_ddl
+        and "'notImportable'" not in raw_imported_rows_ddl
+        and "'template'" not in raw_imported_rows_ddl
         and "'ready'" not in raw_imported_rows_ddl
         and "'pending'" not in raw_imported_rows_ddl
         and "reviewed" not in raw_imported_row_columns

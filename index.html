@@ -241,8 +241,9 @@
               <select id="rawStatusFilter" aria-label="Filter by import status">
                 <option value="all">All rows</option>
                 <option value="new" selected>New</option>
-                <option value="importable">New - Importable</option>
-                <option value="notImportable">New - Not Importable</option>
+                <option value="auto-importable">New - Auto-importable</option>
+                <option value="pre-fill">New - Pre-fill</option>
+                <option value="manual">New - Manual Import</option>
                 <option value="imported">Imported</option>
                 <option value="duplicate">Duplicate</option>
                 <option value="error">Error</option>
@@ -400,6 +401,19 @@
       </div>
       <div class="form-grid rule-form-grid">
         <div class="rule-form-column">
+          <div class="type-button-row">
+            <input name="ruleKind" type="hidden" id="ruleKindInput" value="auto-import">
+            <div class="connected-button-group" id="ruleKindGroup" role="radiogroup" aria-label="Rule mode">
+              <button type="button" class="connected-button" data-type-value="auto-import" role="radio">
+                <span class="material-symbols-outlined" aria-hidden="true">checklist</span>
+                <span>Auto-import</span>
+              </button>
+              <button type="button" class="connected-button" data-type-value="template" role="radio">
+                <span class="material-symbols-outlined" aria-hidden="true">content_paste</span>
+                <span>Pre-fill</span>
+              </button>
+            </div>
+          </div>
           <div class="rule-match-description-row">
             <label>
               <span>Match description</span>
@@ -410,10 +424,6 @@
             <label>
               <span>Match category</span>
               <input name="matchCategory" type="text" autocomplete="off">
-            </label>
-            <label>
-              <span>Priority</span>
-              <input name="priority" type="number" min="0" value="100">
             </label>
           </div>
         </div>
@@ -460,6 +470,22 @@
         <button type="submit" class="primary" id="ruleSubmitButton">Create Rule</button>
       </div>
     </form>
+  </dialog>
+
+  <dialog id="duplicateRuleDialog" class="modal confirm-modal" tabindex="-1">
+    <div class="modal-panel">
+      <div class="panel-heading">
+        <h2>Duplicate Rule</h2>
+        <button class="icon-only" type="button" id="duplicateRuleCloseButton" aria-label="Close">
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <p id="duplicateRuleMessage" class="confirm-message"></p>
+      <div class="modal-actions">
+        <button type="button" class="icon-button" id="duplicateRuleCancelButton">Cancel</button>
+        <button type="button" class="primary" id="duplicateRuleGoButton">View Rule</button>
+      </div>
+    </div>
   </dialog>
 
   <dialog id="manualImportDialog" class="modal small-modal" tabindex="-1">

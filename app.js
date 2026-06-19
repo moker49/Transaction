@@ -47,6 +47,7 @@
   let ruleEditSnapshot = null;
   let transactionEditSnapshot = null;
   let confirmResolver = null;
+  let duplicateRuleResolver = null;
   let textInputResolver = null;
   let textInputDeleteHandler = null;
   let categoryPickerTarget = null;
@@ -59,9 +60,8 @@
     transactions: { key: "date", direction: "desc", type: "date" },
     accounts: { key: "name", direction: "asc", type: "text" },
     rawRows: { key: "date", direction: "desc", type: "date" },
-    rules: { key: "priority", direction: "asc", type: "number" },
+    rules: { key: "name", direction: "asc", type: "text" },
   };
-  const importableRawRowStatuses = new Set(["importable"]);
   const transactionTypes = [
     { value: "income", label: "Income" },
     { value: "expense", label: "Expense" },
@@ -105,6 +105,8 @@
     categoryAddButton: document.querySelector("#categoryAddButton"),
     tagAddButton: document.querySelector("#tagAddButton"),
     ruleForm: document.querySelector("#ruleForm"),
+    ruleKindInput: document.querySelector("#ruleKindInput"),
+    ruleKindGroup: document.querySelector("#ruleKindGroup"),
     importMessage: document.querySelector("#importMessage"),
     devMessage: document.querySelector("#devMessage"),
     importAccountSelect: document.querySelector("#importAccountSelect"),
@@ -134,6 +136,11 @@
     ruleMessage: document.querySelector("#ruleMessage"),
     ruleSubmitButton: document.querySelector("#ruleSubmitButton"),
     ruleDeleteButton: document.querySelector("#ruleDeleteButton"),
+    duplicateRuleDialog: document.querySelector("#duplicateRuleDialog"),
+    duplicateRuleMessage: document.querySelector("#duplicateRuleMessage"),
+    duplicateRuleCloseButton: document.querySelector("#duplicateRuleCloseButton"),
+    duplicateRuleCancelButton: document.querySelector("#duplicateRuleCancelButton"),
+    duplicateRuleGoButton: document.querySelector("#duplicateRuleGoButton"),
     manualImportDialog: document.querySelector("#manualImportDialog"),
     manualImportForm: document.querySelector("#manualImportForm"),
     manualImportDialogTitle: document.querySelector("#manualImportDialogTitle"),
@@ -282,17 +289,45 @@
   elements.ruleDismissButton.addEventListener("click", closeRuleDialog);
   elements.ruleDeleteButton.addEventListener("click", deleteEditingRule);
   elements.ruleCategoryButton.addEventListener("click", () => openCategoryPicker("rule"));
+  elements.ruleKindGroup.addEventListener("click", (event) => {
+    selectTypeFromGroup(event, elements.ruleKindInput, elements.ruleKindGroup);
+    syncRuleDialogModeForSelectedType();
+  });
+  elements.ruleKindGroup.addEventListener("keydown", (event) => {
+    navigateTypeGroup(event, elements.ruleKindInput, elements.ruleKindGroup);
+    syncRuleDialogModeForSelectedType();
+  });
   elements.ruleTypeGroup.addEventListener("click", (event) => selectTypeFromGroup(event, elements.ruleTypeInput, elements.ruleTypeGroup));
   elements.ruleTypeGroup.addEventListener("keydown", (event) => navigateTypeGroup(event, elements.ruleTypeInput, elements.ruleTypeGroup));
+  elements.ruleForm.elements.matchDescription.addEventListener("input", updateRuleFieldErrorState);
+  elements.ruleForm.elements.matchCategory.addEventListener("input", updateRuleFieldErrorState);
+  elements.ruleForm.elements.setCleanDescription.addEventListener("input", updateRuleFieldErrorState);
+  document.querySelectorAll(".modal form input[required], .modal form select[required]").forEach((field) => {
+    field.addEventListener("invalid", () => setFieldError(field.closest("label")));
+    field.addEventListener("input", () => {
+      if (field.checkValidity()) {
+        clearFieldError(field.closest("label"));
+      }
+    });
+    field.addEventListener("change", () => {
+      if (field.checkValidity()) {
+        clearFieldError(field.closest("label"));
+      }
+    });
+  });
   elements.ruleDialog.addEventListener("close", () => {
     editingRuleId = null;
   });
+  elements.duplicateRuleCloseButton.addEventListener("click", () => closeDuplicateRuleWarning("cancel"));
+  elements.duplicateRuleCancelButton.addEventListener("click", () => closeDuplicateRuleWarning("cancel"));
+  elements.duplicateRuleGoButton.addEventListener("click", () => closeDuplicateRuleWarning("go"));
   elements.manualImportForm.addEventListener("submit", importManualRawRow);
   elements.manualImportCloseButton.addEventListener("click", closeManualImportDialog);
   elements.manualImportCancelButton.addEventListener("click", closeManualImportDialog);
   elements.manualImportCategoryButton.addEventListener("click", () => openCategoryPicker("manual-import"));
   elements.manualImportTypeGroup.addEventListener("click", (event) => selectTypeFromGroup(event, elements.manualImportTypeInput, elements.manualImportTypeGroup));
   elements.manualImportTypeGroup.addEventListener("keydown", (event) => navigateTypeGroup(event, elements.manualImportTypeInput, elements.manualImportTypeGroup));
+  elements.manualImportForm.elements.cleanDescription.addEventListener("input", updateManualImportFieldErrorState);
   elements.manualImportDialog.addEventListener("close", () => {
     activeManualImportRawRowId = null;
   });
@@ -847,8 +882,9 @@
       transaction.posted_date >= range.start && transaction.posted_date <= range.end
     ));
     const rawRows = (payload.rawRows || state.rawRows).filter((row) => (
-      row.import_status === "importable"
-      || row.import_status === "notImportable"
+      row.import_status === "auto-importable"
+      || row.import_status === "manual"
+      || row.import_status === "pre-fill"
       || isRawRowInCurrentDateRange(row, range)
     ));
     return {
@@ -1347,6 +1383,9 @@
       button.setAttribute("aria-checked", isSelected ? "true" : "false");
       button.tabIndex = isSelected ? 0 : -1;
     });
+    if (input === elements.ruleKindInput && normalized === "template") {
+      clearRuleFieldErrors();
+    }
   }
 
   function setTypeGroupDisabled(group, isDisabled) {
@@ -1377,45 +1416,85 @@
   }
 
   function openRuleAddDialog(prefill = {}) {
-    ruleDialogMode = "add";
-    editingRuleId = null;
-    ruleEditSnapshot = null;
+    setRuleDialogCreateMode();
     elements.ruleMessage.textContent = "";
     elements.ruleMessage.classList.remove("error");
-    elements.ruleDialogTitle.textContent = "Create Rule";
-    elements.ruleSubmitButton.textContent = "Create Rule";
-    elements.ruleDeleteButton.hidden = true;
     elements.ruleForm.reset();
-    const matchDescription = clean(prefill.matchDescription);
+    const matchDescription = truncatePrefilledMatchDescription(prefill.matchDescription);
     const matchCategory = clean(prefill.matchCategory);
     elements.ruleForm.elements.matchDescription.value = matchDescription;
     elements.ruleForm.elements.matchCategory.value = matchCategory;
-    elements.ruleForm.elements.priority.value = "100";
-    setTypeGroupValue(elements.ruleTypeInput, elements.ruleTypeGroup, "expense");
-    setRuleCategoryValue(null);
-    renderRuleTags([]);
-    openModal(elements.ruleDialog);
+    elements.ruleForm.elements.setCleanDescription.value = clean(prefill.setCleanDescription) || "";
+    setTypeGroupValue(elements.ruleKindInput, elements.ruleKindGroup, prefill.ruleType || "auto-import");
+    setTypeGroupValue(elements.ruleTypeInput, elements.ruleTypeGroup, prefill.setTransactionType || "expense");
+    setRuleCategoryValue(prefill.setCategoryId || null);
+    renderRuleTags(prefill.addTagIds || []);
+    if (!elements.ruleDialog.open) {
+      openModal(elements.ruleDialog);
+    }
+    syncRuleDialogModeForSelectedType();
+  }
+
+  function truncatePrefilledMatchDescription(value) {
+    return clean(value).slice(0, 20).trim();
+  }
+
+  function truncatePrefilledDescription(value) {
+    return clean(value).slice(0, 20).trim();
   }
 
   function openRuleEditDialog(rule) {
-    ruleDialogMode = "edit";
-    editingRuleId = rule.id;
     elements.ruleMessage.textContent = "";
     elements.ruleMessage.classList.remove("error");
+    populateRuleEditDialog(rule);
+    if (!elements.ruleDialog.open) {
+      openModal(elements.ruleDialog);
+    }
+  }
+
+  function setRuleDialogCreateMode() {
+    ruleDialogMode = "add";
+    editingRuleId = null;
+    ruleEditSnapshot = null;
+    clearRuleFieldErrors();
+    elements.ruleDialogTitle.textContent = "Create Rule";
+    elements.ruleSubmitButton.textContent = "Create Rule";
+    elements.ruleDeleteButton.hidden = true;
+  }
+
+  function populateRuleEditDialog(rule) {
+    ruleDialogMode = "edit";
+    editingRuleId = rule.id;
+    clearRuleFieldErrors();
     elements.ruleDialogTitle.textContent = "Edit Rule";
     elements.ruleSubmitButton.textContent = "Save";
     elements.ruleDeleteButton.hidden = false;
     const form = elements.ruleForm;
     const matches = ruleMatchValues(rule);
+    setTypeGroupValue(elements.ruleKindInput, elements.ruleKindGroup, rule.rule_type || "auto-import");
     form.elements.matchDescription.value = matches.description;
     form.elements.matchCategory.value = matches.category;
     form.elements.setCleanDescription.value = rule.set_clean_description || "";
     setTypeGroupValue(elements.ruleTypeInput, elements.ruleTypeGroup, rule.set_transaction_type || "expense");
     setRuleCategoryValue(rule.set_category_id);
     renderRuleTags(rule.tag_ids || (rule.add_tag_id === null ? [] : [rule.add_tag_id]));
-    form.elements.priority.value = String(rule.priority ?? 100);
     ruleEditSnapshot = buildRulePayload();
-    openModal(elements.ruleDialog);
+  }
+
+  function syncRuleDialogModeForSelectedType() {
+    if (!elements.ruleDialog.open) {
+      return;
+    }
+    const existingRule = findDuplicateRule(buildRulePayload());
+    if (existingRule) {
+      if (existingRule.id !== editingRuleId) {
+        populateRuleEditDialog(existingRule);
+      }
+      return;
+    }
+    if (ruleDialogMode === "edit") {
+      setRuleDialogCreateMode();
+    }
   }
 
   function closeRuleDialog() {
@@ -1426,24 +1505,44 @@
     event.preventDefault();
     const formElement = event.currentTarget;
     const payload = buildRulePayload(formElement);
+    clearRuleFieldErrors();
 
     if (!payload.match_description && !payload.match_category) {
+      setRuleFieldErrors(["matchDescription", "matchCategory"]);
       setModalMessage(elements.ruleMessage, "Match description, category, or both.", true);
       return;
     }
 
-    if (!payload.set_clean_description) {
-      setModalMessage(elements.ruleMessage, "Clean description is required.", true);
+    if (!payload.set_category_id && !payload.set_clean_description && !payload.set_transaction_type && !payload.add_tag_ids.length) {
+      setRuleFieldErrors(["setCategory", "setCleanDescription"]);
+      setModalMessage(elements.ruleMessage, "Set a category, description, type, or tag.", true);
       return;
     }
-
-    if (!payload.set_category_id && !payload.set_clean_description && !payload.set_transaction_type && !payload.add_tag_ids.length) {
-      setModalMessage(elements.ruleMessage, "Set a category, description, type, or tag.", true);
+    if (payload.rule_type === "auto-import" && (!payload.set_category_id || !payload.set_clean_description || !payload.set_transaction_type)) {
+      setRuleFieldErrors([
+        ...(!payload.set_category_id ? ["setCategory"] : []),
+        ...(!payload.set_clean_description ? ["setCleanDescription"] : []),
+      ]);
+      setModalMessage(elements.ruleMessage, "Auto-import rules need a category and description.", true);
+      return;
+    }
+    if (payload.rule_type === "template" && !payload.set_category_id && !payload.set_clean_description && !payload.set_transaction_type) {
+      setRuleFieldErrors(["setCategory", "setCleanDescription"]);
+      setModalMessage(elements.ruleMessage, "Templates need a category or description.", true);
       return;
     }
 
     try {
       const isEdit = ruleDialogMode === "edit";
+      const duplicateRule = findDuplicateRule(payload, isEdit ? editingRuleId : null);
+      if (duplicateRule) {
+        const action = await showDuplicateRuleWarning(duplicateRule);
+        if (action === "go") {
+          closeRuleDialog();
+          openRuleEditDialog(duplicateRule);
+        }
+        return;
+      }
       if (isEdit && payloadMatchesSnapshot(payload, ruleEditSnapshot)) {
         closeRuleDialog();
         return;
@@ -1460,6 +1559,130 @@
         error.message || (ruleDialogMode === "edit" ? "Could not update rule." : "Could not add rule."),
         true,
       );
+    }
+  }
+
+  function ruleFieldTargets() {
+    return {
+      matchDescription: elements.ruleForm.elements.matchDescription.closest("label"),
+      matchCategory: elements.ruleForm.elements.matchCategory.closest("label"),
+      setCategory: elements.ruleCategoryButton.closest("label"),
+      setCleanDescription: elements.ruleForm.elements.setCleanDescription.closest("label"),
+    };
+  }
+
+  function setRuleFieldErrors(fields) {
+    const targets = ruleFieldTargets();
+    fields.forEach((field) => {
+      setFieldError(targets[field], "rule-field-error");
+    });
+  }
+
+  function clearRuleFieldErrors() {
+    Object.values(ruleFieldTargets()).forEach((target) => {
+      clearFieldError(target, "rule-field-error");
+    });
+  }
+
+  function clearRuleFieldError(field) {
+    if (elements.ruleKindInput.value === "template") {
+      clearRuleFieldErrors();
+      return;
+    }
+    clearFieldError(ruleFieldTargets()[field], "rule-field-error");
+  }
+
+  function updateRuleFieldErrorState() {
+    const form = elements.ruleForm.elements;
+    if (clean(form.matchDescription.value)) {
+      clearRuleFieldError("matchDescription");
+    }
+    if (clean(form.matchCategory.value)) {
+      clearRuleFieldError("matchCategory");
+    }
+    if (clean(form.setCleanDescription.value)) {
+      clearRuleFieldError("setCleanDescription");
+    }
+  }
+
+  function manualImportFieldTargets() {
+    return {
+      category: elements.manualImportCategoryButton.closest("label"),
+      cleanDescription: elements.manualImportForm.elements.cleanDescription.closest("label"),
+    };
+  }
+
+  function setManualImportFieldErrors(fields) {
+    const targets = manualImportFieldTargets();
+    fields.forEach((field) => {
+      setFieldError(targets[field]);
+    });
+  }
+
+  function clearManualImportFieldErrors() {
+    Object.values(manualImportFieldTargets()).forEach((target) => {
+      clearFieldError(target);
+    });
+  }
+
+  function clearManualImportFieldError(field) {
+    clearFieldError(manualImportFieldTargets()[field]);
+  }
+
+  function updateManualImportFieldErrorState() {
+    const form = elements.manualImportForm.elements;
+    if (elements.manualImportCategoryInput.value) {
+      clearManualImportFieldError("category");
+    }
+    if (clean(form.cleanDescription.value)) {
+      clearManualImportFieldError("cleanDescription");
+    }
+  }
+
+  function setFieldError(target, className = "field-error") {
+    target?.classList.add(className);
+  }
+
+  function clearFieldError(target, className = "field-error") {
+    target?.classList.remove(className);
+  }
+
+  function findDuplicateRule(payload, excludeRuleId = null) {
+    return state.rules.find((rule) => {
+      if (excludeRuleId !== null && Number(rule.id) === Number(excludeRuleId)) {
+        return false;
+      }
+      const matches = ruleMatchValues(rule);
+      return (rule.rule_type || "auto-import") === payload.rule_type
+        && clean(matches.description) === clean(payload.match_description)
+        && clean(matches.category) === clean(payload.match_category);
+    }) || null;
+  }
+
+  function showDuplicateRuleWarning(rule) {
+    if (duplicateRuleResolver) {
+      closeDuplicateRuleWarning("cancel");
+    }
+    const matches = ruleMatchValues(rule);
+    const kind = (rule.rule_type || "auto-import") === "template" ? "Pre-fill" : "Auto-import";
+    elements.duplicateRuleMessage.textContent = [
+      `${kind} rule already exists.`,
+      matches.description ? `Description: ${matches.description}` : "",
+      matches.category ? `Category: ${matches.category}` : "",
+    ].filter(Boolean).join("\n");
+    openModal(elements.duplicateRuleDialog);
+    return new Promise((resolve) => {
+      duplicateRuleResolver = resolve;
+    });
+  }
+
+  function closeDuplicateRuleWarning(action) {
+    if (elements.duplicateRuleDialog.open) {
+      elements.duplicateRuleDialog.close();
+    }
+    if (duplicateRuleResolver) {
+      duplicateRuleResolver(action);
+      duplicateRuleResolver = null;
     }
   }
 
@@ -1823,16 +2046,19 @@
   function buildRulePayload(formElement = elements.ruleForm) {
     const form = new FormData(formElement);
     const setCleanDescription = clean(form.get("setCleanDescription")) || null;
+    const matchDescription = clean(form.get("matchDescription")) || null;
+    const matchCategory = clean(form.get("matchCategory")) || null;
     const addTagIds = selectedTagIdsFrom(elements.ruleTags);
+    const ruleType = clean(form.get("ruleKind")) || "auto-import";
     return {
-      name: setCleanDescription,
-      match_description: clean(form.get("matchDescription")) || null,
-      match_category: clean(form.get("matchCategory")) || null,
+      name: setCleanDescription || matchDescription || matchCategory || (ruleType === "template" ? "Template" : "Rule"),
+      rule_type: ruleType,
+      match_description: matchDescription,
+      match_category: matchCategory,
       set_category_id: Number(form.get("setCategoryId")) || null,
       set_clean_description: setCleanDescription,
       set_transaction_type: clean(form.get("setTransactionType")) || null,
       add_tag_ids: addTagIds,
-      priority: Number(form.get("priority")) || 100,
     };
   }
 
@@ -1960,10 +2186,14 @@
     elements.manualImportMessage.textContent = "";
     elements.manualImportMessage.classList.remove("error");
     elements.manualImportForm.reset();
+    clearManualImportFieldErrors();
     setTypeGroupValue(elements.manualImportTypeInput, elements.manualImportTypeGroup, rawRow.preview_type || "expense");
-    setManualImportCategoryValue(null);
-    elements.manualImportForm.elements.cleanDescription.value = clean(rawRow.preview_clean_description) || clean(rawRow.raw_description) || "";
-    renderManualImportTags([]);
+    setManualImportCategoryValue(rawRow.preview_category_id || null);
+    const previewDescription = clean(rawRow.preview_clean_description);
+    elements.manualImportForm.elements.cleanDescription.value = isTemplateRawRow(rawRow)
+      ? previewDescription
+      : previewDescription || truncatePrefilledDescription(rawRow.raw_description);
+    renderManualImportTags(rawRow.preview_tag_ids || []);
     openModal(elements.manualImportDialog);
   }
 
@@ -2001,7 +2231,7 @@
     renderDefinitionList(elements.rawRowImportValues, [
       ["Account", account ? accountLabel(account) : "Unknown"],
       ["Status", rawRow.import_status],
-      ["Importable", isImportableRawRow(rawRow) ? "Yes" : "No"],
+      ["Auto-importable", isImportableRawRow(rawRow) ? "Yes" : "No"],
       ["Error", rawRow.import_error],
       ["Source ID", rawRow.imported_source_id],
       ["Parsed transaction ID", rawRow.parsed_transaction_id],
@@ -2032,20 +2262,33 @@
       elements.rawRowRuleButton.hidden = true;
       return;
     }
-    const topRule = topPriorityRuleForRawRow(rawRow);
-    const canEditRule = isImportableRawRow(rawRow) && topRule;
+    const canOpenRule = rawRow.import_status !== "imported";
+    const canEditRule = canOpenRule && Boolean(topMatchingRuleForRawRow(rawRow, "auto-import"));
+    const canUseTemplate = canOpenRule && Boolean(topMatchingRuleForRawRow(rawRow, "template"));
     const canCreateRule = shouldOfferRuleCreation(rawRow);
-    elements.rawRowRuleButton.hidden = !canEditRule && !canCreateRule;
+    elements.rawRowRuleButton.hidden = !canEditRule && !canUseTemplate && !canCreateRule;
     elements.rawRowRuleButton.textContent = "Rule";
   }
 
   function shouldOfferRuleCreation(rawRow) {
-    return rawRow.import_status !== "imported" && !isImportableRawRow(rawRow);
+    return rawRow.import_status !== "imported" && !isImportableRawRow(rawRow) && !isTemplateRawRow(rawRow);
   }
 
   function openTopRawRowRule() {
     const rawRow = activeRawRow();
-    if (rawRow && shouldOfferRuleCreation(rawRow)) {
+    if (!rawRow) {
+      updateRawRowModalActions();
+      return;
+    }
+    const autoImportRule = topMatchingRuleForRawRow(rawRow, "auto-import");
+    const template = topMatchingRuleForRawRow(rawRow, "template");
+    const rule = autoImportRule || template;
+    if (rule) {
+      closeRawRowDialog();
+      openRuleEditDialog(rule);
+      return;
+    }
+    if (shouldOfferRuleCreation(rawRow)) {
       closeRawRowDialog();
       openRuleAddDialog({
         matchDescription: rawRow.raw_description,
@@ -2053,13 +2296,7 @@
       });
       return;
     }
-    const rule = rawRow ? topPriorityRuleForRawRow(rawRow) : null;
-    if (!rule) {
-      updateRawRowModalActions();
-      return;
-    }
-    closeRawRowDialog();
-    openRuleEditDialog(rule);
+    updateRawRowModalActions();
   }
 
   function saveRawRowNote(event) {
@@ -2118,24 +2355,8 @@
       closeRawRowDialog();
       return;
     }
-    if (!isImportableRawRow(rawRow)) {
-      closeRawRowDialog();
-      openManualImportDialog(rawRow);
-      return;
-    }
-    const note = clean(elements.rawRowNoteInput.value);
-    if (note) {
-      rawRowNotes.set(rawRow.id, note);
-    } else {
-      rawRowNotes.delete(rawRow.id);
-    }
-    await importRawRows([rawRow.id], {
-      successMessage: ({ counts }) => `Imported ${counts.imported}; duplicates ${counts.duplicate}; errors ${counts.error}.`,
-      onSuccess: () => {
-        selectedRawRowIds.delete(rawRow.id);
-        closeRawRowDialog();
-      },
-    });
+    closeRawRowDialog();
+    openManualImportDialog(rawRow);
   }
 
   async function importManualRawRow(event) {
@@ -2146,16 +2367,22 @@
       return;
     }
     const payload = buildManualImportPayload();
+    clearManualImportFieldErrors();
     if (!payload.transaction_type) {
       setModalMessage(elements.manualImportMessage, "Type is required.", true);
       return;
     }
-    if (!payload.category_id) {
-      setModalMessage(elements.manualImportMessage, "Category is required.", true);
-      return;
-    }
-    if (!payload.clean_description) {
-      setModalMessage(elements.manualImportMessage, "Description is required.", true);
+    const missingFields = [
+      ...(!payload.category_id ? ["category"] : []),
+      ...(!payload.clean_description ? ["cleanDescription"] : []),
+    ];
+    if (missingFields.length) {
+      setManualImportFieldErrors(missingFields);
+      setModalMessage(
+        elements.manualImportMessage,
+        missingFields.length === 2 ? "Category and description are required." : (!payload.category_id ? "Category is required." : "Description is required."),
+        true,
+      );
       return;
     }
 
@@ -2271,11 +2498,17 @@
   function setRuleCategoryValue(categoryId) {
     elements.ruleCategoryInput.value = categoryId === null || categoryId === undefined ? "" : String(categoryId);
     renderCategoryButton(elements.ruleCategoryButton, elements.ruleCategoryInput.value);
+    if (elements.ruleCategoryInput.value) {
+      clearRuleFieldError("setCategory");
+    }
   }
 
   function setManualImportCategoryValue(categoryId) {
     elements.manualImportCategoryInput.value = categoryId === null || categoryId === undefined ? "" : String(categoryId);
     renderCategoryButton(elements.manualImportCategoryButton, elements.manualImportCategoryInput.value);
+    if (elements.manualImportCategoryInput.value) {
+      clearManualImportFieldError("category");
+    }
   }
 
   function setTransactionCategoryValue(categoryId) {
@@ -2572,8 +2805,9 @@
     sortedTableRows("rules", state.rules)
       .forEach((rule) => {
         const category = state.categories.find((candidate) => candidate.id === rule.set_category_id);
+        const kind = (rule.rule_type || "auto-import") === "template" ? "Pre-fill" : "Auto-import";
         const row = tableRow([
-          `${rule.name} (${rule.priority})`,
+          `${rule.name} (${kind})`,
           ruleMatchSummary(rule),
           ruleActions(rule, category),
         ]);
@@ -2854,7 +3088,7 @@
   }
 
   function statusBadge(rawRow) {
-    const status = rawRow.import_status || "notImportable";
+    const status = rawRow.import_status || "manual";
     const badge = document.createElement("span");
     badge.className = `status-badge ${statusClass(status)}`;
     badge.textContent = statusLabel(status);
@@ -2875,13 +3109,31 @@
   }
 
   function isImportableRawRow(rawRow) {
-    return rawRow.import_status === "importable";
+    return rawRow.import_status === "auto-importable";
   }
 
-  function topPriorityRuleForRawRow(rawRow) {
+  function isTemplateRawRow(rawRow) {
+    return rawRow.import_status === "pre-fill";
+  }
+
+  function topMatchingRuleForRawRow(rawRow, ruleType = null) {
     return state.rules
-      .filter((rule) => rule.is_active !== false && ruleMatchesRawRow(rule, rawRow))
-      .sort((a, b) => (a.priority ?? 100) - (b.priority ?? 100) || a.id - b.id)[0] || null;
+      .filter((rule) => rule.is_active !== false && (ruleType === null || (rule.rule_type || "auto-import") === ruleType) && ruleMatchesRawRow(rule, rawRow))
+      .sort((a, b) => ruleSpecificityRank(a) - ruleSpecificityRank(b) || a.id - b.id)[0] || null;
+  }
+
+  function ruleSpecificityRank(rule) {
+    const matches = ruleMatchValues(rule);
+    if (matches.description && matches.category) {
+      return 0;
+    }
+    if (matches.description) {
+      return 1;
+    }
+    if (matches.category) {
+      return 2;
+    }
+    return 3;
   }
 
   function ruleMatchesRawRow(rule, rawRow) {
@@ -2911,19 +3163,22 @@
       return true;
     }
     if (filter === "new") {
-      return ["importable", "notImportable"].includes(rawRow.import_status || "notImportable");
+      return ["auto-importable", "manual", "pre-fill"].includes(rawRow.import_status || "manual");
     }
-    if (filter === "importable") {
+    if (filter === "auto-importable") {
       return isImportableRawRow(rawRow);
     }
-    if (filter === "notImportable") {
-      return rawRow.import_status === "notImportable";
+    if (filter === "manual") {
+      return rawRow.import_status === "manual";
+    }
+    if (filter === "pre-fill") {
+      return isTemplateRawRow(rawRow);
     }
     return rawRow.import_status === filter;
   }
 
   function statusClass(status) {
-    if (status === "importable" || status === "notImportable") {
+    if (status === "auto-importable" || status === "manual" || status === "pre-fill") {
       return "status-new";
     }
     return `status-${status}`;
@@ -2931,8 +3186,9 @@
 
   function statusLabel(status) {
     return {
-      importable: "Importable",
-      notImportable: "Not importable",
+      "auto-importable": "Auto-importable",
+      manual: "Manual Import",
+      "pre-fill": "Pre-fill",
       imported: "Imported",
       duplicate: "Duplicate",
       error: "Error",
@@ -3009,13 +3265,17 @@
   function firstCsvValue(row, ...names) {
     for (const name of names) {
       if (Object.prototype.hasOwnProperty.call(row, name)) {
-        const value = clean(row[name]);
+        const value = collapseMultiSpaces(clean(row[name]));
         if (value) {
           return value;
         }
       }
     }
     return null;
+  }
+
+  function collapseMultiSpaces(value) {
+    return String(value || "").replace(/ {2,}/g, " ");
   }
 
   function signedAmountFromDebitCredit(row) {
@@ -3825,7 +4085,6 @@
     if (table === "rules") {
       const matches = ruleMatchValues(item);
       return {
-        priority: item.priority,
         name: item.name,
         match: `${matches.description} ${matches.category}`.trim(),
       }[key];

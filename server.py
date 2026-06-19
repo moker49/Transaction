@@ -27,6 +27,7 @@ from db_cli import (  # noqa: E402
     detect_csv_layout,
     fetch_account,
     fetch_imported_source,
+    fetch_duplicate_transaction_rule,
     fetch_tag_by_id,
     fetch_tag_by_name,
     fetch_transaction_rule,
@@ -41,8 +42,9 @@ from db_cli import (  # noqa: E402
     require_tag_unused,
     raw_row_hash,
     sync_raw_row_importability_status,
+    validate_rule_type,
     validate_transaction_type,
-    validate_rule_actions,
+    validate_rule_payload,
     parse_amount_cents,
     parse_transaction_date,
     make_transaction_hash,
@@ -61,12 +63,12 @@ DEFAULT_CATEGORIES = (
     {"name": "Income", "color": "#208020", "children": ("Salary", "Bonus", "Interest", "Dividend", "Refund", "Gift Received", "Resale")},
     {"name": "Housing", "color": "#c4588e", "children": ("Rent", "Mortgage", "Property Tax", "HOA", "Home Insurance", "Home Maintenance")},
     {"name": "Utility", "color": "#91a82f", "children": ("Electric", "Gas", "Water", "Sewer", "Trash", "Internet", "Phone")},
-    {"name": "Food", "color": "#d16630", "children": ("Groceries", "Restaurant")},
-    {"name": "Transportation", "color": "#3a67c2", "children": ("Car Payment", "Fuel", "Charging", "Auto Insurance", "Maintenance", "Registration", "Parking", "Toll", "Public Transit")},
+    {"name": "Food", "color": "#d16630", "children": ("Groceries", "Restaurant", "Cafe", "Convenience")},
+    {"name": "Transportation", "color": "#3a67c2", "children": ("Car Payment", "Fuel", "Charging", "Auto Insurance", "Maintenance", "Registration", "Parking", "Toll", "Public Transit", "Ride-share")},
     {"name": "Shopping", "color": "#8161c2", "children": ("Clothing", "Electronic", "Household", "Furniture")},
     {"name": "Health", "color": "#ad3131", "children": ("Medical", "Dental", "Vision", "Pharmacy", "Fitness")},
     {"name": "Lifestyle", "color": "#36b36a", "children": ("Activity", "Hobby", "Alcohol", "Substance")},
-    {"name": "Entertainment", "color": "#602699", "children": ("Streaming", "Gaming", "Movie", "Music")},
+    {"name": "Entertainment", "color": "#602699", "children": ("Streaming", "Gaming", "Movie", "Music", "App")},
     {"name": "Travel", "color": "#109e9e", "children": ("Hotel", "Flight", "Rental")},
     {"name": "Financial", "color": "#b68b2e", "children": ("Fee", "Loan Payment", "Investment", "Tax Payment")},
     {"name": "Insurance", "color": "#d18eb0", "children": ("Life Insurance", "Umbrella Insurance", "Protection")},
@@ -390,6 +392,7 @@ def create_rule():
     ensure_database()
     data = request.get_json(silent=True) or {}
     name = nonempty(str(data.get("name", "")), "name")
+    rule_type = validate_rule_type(data.get("rule_type"))
     match_description, match_category = parse_rule_match_inputs(data)
     match_field, match_type, match_value = legacy_rule_match(match_description, match_category)
     set_category_id = int(data["set_category_id"]) if data.get("set_category_id") is not None else None
@@ -397,11 +400,13 @@ def create_rule():
     set_transaction_type = validate_transaction_type(data.get("set_transaction_type"), allow_empty=True)
     add_tag_ids = parse_rule_tag_ids(data)
     add_tag_id = add_tag_ids[0] if add_tag_ids else None
-    priority = int(data.get("priority", 100))
 
-    validate_rule_actions(set_category_id, set_clean_description, set_transaction_type, add_tag_id)
+    validate_rule_payload(rule_type, set_category_id, set_clean_description, set_transaction_type, add_tag_id)
 
     with closing(connect(current_db_path())) as conn:
+        duplicate = fetch_duplicate_transaction_rule(conn, rule_type, match_description, match_category)
+        if duplicate is not None:
+            raise CliError(f"Duplicate rule matches existing rule {duplicate['id']}: {duplicate['name']}")
         if set_category_id is not None:
             require_category(conn, set_category_id)
         for tag_id in add_tag_ids:
@@ -410,6 +415,7 @@ def create_rule():
             """
             INSERT INTO transaction_import_rules (
                 name,
+                rule_type,
                 match_field,
                 match_type,
                 match_value,
@@ -418,13 +424,13 @@ def create_rule():
                 set_category_id,
                 set_clean_description,
                 set_transaction_type,
-                add_tag_id,
-                priority
+                add_tag_id
             )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 name,
+                rule_type,
                 match_field,
                 match_type,
                 match_value,
@@ -434,7 +440,6 @@ def create_rule():
                 set_clean_description,
                 set_transaction_type,
                 add_tag_id,
-                priority,
             ),
         )
         rule_id = int(cursor.lastrowid)
@@ -455,6 +460,7 @@ def update_rule(rule_id: int):
 
     with closing(connect(current_db_path())) as conn:
         current = fetch_transaction_rule(conn, rule_id)
+        next_rule_type = current["rule_type"]
         next_set_category_id = current["set_category_id"]
         next_set_clean_description = current["set_clean_description"]
         next_set_transaction_type = current["set_transaction_type"]
@@ -466,6 +472,10 @@ def update_rule(rule_id: int):
         if "name" in data:
             updates.append("name = ?")
             values.append(nonempty(str(data.get("name", "")), "name"))
+        if "rule_type" in data:
+            next_rule_type = validate_rule_type(data.get("rule_type"))
+            updates.append("rule_type = ?")
+            values.append(next_rule_type)
         if "match_description" in data:
             next_match_description = optional_nonempty(data.get("match_description"), "match_description")
             updates.append("match_description = ?")
@@ -504,9 +514,6 @@ def update_rule(rule_id: int):
                 fetch_tag_by_id(conn, tag_id)
             updates.append("add_tag_id = ?")
             values.append(next_add_tag_id)
-        if "priority" in data:
-            updates.append("priority = ?")
-            values.append(int(data.get("priority", 100)))
         if "is_active" in data:
             updates.append("is_active = ?")
             values.append(1 if data.get("is_active") else 0)
@@ -522,7 +529,16 @@ def update_rule(rule_id: int):
             updates.append("match_value = ?")
             values.append(match_value)
 
-        validate_rule_actions(next_set_category_id, next_set_clean_description, next_set_transaction_type, next_add_tag_id)
+        validate_rule_payload(next_rule_type, next_set_category_id, next_set_clean_description, next_set_transaction_type, next_add_tag_id)
+        duplicate = fetch_duplicate_transaction_rule(
+            conn,
+            next_rule_type,
+            next_match_description,
+            next_match_category,
+            exclude_rule_id=rule_id,
+        )
+        if duplicate is not None:
+            raise CliError(f"Duplicate rule matches existing rule {duplicate['id']}: {duplicate['name']}")
 
         updates.append("updated_at = datetime('now')")
         values.append(rule_id)
@@ -568,7 +584,7 @@ def delete_transaction(transaction_id: int):
             conn.execute(
                 """
                 UPDATE raw_imported_rows
-                SET import_status = 'notImportable',
+                SET import_status = 'manual',
                     import_error = NULL,
                     parsed_transaction_id = NULL,
                     updated_at = datetime('now')
@@ -1025,7 +1041,7 @@ def transaction_data_from_state(state: dict[str, Any], start_date: str, end_date
     raw_transactions = [
         raw_row
         for raw_row in state["rawRows"]
-        if raw_row["import_status"] in ("importable", "notImportable")
+        if raw_row["import_status"] in ("auto-importable", "manual", "pre-fill")
         or raw_row_in_date_range(raw_row, start_date, end_date)
     ]
     return {
@@ -1272,6 +1288,7 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
             SELECT
                 r.id,
                 r.name,
+                r.rule_type,
                 r.match_field,
                 r.match_type,
                 r.match_value,
@@ -1283,14 +1300,20 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
                 r.set_transaction_type,
                 r.add_tag_id,
                 tags.name AS add_tag,
-                r.priority,
                 r.is_active,
                 r.created_at,
                 r.updated_at
             FROM transaction_import_rules r
             LEFT JOIN categories c ON c.id = r.set_category_id
             LEFT JOIN tags ON tags.id = r.add_tag_id
-            ORDER BY r.priority, r.id
+            ORDER BY
+                CASE
+                    WHEN r.match_description IS NOT NULL AND r.match_category IS NOT NULL THEN 0
+                    WHEN r.match_description IS NOT NULL THEN 1
+                    WHEN r.match_category IS NOT NULL THEN 2
+                    ELSE 3
+                END,
+                r.id
             """
         ).fetchall()
     )
@@ -1321,11 +1344,17 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
         tags_by_rule.setdefault(rule_id, []).append(tag)
     categories_by_id = {category["id"]: category["name"] for category in categories}
     for row in raw_rows:
-        preview = apply_import_rules(conn, row) if row["import_status"] == "importable" else {}
+        if row["import_status"] in ("auto-importable", "manual", "pre-fill"):
+            auto_import_preview = apply_import_rules(conn, row, "auto-import")
+            preview = auto_import_preview if rule_preview_has_values(auto_import_preview) else apply_import_rules(conn, row, "template")
+        else:
+            preview = {}
         preview_category_id = preview.get("category_id")
+        row["preview_category_id"] = preview_category_id
         row["preview_category"] = categories_by_id.get(preview_category_id) if preview_category_id is not None else None
         row["preview_clean_description"] = preview.get("clean_description")
         row["preview_type"] = preview.get("transaction_type")
+        row["preview_tag_ids"] = preview.get("tag_ids", [])
     for rule in rules:
         rule["is_active"] = bool(rule["is_active"])
         rule["tags"] = tags_by_rule.get(int(rule["id"]), [])
@@ -1344,6 +1373,15 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
         "transactions": transactions,
         "rawRows": raw_rows,
     }
+
+
+def rule_preview_has_values(preview: dict[str, Any]) -> bool:
+    return (
+        preview.get("category_id") is not None
+        or normalize_text(preview.get("clean_description")) is not None
+        or preview.get("transaction_type") is not None
+        or bool(preview.get("tag_ids"))
+    )
 
 
 def migrate_finance_tags_to_transaction_type(conn: sqlite3.Connection) -> None:

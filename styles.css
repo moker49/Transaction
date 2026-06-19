@@ -322,6 +322,10 @@ h2 {
   background: transparent;
 }
 
+#ruleKindGroup {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .connected-button {
   position: relative;
   isolation: isolate;
@@ -759,6 +763,18 @@ label {
   font-weight: 700;
 }
 
+label.rule-field-error > span,
+label.field-error > span {
+  color: var(--danger);
+}
+
+label.rule-field-error input,
+label.field-error input,
+label.field-error select {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--danger) 34%, transparent);
+}
+
 .form-field {
   display: grid;
   gap: 6px;
@@ -1165,6 +1181,13 @@ td.amount {
 .empty-category-chip {
   border-style: dashed;
   color: var(--muted);
+}
+
+label.rule-field-error .empty-category-chip,
+label.field-error .empty-category-chip {
+  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 18%, transparent);
+  color: var(--danger);
 }
 
 .settings-list {
@@ -1726,7 +1749,7 @@ button.category-chip.manageable-chip {
 }
 
 .rule-match-row {
-  grid-template-columns: minmax(0, 1fr) 118px;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .rule-clean-row {
@@ -1770,7 +1793,6 @@ button.category-chip.manageable-chip {
 .type-button-row {
   display: flex;
   justify-content: center;
-  padding-bottom: 10px;
 }
 
 .detail-row-date-category {
@@ -2347,7 +2369,7 @@ tr.is-importable-row td {
   }
 
   .rule-match-row {
-    grid-template-columns: minmax(0, 1fr) 92px;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .rule-form-grid .form-divider {
