@@ -22,12 +22,14 @@ import db_cli as db_cli_module  # noqa: E402
 from db_cli import (  # noqa: E402
     CliError,
     DEFAULT_DB_PATH,
-    apply_import_rules,
+    apply_import_rule_rows,
     connect,
     detect_csv_layout,
+    fetch_active_rules,
     fetch_account,
     fetch_imported_source,
     fetch_duplicate_transaction_rule,
+    fetch_rule_tag_ids_by_rule,
     fetch_tag_by_id,
     fetch_tag_by_name,
     fetch_transaction_rule,
@@ -159,9 +161,9 @@ def get_state():
 def get_reference_data():
     ensure_database()
     with closing(connect(current_db_path())) as conn:
-        state = read_state(conn)
+        reference_data = read_reference_data(conn)
         conn.commit()
-    return jsonify({"referenceData": reference_data_from_state(state)})
+    return jsonify({"referenceData": reference_data})
 
 
 @app.get("/api/transactions")
@@ -172,9 +174,9 @@ def get_transaction_data():
     if start_date > end_date:
         raise CliError("startDate must be on or before endDate.")
     with closing(connect(current_db_path())) as conn:
-        state = read_state(conn)
+        transaction_data = read_transaction_data(conn, start_date, end_date)
         conn.commit()
-    return jsonify({"transactionData": transaction_data_from_state(state, start_date, end_date)})
+    return jsonify({"transactionData": transaction_data})
 
 
 @app.post("/api/accounts")
@@ -1159,8 +1161,7 @@ def parent_category_for_transaction(
     return categories_by_id.get(int(parent_id)) if parent_id is not None else category
 
 
-def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
-    sync_raw_row_importability_status(conn)
+def read_reference_data(conn: sqlite3.Connection) -> dict[str, Any]:
     ensure_default_categories(conn)
     ensure_system_tags(conn)
     accounts = rows_to_dicts(
@@ -1202,7 +1203,57 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
             """
         ).fetchall()
     )
-    raw_rows = rows_to_dicts(
+    categories = read_categories(conn)
+    tags = read_tags(conn)
+    rules = read_rules(conn)
+    rule_tags = read_rule_tags(conn)
+    for item in imports:
+        item["metadata"] = parse_metadata(item.pop("metadata_json"))
+    apply_rule_tags(rules, rule_tags)
+    apply_category_metadata(categories)
+    apply_tag_metadata(tags)
+    return {
+        "accounts": accounts,
+        "categories": categories,
+        "tags": tags,
+        "rules": rules,
+        "imports": imports,
+    }
+
+
+def read_transaction_data(conn: sqlite3.Connection, start_date: str, end_date: str) -> dict[str, Any]:
+    sync_raw_row_importability_status(conn)
+    ensure_default_categories(conn)
+    ensure_system_tags(conn)
+    categories = read_categories(conn)
+    raw_rows = read_raw_rows(conn)
+    transactions = read_transactions(conn, start_date, end_date)
+    transaction_tags = read_transaction_tags(conn, start_date, end_date)
+    apply_transaction_tags(transactions, transaction_tags)
+    apply_raw_row_previews(conn, raw_rows, categories)
+    return transaction_data_from_state(
+        {
+            "categories": categories,
+            "transactions": transactions,
+            "rawRows": raw_rows,
+        },
+        start_date,
+        end_date,
+    )
+
+
+def read_categories(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+    return rows_to_dicts(
+        conn.execute("SELECT id, name, parent_id, color, created_at FROM categories ORDER BY name, id").fetchall()
+    )
+
+
+def read_tags(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+    return rows_to_dicts(conn.execute("SELECT id, name, created_at FROM tags ORDER BY name, id").fetchall())
+
+
+def read_raw_rows(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+    return rows_to_dicts(
         conn.execute(
             """
             SELECT
@@ -1225,9 +1276,21 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
             """
         ).fetchall()
     )
-    transactions = rows_to_dicts(
+
+
+def read_transactions(conn: sqlite3.Connection, start_date: str | None = None, end_date: str | None = None) -> list[dict[str, Any]]:
+    filters: list[str] = []
+    values: list[Any] = []
+    if start_date is not None:
+        filters.append("t.posted_date >= ?")
+        values.append(start_date)
+    if end_date is not None:
+        filters.append("t.posted_date <= ?")
+        values.append(end_date)
+    where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
+    return rows_to_dicts(
         conn.execute(
-            """
+            f"""
             SELECT
                 t.id,
                 t.account_id,
@@ -1260,29 +1323,45 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
             LEFT JOIN raw_imported_rows rr ON rr.id = t.raw_imported_row_id
             LEFT JOIN imported_source src ON src.id = rr.imported_source_id
             LEFT JOIN transaction_notes n ON n.transaction_id = t.id
+            {where_clause}
             GROUP BY t.id
             ORDER BY t.posted_date DESC, t.id DESC
-            """
+            """,
+            values,
         ).fetchall()
     )
-    categories = rows_to_dicts(
-        conn.execute("SELECT id, name, parent_id, color, created_at FROM categories ORDER BY name, id").fetchall()
-    )
-    tags = rows_to_dicts(conn.execute("SELECT id, name, created_at FROM tags ORDER BY name, id").fetchall())
-    transaction_tags = rows_to_dicts(
+
+
+def read_transaction_tags(conn: sqlite3.Connection, start_date: str | None = None, end_date: str | None = None) -> list[dict[str, Any]]:
+    filters: list[str] = []
+    values: list[Any] = []
+    if start_date is not None:
+        filters.append("t.posted_date >= ?")
+        values.append(start_date)
+    if end_date is not None:
+        filters.append("t.posted_date <= ?")
+        values.append(end_date)
+    where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
+    return rows_to_dicts(
         conn.execute(
-            """
+            f"""
             SELECT
                 tt.transaction_id,
                 tags.id,
                 tags.name
             FROM transaction_tags tt
             JOIN tags ON tags.id = tt.tag_id
+            JOIN transactions t ON t.id = tt.transaction_id
+            {where_clause}
             ORDER BY tags.name, tags.id
-            """
+            """,
+            values,
         ).fetchall()
     )
-    rules = rows_to_dicts(
+
+
+def read_rules(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+    return rows_to_dicts(
         conn.execute(
             """
             SELECT
@@ -1317,7 +1396,10 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
             """
         ).fetchall()
     )
-    rule_tags = rows_to_dicts(
+
+
+def read_rule_tags(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+    return rows_to_dicts(
         conn.execute(
             """
             SELECT
@@ -1330,23 +1412,56 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
             """
         ).fetchall()
     )
-    for item in imports:
-        item["metadata"] = parse_metadata(item.pop("metadata_json"))
+
+
+def apply_transaction_tags(transactions: list[dict[str, Any]], transaction_tags: list[dict[str, Any]]) -> None:
     tags_by_transaction: dict[int, list[dict[str, Any]]] = {}
     for tag in transaction_tags:
         transaction_id = int(tag.pop("transaction_id"))
         tags_by_transaction.setdefault(transaction_id, []).append(tag)
     for transaction in transactions:
         transaction["tags"] = tags_by_transaction.get(int(transaction["id"]), [])
+
+
+def apply_rule_tags(rules: list[dict[str, Any]], rule_tags: list[dict[str, Any]]) -> None:
     tags_by_rule: dict[int, list[dict[str, Any]]] = {}
     for tag in rule_tags:
         rule_id = int(tag.pop("rule_id"))
         tags_by_rule.setdefault(rule_id, []).append(tag)
+    for rule in rules:
+        rule["is_active"] = bool(rule["is_active"])
+        rule["tags"] = tags_by_rule.get(int(rule["id"]), [])
+        rule["tag_ids"] = [tag["id"] for tag in rule["tags"]]
+
+
+def apply_category_metadata(categories: list[dict[str, Any]]) -> None:
+    for category in categories:
+        category["is_default"] = category["name"] in DEFAULT_CATEGORY_NAMES
+        category["sort_order"] = DEFAULT_CATEGORY_SORT_ORDER.get(category["name"], 999999)
+
+
+def apply_tag_metadata(tags: list[dict[str, Any]]) -> None:
+    for tag in tags:
+        tag["is_protected"] = is_protected_tag(tag)
+
+
+def apply_raw_row_previews(
+    conn: sqlite3.Connection,
+    raw_rows: list[dict[str, Any]],
+    categories: list[dict[str, Any]],
+) -> None:
+    auto_import_rules = fetch_active_rules(conn, "auto-import")
+    template_rules = fetch_active_rules(conn, "template")
+    rule_tag_ids_by_rule = fetch_rule_tag_ids_by_rule(conn)
     categories_by_id = {category["id"]: category["name"] for category in categories}
     for row in raw_rows:
         if row["import_status"] in ("auto-importable", "manual", "pre-fill"):
-            auto_import_preview = apply_import_rules(conn, row, "auto-import")
-            preview = auto_import_preview if rule_preview_has_values(auto_import_preview) else apply_import_rules(conn, row, "template")
+            auto_import_preview = apply_import_rule_rows(auto_import_rules, row, rule_tag_ids_by_rule)
+            preview = (
+                auto_import_preview
+                if rule_preview_has_values(auto_import_preview)
+                else apply_import_rule_rows(template_rules, row, rule_tag_ids_by_rule)
+            )
         else:
             preview = {}
         preview_category_id = preview.get("category_id")
@@ -1355,21 +1470,19 @@ def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
         row["preview_clean_description"] = preview.get("clean_description")
         row["preview_type"] = preview.get("transaction_type")
         row["preview_tag_ids"] = preview.get("tag_ids", [])
-    for rule in rules:
-        rule["is_active"] = bool(rule["is_active"])
-        rule["tags"] = tags_by_rule.get(int(rule["id"]), [])
-        rule["tag_ids"] = [tag["id"] for tag in rule["tags"]]
-    for category in categories:
-        category["is_default"] = category["name"] in DEFAULT_CATEGORY_NAMES
-        category["sort_order"] = DEFAULT_CATEGORY_SORT_ORDER.get(category["name"], 999999)
-    for tag in tags:
-        tag["is_protected"] = is_protected_tag(tag)
+
+
+def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
+    sync_raw_row_importability_status(conn)
+    reference_data = read_reference_data(conn)
+    categories = reference_data["categories"]
+    transactions = read_transactions(conn)
+    transaction_tags = read_transaction_tags(conn)
+    raw_rows = read_raw_rows(conn)
+    apply_transaction_tags(transactions, transaction_tags)
+    apply_raw_row_previews(conn, raw_rows, categories)
     return {
-        "accounts": accounts,
-        "categories": categories,
-        "tags": tags,
-        "rules": rules,
-        "imports": imports,
+        **reference_data,
         "transactions": transactions,
         "rawRows": raw_rows,
     }

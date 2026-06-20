@@ -661,6 +661,20 @@ def fetch_active_rules(conn: sqlite3.Connection, rule_type: str | None = None) -
     ).fetchall()
 
 
+def fetch_rule_tag_ids_by_rule(conn: sqlite3.Connection) -> dict[int, list[int]]:
+    rows = conn.execute(
+        """
+        SELECT rule_id, tag_id
+        FROM transaction_import_rule_tags
+        ORDER BY rule_id, tag_id
+        """
+    ).fetchall()
+    tag_ids_by_rule: dict[int, list[int]] = {}
+    for row in rows:
+        tag_ids_by_rule.setdefault(int(row["rule_id"]), []).append(int(row["tag_id"]))
+    return tag_ids_by_rule
+
+
 def rule_matches(rule: sqlite3.Row, raw_row: sqlite3.Row) -> bool:
     match_description = normalize_match_text(rule["match_description"])
     match_category = normalize_match_text(rule["match_category"])
@@ -681,9 +695,13 @@ def rule_matches(rule: sqlite3.Row, raw_row: sqlite3.Row) -> bool:
     return bool(needle) and needle in haystack
 
 
-def apply_import_rules(conn: sqlite3.Connection, raw_row: sqlite3.Row, rule_type: str = "auto-import") -> dict[str, Any]:
+def apply_import_rule_rows(
+    rules: Iterable[sqlite3.Row],
+    raw_row: sqlite3.Row,
+    rule_tag_ids_by_rule: dict[int, list[int]],
+) -> dict[str, Any]:
     result: dict[str, Any] = {"category_id": None, "clean_description": None, "transaction_type": None, "tag_ids": []}
-    for rule in fetch_active_rules(conn, rule_type):
+    for rule in rules:
         if not rule_matches(rule, raw_row):
             continue
         if rule["set_category_id"] is not None:
@@ -692,11 +710,22 @@ def apply_import_rules(conn: sqlite3.Connection, raw_row: sqlite3.Row, rule_type
             result["clean_description"] = rule["set_clean_description"]
         if rule["set_transaction_type"] is not None:
             result["transaction_type"] = rule["set_transaction_type"]
-        for tag_id in fetch_rule_tag_ids(conn, int(rule["id"]), rule["add_tag_id"]):
+        tag_ids = rule_tag_ids_by_rule.get(int(rule["id"]))
+        if not tag_ids and rule["add_tag_id"] is not None:
+            tag_ids = [int(rule["add_tag_id"])]
+        for tag_id in tag_ids or []:
             if tag_id not in result["tag_ids"]:
                 result["tag_ids"].append(tag_id)
         break
     return result
+
+
+def apply_import_rules(conn: sqlite3.Connection, raw_row: sqlite3.Row, rule_type: str = "auto-import") -> dict[str, Any]:
+    return apply_import_rule_rows(
+        fetch_active_rules(conn, rule_type),
+        raw_row,
+        fetch_rule_tag_ids_by_rule(conn),
+    )
 
 
 def has_matching_rule(conn: sqlite3.Connection, raw_row: sqlite3.Row, rule_type: str) -> bool:
@@ -741,6 +770,8 @@ def import_rule_result_for_raw_row(conn: sqlite3.Connection, raw_row: sqlite3.Ro
 
 
 def sync_raw_row_importability_status(conn: sqlite3.Connection) -> None:
+    auto_import_rules = fetch_active_rules(conn, "auto-import")
+    template_rules = fetch_active_rules(conn, "template")
     rows = conn.execute(
         """
         SELECT id, raw_category, raw_description, import_status
@@ -750,7 +781,18 @@ def sync_raw_row_importability_status(conn: sqlite3.Connection) -> None:
         """
     ).fetchall()
     for row in rows:
-        next_status = raw_row_importability_status(conn, row)
+        matching_auto_rule = next((rule for rule in auto_import_rules if rule_matches(rule, row)), None)
+        if matching_auto_rule is not None:
+            is_importable = (
+                matching_auto_rule["set_category_id"] is not None
+                and matching_auto_rule["set_transaction_type"] is not None
+                and normalize_text(matching_auto_rule["set_clean_description"]) is not None
+            )
+            next_status = "auto-importable" if is_importable else "manual"
+        elif any(rule_matches(rule, row) for rule in template_rules):
+            next_status = "pre-fill"
+        else:
+            next_status = "manual"
         conn.execute(
             """
             UPDATE raw_imported_rows
