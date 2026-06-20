@@ -33,7 +33,7 @@ FORBIDDEN_SQL_WORDS = {
 MATCH_FIELDS = {"category", "description"}
 MATCH_TYPES = {"contains", "equals", "starts_with", "regex"}
 RULE_TYPES = {"auto-import", "template"}
-IMPORTABLE_RAW_ROW_STATUSES = {"auto-importable"}
+IMPORTABLE_RAW_ROW_STATUSES = {"auto-importable", "pre-fill"}
 TRANSACTION_TYPES = {"income", "expense", "transfer"}
 
 
@@ -735,6 +735,11 @@ def raw_row_importability_status(conn: sqlite3.Connection, raw_row: sqlite3.Row)
     return "manual"
 
 
+def import_rule_result_for_raw_row(conn: sqlite3.Connection, raw_row: sqlite3.Row) -> dict[str, Any]:
+    rule_type = "template" if raw_row["import_status"] == "pre-fill" else "auto-import"
+    return apply_import_rules(conn, raw_row, rule_type)
+
+
 def sync_raw_row_importability_status(conn: sqlite3.Connection) -> None:
     rows = conn.execute(
         """
@@ -845,7 +850,7 @@ def import_raw_rows(
     untyped_rows = []
     undescribed_rows = []
     for raw_row in raw_rows:
-        rule_result = apply_import_rules(conn, raw_row)
+        rule_result = import_rule_result_for_raw_row(conn, raw_row)
         if rule_result["category_id"] is None:
             uncategorized_rows.append(str(raw_row["id"]))
         if rule_result["transaction_type"] is None:
@@ -869,7 +874,7 @@ def import_raw_rows(
             if description is None:
                 raise CliError("raw_description is required.")
 
-            rule_result = apply_import_rules(conn, raw_row)
+            rule_result = import_rule_result_for_raw_row(conn, raw_row)
             clean_description = normalize_text(rule_result["clean_description"]) or description
             transaction_hash = make_transaction_hash(
                 int(raw_row["account_id"]),

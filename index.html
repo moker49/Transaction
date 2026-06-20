@@ -531,6 +531,10 @@
             <span>Tags</span>
             <div id="manualImportTags" class="tag-check-list"></div>
           </label>
+          <label>
+            <span>Notes</span>
+            <textarea name="note" rows="4"></textarea>
+          </label>
         </div>
       </div>
       <div id="manualImportMessage" class="modal-message" role="status" aria-live="polite"></div>
@@ -677,21 +681,11 @@
           <h3>Import Status</h3>
           <dl id="rawRowImportValues" class="detail-list readonly-details"></dl>
         </section>
-        <section>
-          <h3>Note</h3>
-          <div class="detail-list">
-            <label>
-              <span>Transaction note</span>
-              <textarea id="rawRowNoteInput" rows="5"></textarea>
-            </label>
-          </div>
-        </section>
       </div>
       <div class="modal-actions">
         <button type="button" class="danger-button modal-delete-button" id="rawRowDeleteButton">Delete</button>
         <button type="button" class="icon-button" id="rawRowImportButton">Import</button>
         <button type="button" class="primary" id="rawRowRuleButton" hidden>Rule</button>
-        <button type="submit" class="primary" id="rawRowSaveButton">Save</button>
       </div>
     </form>
   </dialog>

@@ -211,18 +211,15 @@
     transactionSaveButton: document.querySelector("#transactionSaveButton"),
     transactionDeleteButton: document.querySelector("#transactionDeleteButton"),
     rawRowDialog: document.querySelector("#rawRowDialog"),
-    rawRowForm: document.querySelector("#rawRowForm"),
     rawRowDialogTitle: document.querySelector("#rawRowDialogTitle"),
     rawRowStatusSubtitle: document.querySelector("#rawRowStatusSubtitle"),
     rawRowCloseButton: document.querySelector("#rawRowCloseButton"),
     rawRowImportButton: document.querySelector("#rawRowImportButton"),
     rawRowDeleteButton: document.querySelector("#rawRowDeleteButton"),
     rawRowRuleButton: document.querySelector("#rawRowRuleButton"),
-    rawRowSaveButton: document.querySelector("#rawRowSaveButton"),
     rawRowRawValues: document.querySelector("#rawRowRawValues"),
     rawRowCleanValues: document.querySelector("#rawRowCleanValues"),
     rawRowImportValues: document.querySelector("#rawRowImportValues"),
-    rawRowNoteInput: document.querySelector("#rawRowNoteInput"),
     categoryDialog: document.querySelector("#categoryDialog"),
     categoryDialogForm: document.querySelector("#categoryDialogForm"),
     categoryDialogTitle: document.querySelector("#categoryDialogTitle"),
@@ -396,12 +393,10 @@
   });
   elements.transactionTypeGroup.addEventListener("click", (event) => selectTypeFromGroup(event, elements.transactionTypeInput, elements.transactionTypeGroup));
   elements.transactionTypeGroup.addEventListener("keydown", (event) => navigateTypeGroup(event, elements.transactionTypeInput, elements.transactionTypeGroup));
-  elements.rawRowForm.addEventListener("submit", saveRawRowNote);
   elements.rawRowCloseButton.addEventListener("click", closeRawRowDialog);
   elements.rawRowImportButton.addEventListener("click", importActiveRawRow);
   elements.rawRowDeleteButton.addEventListener("click", deleteActiveRawRow);
   elements.rawRowRuleButton.addEventListener("click", openTopRawRowRule);
-  elements.rawRowNoteInput.addEventListener("input", updateRawRowModalActions);
   elements.rawRowDialog.addEventListener("close", () => {
     activeRawRowId = null;
   });
@@ -2069,7 +2064,7 @@
       clean_description: clean(form.get("cleanDescription")) || null,
       transaction_type: clean(form.get("transactionType")) || null,
       tag_ids: selectedTagIdsFrom(elements.manualImportTags),
-      note: clean(elements.rawRowNoteInput.value),
+      note: clean(form.get("note")),
     };
   }
 
@@ -2193,6 +2188,7 @@
     elements.manualImportForm.elements.cleanDescription.value = isTemplateRawRow(rawRow)
       ? previewDescription
       : previewDescription || truncatePrefilledDescription(rawRow.raw_description);
+    elements.manualImportForm.elements.note.value = rawRowStoredNote(rawRow);
     renderManualImportTags(rawRow.preview_tag_ids || []);
     openModal(elements.manualImportDialog);
   }
@@ -2213,9 +2209,6 @@
     const account = state.accounts.find((candidate) => candidate.id === rawRow.account_id);
     elements.rawRowDialogTitle.textContent = `Raw Transaction ${rawRow.id}`;
     elements.rawRowStatusSubtitle.replaceChildren(statusBadge(rawRow));
-    elements.rawRowNoteInput.value = rawRowStoredNote(rawRow);
-    elements.rawRowNoteInput.disabled = false;
-    elements.rawRowSaveButton.textContent = "Save";
     renderDefinitionList(elements.rawRowRawValues, [
       ["Date", formatDisplayDate(rawRow.raw_date)],
       ["Category", rawRow.raw_category],
@@ -2245,20 +2238,9 @@
     return rawRowNotes.get(rawRow.id) || "";
   }
 
-  function isRawRowNoteDirty(rawRow) {
-    return clean(elements.rawRowNoteInput.value) !== clean(rawRowStoredNote(rawRow));
-  }
-
   function updateRawRowModalActions() {
     const rawRow = activeRawRow();
     if (!rawRow) {
-      elements.rawRowSaveButton.hidden = true;
-      elements.rawRowRuleButton.hidden = true;
-      return;
-    }
-    const noteDirty = isRawRowNoteDirty(rawRow);
-    elements.rawRowSaveButton.hidden = !noteDirty;
-    if (noteDirty) {
       elements.rawRowRuleButton.hidden = true;
       return;
     }
@@ -2297,27 +2279,6 @@
       return;
     }
     updateRawRowModalActions();
-  }
-
-  function saveRawRowNote(event) {
-    event.preventDefault();
-    const rawRow = activeRawRow();
-    if (!rawRow) {
-      closeRawRowDialog();
-      return;
-    }
-    if (!isRawRowNoteDirty(rawRow)) {
-      closeRawRowDialog();
-      return;
-    }
-    const note = clean(elements.rawRowNoteInput.value);
-    if (note) {
-      rawRowNotes.set(rawRow.id, note);
-    } else {
-      rawRowNotes.delete(rawRow.id);
-    }
-    renderRawRows();
-    closeRawRowDialog();
   }
 
   async function deleteActiveRawRow() {
@@ -2848,7 +2809,7 @@
 
     [...selectedRawRowIds].forEach((rowId) => {
       const rawRow = state.rawRows.find((candidate) => candidate.id === rowId);
-      if (!rawRow || !isImportableRawRow(rawRow)) {
+      if (!rawRow || !isSelectableRawRow(rawRow)) {
         selectedRawRowIds.delete(rowId);
       }
     });
@@ -2880,7 +2841,7 @@
       checkbox.className = "row-checkbox";
       checkbox.type = "checkbox";
       checkbox.checked = selectedRawRowIds.has(rawRow.id);
-      checkbox.disabled = !isImportableRawRow(rawRow);
+      checkbox.disabled = !isSelectableRawRow(rawRow);
       checkbox.setAttribute("aria-label", `Select row ${rawRow.id}`);
       checkbox.addEventListener("click", (event) => event.stopPropagation());
       checkbox.addEventListener("keydown", (event) => event.stopPropagation());
@@ -2897,8 +2858,8 @@
       noteInput.type = "text";
       noteInput.className = "raw-note-input";
       noteInput.value = rawRowNotes.get(rawRow.id) || "";
-      noteInput.disabled = !isImportableRawRow(rawRow);
-      noteInput.placeholder = isImportableRawRow(rawRow) ? "Transaction note" : "";
+      noteInput.disabled = !isSelectableRawRow(rawRow);
+      noteInput.placeholder = isSelectableRawRow(rawRow) ? "Transaction note" : "";
       noteInput.setAttribute("aria-label", `Note for row ${rawRow.id}`);
       noteInput.addEventListener("click", (event) => event.stopPropagation());
       noteInput.addEventListener("keydown", (event) => event.stopPropagation());
@@ -2941,7 +2902,7 @@
   async function importSelectedRawRows() {
     const rowIds = [...selectedRawRowIds].filter((rowId) => {
       const rawRow = state.rawRows.find((candidate) => candidate.id === rowId);
-      return rawRow && isImportableRawRow(rawRow);
+      return rawRow && isSelectableRawRow(rawRow);
     });
     if (!rowIds.length) {
       return;
@@ -3033,7 +2994,7 @@
 
   function selectVisibleRawRows() {
     const selectableIds = visibleRawRows
-      .filter((row) => isImportableRawRow(row))
+      .filter((row) => isSelectableRawRow(row))
       .map((row) => row.id);
     selectableIds.forEach((rowId) => selectedRawRowIds.add(rowId));
     rawMobileImportColumnVisible = true;
@@ -3056,7 +3017,7 @@
   function updateImportSelectedButton() {
     const importableCount = [...selectedRawRowIds].filter((rowId) => {
       const rawRow = state.rawRows.find((candidate) => candidate.id === rowId);
-      return rawRow && isImportableRawRow(rawRow);
+      return rawRow && isSelectableRawRow(rawRow);
     }).length;
     elements.importSelectedRowsButton.disabled = importableCount === 0;
     elements.importSelectedRowsButton.hidden = importableCount === 0;
@@ -3069,7 +3030,7 @@
 
   function updateSelectVisibleButton() {
     const selectableIds = visibleRawRows
-      .filter((row) => isImportableRawRow(row))
+      .filter((row) => isSelectableRawRow(row))
       .map((row) => row.id);
     elements.selectVisibleRowsButton.disabled = selectableIds.length === 0;
     elements.selectVisibleRowsButton.title = "Select all visible";
@@ -3114,6 +3075,22 @@
 
   function isTemplateRawRow(rawRow) {
     return rawRow.import_status === "pre-fill";
+  }
+
+  function isSelectableRawRow(rawRow) {
+    if (isImportableRawRow(rawRow)) {
+      return true;
+    }
+    if (!isTemplateRawRow(rawRow)) {
+      return false;
+    }
+    const template = topMatchingRuleForRawRow(rawRow, "template");
+    return Boolean(
+      template
+      && template.set_transaction_type
+      && template.set_category_id
+      && clean(template.set_clean_description),
+    );
   }
 
   function topMatchingRuleForRawRow(rawRow, ruleType = null) {

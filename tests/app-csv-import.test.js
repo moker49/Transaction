@@ -28,6 +28,7 @@ const functionNames = [
   "parseCsv",
   "normalizeCsvRow",
   "firstCsvValue",
+  "collapseMultiSpaces",
   "signedAmountFromDebitCredit",
   "detectCsvLayout",
   "hasFields",
@@ -90,6 +91,25 @@ test("parses quoted CSV values and generic amount columns", () => {
       raw_category: null,
       raw_description: "Coffee, downtown",
       raw_amount: "-4.20",
+    },
+  ]);
+});
+
+test("collapses repeated spaces in raw CSV values", () => {
+  const csv = [
+    "Date,Description,Category,Amount",
+    "2026-06-06,Big   Store  Downtown,Food    Drink,-12.34",
+  ].join("\n");
+
+  const parsed = moduleUnderTest.exports.parseCsv(csv);
+  const rawRows = parsed.rows.map(moduleUnderTest.exports.normalizeCsvRow);
+
+  assert.deepEqual(rawRows, [
+    {
+      raw_date: "2026-06-06",
+      raw_category: "Food Drink",
+      raw_description: "Big Store Downtown",
+      raw_amount: "-12.34",
     },
   ]);
 });
