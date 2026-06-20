@@ -50,6 +50,7 @@ EXPECTED_TRANSACTION_RULE_COLUMNS = {
     "match_value",
     "match_description",
     "match_category",
+    "match_amount",
     "set_category_id",
     "set_clean_description",
     "set_transaction_type",
@@ -204,6 +205,15 @@ def migrate_existing_schema(conn: sqlite3.Connection, tables: Iterable[str]) -> 
             conn.execute("ALTER TABLE transaction_import_rules ADD COLUMN match_description TEXT")
         if "match_category" not in rule_columns:
             conn.execute("ALTER TABLE transaction_import_rules ADD COLUMN match_category TEXT")
+        if "match_amount" not in rule_columns:
+            conn.execute(
+                """
+                ALTER TABLE transaction_import_rules
+                ADD COLUMN match_amount TEXT NOT NULL DEFAULT 'any'
+                    CHECK (match_amount IN ('positive', 'negative', 'any'))
+                """
+            )
+        conn.execute("DROP INDEX IF EXISTS idx_transaction_import_rules_unique_match")
         conn.execute(
             """
             UPDATE transaction_import_rules
@@ -458,6 +468,7 @@ def rebuild_transaction_import_rules_with_expense_type(conn: sqlite3.Connection)
                 match_value TEXT NOT NULL,
                 match_description TEXT,
                 match_category TEXT,
+                match_amount TEXT NOT NULL DEFAULT 'any',
                 set_category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
                 set_clean_description TEXT,
                 set_transaction_type TEXT,
@@ -468,6 +479,7 @@ def rebuild_transaction_import_rules_with_expense_type(conn: sqlite3.Connection)
                 CHECK (rule_type IN ('auto-import', 'template')),
                 CHECK (match_field IN ('category', 'description')),
                 CHECK (match_type IN ('contains', 'equals', 'starts_with', 'regex')),
+                CHECK (match_amount IN ('positive', 'negative', 'any')),
                 CHECK (set_transaction_type IS NULL OR set_transaction_type IN ('income', 'expense', 'transfer')),
                 CHECK (is_active IN (0, 1)),
                 CHECK (set_category_id IS NOT NULL OR set_clean_description IS NOT NULL OR set_transaction_type IS NOT NULL OR add_tag_id IS NOT NULL)
@@ -485,6 +497,7 @@ def rebuild_transaction_import_rules_with_expense_type(conn: sqlite3.Connection)
                 match_value,
                 match_description,
                 match_category,
+                match_amount,
                 set_category_id,
                 set_clean_description,
                 set_transaction_type,
@@ -505,6 +518,7 @@ def rebuild_transaction_import_rules_with_expense_type(conn: sqlite3.Connection)
                 match_value,
                 match_description,
                 match_category,
+                COALESCE(match_amount, 'any'),
                 set_category_id,
                 set_clean_description,
                 CASE
@@ -525,7 +539,8 @@ def rebuild_transaction_import_rules_with_expense_type(conn: sqlite3.Connection)
                         ELSE COALESCE(rule_type, 'auto-import')
                     END,
                     COALESCE(match_description, ''),
-                    COALESCE(match_category, '')
+                    COALESCE(match_category, ''),
+                    COALESCE(match_amount, 'any')
             )
             """
         )
@@ -710,8 +725,12 @@ def schema_is_compatible(conn: sqlite3.Connection) -> bool:
         and "description" not in transaction_columns
         and EXPECTED_TRANSACTION_RULE_COLUMNS.issubset(transaction_rule_columns)
         and "rule_type" in transaction_rule_columns
+        and "match_amount" in transaction_rule_columns
         and "priority" not in transaction_rule_columns
         and "'auto-import'" in transaction_rule_ddl
+        and "'positive'" in transaction_rule_ddl
+        and "'negative'" in transaction_rule_ddl
+        and "'any'" in transaction_rule_ddl
         and "'expense'" in transaction_rule_ddl
         and "'transfer'" in transaction_rule_ddl
         and "'template'" in transaction_rule_ddl

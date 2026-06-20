@@ -127,6 +127,8 @@
     ruleDialog: document.querySelector("#ruleDialog"),
     ruleCategoryInput: document.querySelector("#ruleCategoryInput"),
     ruleCategoryButton: document.querySelector("#ruleCategoryButton"),
+    ruleMatchAmountInput: document.querySelector("#ruleMatchAmountInput"),
+    ruleMatchAmountGroup: document.querySelector("#ruleMatchAmountGroup"),
     ruleTypeInput: document.querySelector("#ruleTypeInput"),
     ruleTypeGroup: document.querySelector("#ruleTypeGroup"),
     ruleTags: document.querySelector("#ruleTags"),
@@ -283,7 +285,7 @@
   elements.dummyDatabaseToggle.addEventListener("change", updateDatabaseMode);
   elements.ruleAddButton.addEventListener("click", () => openRuleAddDialog());
   elements.ruleCancelButton.addEventListener("click", closeRuleDialog);
-  elements.ruleDismissButton.addEventListener("click", closeRuleDialog);
+  elements.ruleDismissButton.addEventListener("click", handleRuleDismissButton);
   elements.ruleDeleteButton.addEventListener("click", deleteEditingRule);
   elements.ruleCategoryButton.addEventListener("click", () => openCategoryPicker("rule"));
   elements.ruleKindGroup.addEventListener("click", (event) => {
@@ -296,6 +298,8 @@
   });
   elements.ruleTypeGroup.addEventListener("click", (event) => selectTypeFromGroup(event, elements.ruleTypeInput, elements.ruleTypeGroup));
   elements.ruleTypeGroup.addEventListener("keydown", (event) => navigateTypeGroup(event, elements.ruleTypeInput, elements.ruleTypeGroup));
+  elements.ruleMatchAmountGroup.addEventListener("click", (event) => selectTypeFromGroup(event, elements.ruleMatchAmountInput, elements.ruleMatchAmountGroup));
+  elements.ruleMatchAmountGroup.addEventListener("keydown", (event) => navigateTypeGroup(event, elements.ruleMatchAmountInput, elements.ruleMatchAmountGroup));
   elements.ruleForm.elements.matchDescription.addEventListener("input", updateRuleFieldErrorState);
   elements.ruleForm.elements.matchCategory.addEventListener("input", updateRuleFieldErrorState);
   elements.ruleForm.elements.setCleanDescription.addEventListener("input", updateRuleFieldErrorState);
@@ -786,6 +790,10 @@
   async function loadReferenceData({ shouldRender = true } = {}) {
     const payload = await apiRequest("/api/reference-data");
     applyReferenceData(payload.referenceData, { shouldRender });
+  }
+
+  function mutationPath(path) {
+    return `${path}?${dateRangeQuery()}`;
   }
 
   async function apiRequest(path, options = {}) {
@@ -1358,7 +1366,8 @@
       (rule.match_field === "description" ? clean(rule.match_value) : "");
     const category = clean(rule.match_category) ||
       (rule.match_field === "category" ? clean(rule.match_value) : "");
-    return { description, category };
+    const amount = clean(rule.match_amount) || "any";
+    return { description, category, amount };
   }
 
   function selectTypeFromGroup(event, input, group) {
@@ -1421,6 +1430,7 @@
     elements.ruleForm.elements.matchCategory.value = matchCategory;
     elements.ruleForm.elements.setCleanDescription.value = clean(prefill.setCleanDescription) || "";
     setTypeGroupValue(elements.ruleKindInput, elements.ruleKindGroup, prefill.ruleType || "auto-import");
+    setTypeGroupValue(elements.ruleMatchAmountInput, elements.ruleMatchAmountGroup, prefill.matchAmount || "any");
     setTypeGroupValue(elements.ruleTypeInput, elements.ruleTypeGroup, prefill.setTransactionType || "expense");
     setRuleCategoryValue(prefill.setCategoryId || null);
     renderRuleTags(prefill.addTagIds || []);
@@ -1454,6 +1464,7 @@
     clearRuleFieldErrors();
     elements.ruleDialogTitle.textContent = "Create Rule";
     elements.ruleSubmitButton.textContent = "Create Rule";
+    elements.ruleDismissButton.textContent = "Cancel";
     elements.ruleDeleteButton.hidden = true;
   }
 
@@ -1463,17 +1474,27 @@
     clearRuleFieldErrors();
     elements.ruleDialogTitle.textContent = "Edit Rule";
     elements.ruleSubmitButton.textContent = "Save";
+    elements.ruleDismissButton.textContent = "Create";
     elements.ruleDeleteButton.hidden = false;
     const form = elements.ruleForm;
     const matches = ruleMatchValues(rule);
     setTypeGroupValue(elements.ruleKindInput, elements.ruleKindGroup, rule.rule_type || "auto-import");
     form.elements.matchDescription.value = matches.description;
     form.elements.matchCategory.value = matches.category;
+    setTypeGroupValue(elements.ruleMatchAmountInput, elements.ruleMatchAmountGroup, matches.amount);
     form.elements.setCleanDescription.value = rule.set_clean_description || "";
     setTypeGroupValue(elements.ruleTypeInput, elements.ruleTypeGroup, rule.set_transaction_type || "expense");
     setRuleCategoryValue(rule.set_category_id);
     renderRuleTags(rule.tag_ids || (rule.add_tag_id === null ? [] : [rule.add_tag_id]));
     ruleEditSnapshot = buildRulePayload();
+  }
+
+  function handleRuleDismissButton() {
+    if (ruleDialogMode === "edit") {
+      saveRuleFromForm({ forceCreate: true });
+      return;
+    }
+    closeRuleDialog();
   }
 
   function syncRuleDialogModeForSelectedType() {
@@ -1498,8 +1519,11 @@
 
   async function saveRule(event) {
     event.preventDefault();
-    const formElement = event.currentTarget;
-    const payload = buildRulePayload(formElement);
+    await saveRuleFromForm();
+  }
+
+  async function saveRuleFromForm({ forceCreate = false } = {}) {
+    const payload = buildRulePayload(elements.ruleForm);
     clearRuleFieldErrors();
 
     if (!payload.match_description && !payload.match_category) {
@@ -1527,8 +1551,8 @@
       return;
     }
 
+    const isEdit = ruleDialogMode === "edit" && !forceCreate;
     try {
-      const isEdit = ruleDialogMode === "edit";
       const duplicateRule = findDuplicateRule(payload, isEdit ? editingRuleId : null);
       if (duplicateRule) {
         const action = await showDuplicateRuleWarning(duplicateRule);
@@ -1538,11 +1562,16 @@
         }
         return;
       }
+      const splitConflict = findSplitAmountConflict(payload, isEdit ? editingRuleId : null);
+      if (splitConflict) {
+        setModalMessage(elements.ruleMessage, "Match amount already has a positive or negative rule for the same match criteria.", true);
+        return;
+      }
       if (isEdit && payloadMatchesSnapshot(payload, ruleEditSnapshot)) {
         closeRuleDialog();
         return;
       }
-      const response = await apiRequest(isEdit ? `/api/rules/${editingRuleId}` : "/api/rules", {
+      const response = await apiRequest(mutationPath(isEdit ? `/api/rules/${editingRuleId}` : "/api/rules"), {
         method: isEdit ? "PATCH" : "POST",
         body: JSON.stringify(payload),
       });
@@ -1551,7 +1580,7 @@
     } catch (error) {
       setModalMessage(
         elements.ruleMessage,
-        error.message || (ruleDialogMode === "edit" ? "Could not update rule." : "Could not add rule."),
+        error.message || (isEdit ? "Could not update rule." : "Could not add rule."),
         true,
       );
     }
@@ -1650,8 +1679,31 @@
       const matches = ruleMatchValues(rule);
       return (rule.rule_type || "auto-import") === payload.rule_type
         && clean(matches.description) === clean(payload.match_description)
-        && clean(matches.category) === clean(payload.match_category);
+        && clean(matches.category) === clean(payload.match_category)
+        && matches.amount === (payload.match_amount || "any");
     }) || null;
+  }
+
+  function findRuleByAmount(payload, matchAmount, excludeRuleId = null) {
+    return state.rules.find((rule) => {
+      if (excludeRuleId !== null && Number(rule.id) === Number(excludeRuleId)) {
+        return false;
+      }
+      const matches = ruleMatchValues(rule);
+      return (rule.rule_type || "auto-import") === payload.rule_type
+        && clean(matches.description) === clean(payload.match_description)
+        && clean(matches.category) === clean(payload.match_category)
+        && matches.amount === matchAmount;
+    }) || null;
+  }
+
+  function findSplitAmountConflict(payload, excludeRuleId = null) {
+    if ((payload.match_amount || "any") !== "any") {
+      return null;
+    }
+    const positiveRule = findRuleByAmount(payload, "positive", excludeRuleId);
+    const negativeRule = findRuleByAmount(payload, "negative", excludeRuleId);
+    return positiveRule || negativeRule ? { positiveRule, negativeRule } : null;
   }
 
   function showDuplicateRuleWarning(rule) {
@@ -1664,6 +1716,7 @@
       `${kind} rule already exists.`,
       matches.description ? `Description: ${matches.description}` : "",
       matches.category ? `Category: ${matches.category}` : "",
+      `Amount: ${matchAmountLabel(matches.amount)}`,
     ].filter(Boolean).join("\n");
     openModal(elements.duplicateRuleDialog);
     return new Promise((resolve) => {
@@ -1800,7 +1853,7 @@
       return false;
     }
     try {
-      const payload = await apiRequest(`/api/rules/${rule.id}`, { method: "DELETE" });
+      const payload = await apiRequest(mutationPath(`/api/rules/${rule.id}`), { method: "DELETE" });
       applyStateFromPayload(payload);
       return true;
     } catch (error) {
@@ -2050,6 +2103,7 @@
       rule_type: ruleType,
       match_description: matchDescription,
       match_category: matchCategory,
+      match_amount: clean(form.get("matchAmount")) || "any",
       set_category_id: Number(form.get("setCategoryId")) || null,
       set_clean_description: setCleanDescription,
       set_transaction_type: clean(form.get("setTransactionType")) || null,
@@ -2066,6 +2120,14 @@
       tag_ids: selectedTagIdsFrom(elements.manualImportTags),
       note: clean(form.get("note")),
     };
+  }
+
+  function matchAmountLabel(matchAmount) {
+    return {
+      positive: "Positive",
+      negative: "Negative",
+      any: "Any",
+    }[matchAmount || "any"] || "Any";
   }
 
   function buildTransactionPayload() {
@@ -2349,7 +2411,7 @@
 
     elements.manualImportSubmitButton.disabled = true;
     try {
-      const response = await apiRequest(`/api/raw-rows/${rawRow.id}/manual-import`, {
+      const response = await apiRequest(mutationPath(`/api/raw-rows/${rawRow.id}/manual-import`), {
         method: "POST",
         body: JSON.stringify(payload),
       });
@@ -2787,6 +2849,7 @@
     if (matches.category) {
       list.appendChild(el("span", `Category contains "${matches.category}"`));
     }
+    list.appendChild(el("span", `Amount is ${matchAmountLabel(matches.amount).toLowerCase()}`));
     return list.childElementCount ? list : "-";
   }
 
@@ -2932,7 +2995,7 @@
       button.title = "Importing";
     }
     try {
-      const payload = await apiRequest("/api/raw-rows/import", {
+      const payload = await apiRequest(mutationPath("/api/raw-rows/import"), {
         method: "POST",
         body: JSON.stringify({ raw_row_ids: rowIds, raw_row_notes: notes }),
       });
@@ -3114,6 +3177,9 @@
   }
 
   function ruleMatchesRawRow(rule, rawRow) {
+    if (!ruleAmountMatches(rule, rawRow)) {
+      return false;
+    }
     const matches = ruleMatchValues(rule);
     const matchDescription = normalizeMatchText(matches.description);
     const matchCategory = normalizeMatchText(matches.category);
@@ -3129,6 +3195,38 @@
     const fieldValue = rule.match_field === "category" ? rawRow.raw_category : rawRow.raw_description;
     const needle = normalizeMatchText(rule.match_value);
     return Boolean(needle) && normalizeMatchText(fieldValue).includes(needle);
+  }
+
+  function ruleAmountMatches(rule, rawRow) {
+    const matchAmount = ruleMatchValues(rule).amount;
+    if (matchAmount === "any") {
+      return true;
+    }
+    const amount = parseRawAmount(rawRow.raw_amount);
+    if (!Number.isFinite(amount)) {
+      return false;
+    }
+    return matchAmount === "positive" ? amount > 0 : amount < 0;
+  }
+
+  function parseRawAmount(value) {
+    const rawValue = clean(value);
+    if (!rawValue) {
+      return NaN;
+    }
+    let normalized = rawValue;
+    if (normalized.startsWith("debit=")) {
+      const parts = Object.fromEntries(normalized.split("; ").map((part) => part.split("=", 2)).filter((part) => part.length === 2));
+      const debit = clean(parts.debit);
+      const credit = clean(parts.credit);
+      normalized = debit ? `-${debit.replace(/^-/, "")}` : credit;
+    }
+    const isNegative = normalized.startsWith("(") && normalized.endsWith(")");
+    const numeric = Number(normalized.replace(/[$,()]/g, ""));
+    if (!Number.isFinite(numeric)) {
+      return NaN;
+    }
+    return isNegative ? -numeric : numeric;
   }
 
   function normalizeMatchText(value) {

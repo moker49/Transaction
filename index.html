@@ -426,6 +426,24 @@
               <input name="matchCategory" type="text" autocomplete="off">
             </label>
           </div>
+          <div class="type-button-row">
+            <input name="matchAmount" type="hidden" id="ruleMatchAmountInput" value="any">
+            <div class="connected-button-group" id="ruleMatchAmountGroup" role="radiogroup"
+              aria-label="Match amount">
+              <button type="button" class="connected-button" data-type-value="positive" role="radio">
+                <span class="material-symbols-outlined" aria-hidden="true">add</span>
+                <span>Positive</span>
+              </button>
+              <button type="button" class="connected-button" data-type-value="negative" role="radio">
+                <span class="material-symbols-outlined" aria-hidden="true">remove</span>
+                <span>Negative</span>
+              </button>
+              <button type="button" class="connected-button" data-type-value="any" role="radio">
+                <span class="material-symbols-outlined" aria-hidden="true">all_inclusive</span>
+                <span>Any</span>
+              </button>
+            </div>
+          </div>
         </div>
         <div class="form-divider" aria-hidden="true"></div>
         <div class="rule-form-column">

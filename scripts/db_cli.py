@@ -35,6 +35,7 @@ MATCH_TYPES = {"contains", "equals", "starts_with", "regex"}
 RULE_TYPES = {"auto-import", "template"}
 IMPORTABLE_RAW_ROW_STATUSES = {"auto-importable", "pre-fill"}
 TRANSACTION_TYPES = {"income", "expense", "transfer"}
+MATCH_AMOUNTS = {"positive", "negative", "any"}
 
 
 class CliError(Exception):
@@ -153,6 +154,13 @@ def validate_rule_type(value: str | None) -> str:
     return normalized
 
 
+def validate_match_amount(value: str | None) -> str:
+    normalized = normalize_text(value) or "any"
+    if normalized not in MATCH_AMOUNTS:
+        raise CliError(f"match_amount must be one of: {', '.join(sorted(MATCH_AMOUNTS))}")
+    return normalized
+
+
 def validate_rule_actions(
     set_category_id: int | None,
     set_clean_description: str | None,
@@ -196,7 +204,6 @@ def rule_specificity_order_sql() -> str:
             WHEN match_description IS NOT NULL AND match_category IS NOT NULL THEN 0
             WHEN match_description IS NOT NULL THEN 1
             WHEN match_category IS NOT NULL THEN 2
-            ELSE 3
         END,
         id
     """
@@ -207,20 +214,27 @@ def fetch_duplicate_transaction_rule(
     rule_type: str,
     match_description: str | None,
     match_category: str | None,
+    match_amount: str = "any",
     exclude_rule_id: int | None = None,
 ) -> sqlite3.Row | None:
-    values: list[Any] = [validate_rule_type(rule_type), match_description or "", match_category or ""]
+    values: list[Any] = [
+        validate_rule_type(rule_type),
+        match_description or "",
+        match_category or "",
+        validate_match_amount(match_amount),
+    ]
     exclude_clause = ""
     if exclude_rule_id is not None:
         exclude_clause = "AND id != ?"
         values.append(exclude_rule_id)
     return conn.execute(
         f"""
-        SELECT id, name, rule_type, match_description, match_category
+        SELECT id, name, rule_type, match_description, match_category, match_amount
         FROM transaction_import_rules
         WHERE rule_type = ?
             AND COALESCE(match_description, '') = ?
             AND COALESCE(match_category, '') = ?
+            AND match_amount = ?
             {exclude_clause}
         ORDER BY id
         LIMIT 1
@@ -446,6 +460,7 @@ def fetch_transaction_rule(conn: sqlite3.Connection, rule_id: int) -> sqlite3.Ro
             r.match_value,
             r.match_description,
             r.match_category,
+            r.match_amount,
             r.set_category_id,
             c.name AS set_category,
             r.set_clean_description,
@@ -648,6 +663,7 @@ def fetch_active_rules(conn: sqlite3.Connection, rule_type: str | None = None) -
             match_value,
             match_description,
             match_category,
+            match_amount,
             set_category_id,
             set_clean_description,
             set_transaction_type,
@@ -676,6 +692,8 @@ def fetch_rule_tag_ids_by_rule(conn: sqlite3.Connection) -> dict[int, list[int]]
 
 
 def rule_matches(rule: sqlite3.Row, raw_row: sqlite3.Row) -> bool:
+    if not rule_amount_matches(rule["match_amount"], raw_row):
+        return False
     match_description = normalize_match_text(rule["match_description"])
     match_category = normalize_match_text(rule["match_category"])
     if match_description or match_category:
@@ -693,6 +711,19 @@ def rule_matches(rule: sqlite3.Row, raw_row: sqlite3.Row) -> bool:
     needle = normalize_match_text(rule["match_value"])
 
     return bool(needle) and needle in haystack
+
+
+def rule_amount_matches(match_amount: str | None, raw_row: sqlite3.Row) -> bool:
+    normalized_match_amount = validate_match_amount(match_amount)
+    if normalized_match_amount == "any":
+        return True
+    try:
+        amount_cents = parse_amount_cents(raw_row["raw_amount"])
+    except CliError:
+        return False
+    if normalized_match_amount == "positive":
+        return amount_cents > 0
+    return amount_cents < 0
 
 
 def apply_import_rule_rows(
@@ -769,12 +800,21 @@ def import_rule_result_for_raw_row(conn: sqlite3.Connection, raw_row: sqlite3.Ro
     return apply_import_rules(conn, raw_row, rule_type)
 
 
+def import_rule_result_for_status(
+    conn: sqlite3.Connection,
+    raw_row: sqlite3.Row,
+    import_status: str,
+) -> dict[str, Any]:
+    rule_type = "template" if import_status == "pre-fill" else "auto-import"
+    return apply_import_rules(conn, raw_row, rule_type)
+
+
 def sync_raw_row_importability_status(conn: sqlite3.Connection) -> None:
     auto_import_rules = fetch_active_rules(conn, "auto-import")
     template_rules = fetch_active_rules(conn, "template")
     rows = conn.execute(
         """
-        SELECT id, raw_category, raw_description, import_status
+        SELECT id, raw_category, raw_description, raw_amount, import_status
         FROM raw_imported_rows
         WHERE import_status IN ('auto-importable', 'manual', 'pre-fill', 'importable', 'notImportable', 'template')
         ORDER BY id
@@ -874,16 +914,32 @@ def import_raw_rows(
         if normalize_text(note) is not None
     }
 
-    sync_raw_row_importability_status(conn)
     raw_rows = fetch_raw_rows_for_import(conn, normalized_ids)
     found_ids = {int(row["id"]) for row in raw_rows}
     missing_ids = [row_id for row_id in normalized_ids if row_id not in found_ids]
     if missing_ids:
         raise CliError(f"Raw row not found: {', '.join(str(row_id) for row_id in missing_ids)}")
-    unavailable_rows = [
-        f"{row['id']} ({row['import_status']})"
+
+    current_status_by_row_id = {
+        int(row["id"]): raw_row_importability_status(conn, row)
         for row in raw_rows
-        if row["import_status"] not in IMPORTABLE_RAW_ROW_STATUSES
+    }
+    for raw_row in raw_rows:
+        current_status = current_status_by_row_id[int(raw_row["id"])]
+        if current_status != raw_row["import_status"]:
+            conn.execute(
+                """
+                UPDATE raw_imported_rows
+                SET import_status = ?,
+                    updated_at = datetime('now')
+                WHERE id = ?
+                """,
+                (current_status, raw_row["id"]),
+            )
+    unavailable_rows = [
+        f"{row['id']} ({current_status_by_row_id[int(row['id'])]})"
+        for row in raw_rows
+        if current_status_by_row_id[int(row["id"])] not in IMPORTABLE_RAW_ROW_STATUSES
     ]
     if unavailable_rows:
         raise CliError(f"Only auto-importable raw rows can be imported: {', '.join(unavailable_rows)}")
@@ -892,7 +948,7 @@ def import_raw_rows(
     untyped_rows = []
     undescribed_rows = []
     for raw_row in raw_rows:
-        rule_result = import_rule_result_for_raw_row(conn, raw_row)
+        rule_result = import_rule_result_for_status(conn, raw_row, current_status_by_row_id[int(raw_row["id"])])
         if rule_result["category_id"] is None:
             uncategorized_rows.append(str(raw_row["id"]))
         if rule_result["transaction_type"] is None:
@@ -916,7 +972,7 @@ def import_raw_rows(
             if description is None:
                 raise CliError("raw_description is required.")
 
-            rule_result = import_rule_result_for_raw_row(conn, raw_row)
+            rule_result = import_rule_result_for_status(conn, raw_row, current_status_by_row_id[int(raw_row["id"])])
             clean_description = normalize_text(rule_result["clean_description"]) or description
             transaction_hash = make_transaction_hash(
                 int(raw_row["account_id"]),
@@ -1549,6 +1605,7 @@ def command_untag_transaction(args: argparse.Namespace) -> None:
 def command_add_transaction_rule(args: argparse.Namespace) -> None:
     name = nonempty(args.name, "name")
     rule_type = validate_rule_type(args.rule_type)
+    match_amount = validate_match_amount(args.match_amount)
     match_description, match_category, match_field, match_type, match_value = parse_rule_match_values(
         match_description=args.match_description,
         match_category=args.match_category,
@@ -1563,7 +1620,7 @@ def command_add_transaction_rule(args: argparse.Namespace) -> None:
     validate_rule_payload(rule_type, args.set_category_id, set_clean_description, set_transaction_type, args.add_tag_id)
 
     with connect(args.db) as conn:
-        duplicate = fetch_duplicate_transaction_rule(conn, rule_type, match_description, match_category)
+        duplicate = fetch_duplicate_transaction_rule(conn, rule_type, match_description, match_category, match_amount)
         if duplicate is not None:
             raise CliError(f"Duplicate rule matches existing rule {duplicate['id']}: {duplicate['name']}")
         if args.set_category_id is not None:
@@ -1581,13 +1638,14 @@ def command_add_transaction_rule(args: argparse.Namespace) -> None:
                 match_value,
                 match_description,
                 match_category,
+                match_amount,
                 set_category_id,
                 set_clean_description,
                 set_transaction_type,
                 add_tag_id,
                 is_active
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 name,
@@ -1597,6 +1655,7 @@ def command_add_transaction_rule(args: argparse.Namespace) -> None:
                 match_value,
                 match_description,
                 match_category,
+                match_amount,
                 args.set_category_id,
                 set_clean_description,
                 set_transaction_type,
@@ -1630,6 +1689,7 @@ def command_update_transaction_rule(args: argparse.Namespace) -> None:
         next_add_tag_id = current["add_tag_id"]
         next_match_description = current["match_description"]
         next_match_category = current["match_category"]
+        next_match_amount = current["match_amount"]
 
         if args.name is not None:
             updates.append("name = ?")
@@ -1698,6 +1758,11 @@ def command_update_transaction_rule(args: argparse.Namespace) -> None:
             updates.append("match_value = ?")
             values.append(next_match_value)
 
+        if args.match_amount is not None:
+            next_match_amount = validate_match_amount(args.match_amount)
+            updates.append("match_amount = ?")
+            values.append(next_match_amount)
+
         if args.clear_category:
             next_set_category_id = None
             updates.append("set_category_id = ?")
@@ -1752,6 +1817,7 @@ def command_update_transaction_rule(args: argparse.Namespace) -> None:
             next_rule_type,
             next_match_description,
             next_match_category,
+            next_match_amount,
             exclude_rule_id=args.id,
         )
         if duplicate is not None:
@@ -1937,6 +2003,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_rule_parser.add_argument("--rule-type", choices=sorted(RULE_TYPES), default="auto-import")
     add_rule_parser.add_argument("--match-description")
     add_rule_parser.add_argument("--match-category")
+    add_rule_parser.add_argument("--match-amount", choices=sorted(MATCH_AMOUNTS), default="any")
     add_rule_parser.add_argument("--match-field", choices=sorted(MATCH_FIELDS))
     add_rule_parser.add_argument("--match-type", choices=sorted(MATCH_TYPES))
     add_rule_parser.add_argument("--match-value")
@@ -1958,6 +2025,7 @@ def build_parser() -> argparse.ArgumentParser:
     update_rule_parser.add_argument("--clear-match-description", action="store_true")
     update_rule_parser.add_argument("--match-category")
     update_rule_parser.add_argument("--clear-match-category", action="store_true")
+    update_rule_parser.add_argument("--match-amount", choices=sorted(MATCH_AMOUNTS))
     update_rule_parser.add_argument("--match-field", choices=sorted(MATCH_FIELDS))
     update_rule_parser.add_argument("--match-type", choices=sorted(MATCH_TYPES))
     update_rule_parser.add_argument("--match-value")

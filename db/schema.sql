@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS transaction_import_rules (
     match_value TEXT NOT NULL,
     match_description TEXT,
     match_category TEXT,
+    match_amount TEXT NOT NULL DEFAULT 'any',
     set_category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
     set_clean_description TEXT,
     set_transaction_type TEXT,
@@ -72,6 +73,7 @@ CREATE TABLE IF NOT EXISTS transaction_import_rules (
     CHECK (rule_type IN ('auto-import', 'template')),
     CHECK (match_field IN ('category', 'description')),
     CHECK (match_type IN ('contains', 'equals', 'starts_with', 'regex')),
+    CHECK (match_amount IN ('positive', 'negative', 'any')),
     CHECK (set_transaction_type IS NULL OR set_transaction_type IN ('income', 'expense', 'transfer')),
     CHECK (is_active IN (0, 1)),
     CHECK (set_category_id IS NOT NULL OR set_clean_description IS NOT NULL OR set_transaction_type IS NOT NULL OR add_tag_id IS NOT NULL)
@@ -153,7 +155,7 @@ CREATE INDEX IF NOT EXISTS idx_transactions_hash ON transactions(account_id, tra
 CREATE INDEX IF NOT EXISTS idx_transaction_import_rules_active_type ON transaction_import_rules(is_active, rule_type, id);
 CREATE INDEX IF NOT EXISTS idx_transaction_import_rules_type_active ON transaction_import_rules(rule_type, is_active, id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_transaction_import_rules_unique_match
-ON transaction_import_rules(rule_type, COALESCE(match_description, ''), COALESCE(match_category, ''));
+ON transaction_import_rules(rule_type, COALESCE(match_description, ''), COALESCE(match_category, ''), match_amount);
 CREATE INDEX IF NOT EXISTS idx_transaction_import_rules_match ON transaction_import_rules(match_field, match_type);
 CREATE INDEX IF NOT EXISTS idx_transaction_import_rules_set_category_id ON transaction_import_rules(set_category_id);
 CREATE INDEX IF NOT EXISTS idx_transaction_import_rules_add_tag_id ON transaction_import_rules(add_tag_id);

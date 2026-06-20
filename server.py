@@ -5,12 +5,13 @@ import os
 import shutil
 import sqlite3
 import sys
+import time
 from contextlib import closing
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Any
 
-from flask import Flask, jsonify, request, send_from_directory, has_request_context
+from flask import Flask, jsonify, request, send_from_directory, has_request_context, g
 
 
 ROOT = Path(__file__).resolve().parent
@@ -45,11 +46,13 @@ from db_cli import (  # noqa: E402
     raw_row_hash,
     sync_raw_row_importability_status,
     validate_rule_type,
+    validate_match_amount,
     validate_transaction_type,
     validate_rule_payload,
     parse_amount_cents,
     parse_transaction_date,
     make_transaction_hash,
+    normalize_match_text,
     normalize_text,
 )
 from init_db import init_db  # noqa: E402
@@ -61,6 +64,7 @@ DUMMY_DB_PATH = DEFAULT_DB_PATH.with_name("transactions.dummy.sqlite")
 DUMMY_RESTORE_DB_PATH = DEFAULT_DB_PATH.with_name("transactions.dummy.restore.sqlite")
 BILL_TAG_NAME = "bill"
 TRANSACTION_TYPES = ("income", "expense", "transfer")
+ENSURED_DATABASE_PATHS: set[Path] = set()
 DEFAULT_CATEGORIES = (
     {"name": "Income", "color": "#208020", "children": ("Salary", "Bonus", "Interest", "Dividend", "Refund", "Gift Received", "Resale")},
     {"name": "Housing", "color": "#c4588e", "children": ("Rent", "Mortgage", "Property Tax", "HOA", "Home Insurance", "Home Maintenance")},
@@ -118,6 +122,11 @@ def handle_sqlite_error(error: sqlite3.Error):
     return jsonify({"error": f"SQLite error: {error}"}), 500
 
 
+@app.before_request
+def record_request_start():
+    g.request_started_at = time.perf_counter()
+
+
 @app.get("/")
 def index():
     return send_from_directory(ROOT, "index.html")
@@ -127,6 +136,11 @@ def index():
 def prevent_static_cache(response):
     if request.path in {"/", "/index.html"} or request.path.endswith((".js", ".css")):
         response.headers["Cache-Control"] = "no-store, max-age=0"
+    started_at = getattr(g, "request_started_at", None)
+    if started_at is not None:
+        timing = f"total;dur={elapsed_ms(started_at):.1f}"
+        existing_timing = response.headers.get("Server-Timing")
+        response.headers["Server-Timing"] = f"{existing_timing}, {timing}" if existing_timing else timing
     return response
 
 
@@ -168,15 +182,29 @@ def get_reference_data():
 
 @app.get("/api/transactions")
 def get_transaction_data():
+    request_started_at = time.perf_counter()
+    ensure_started_at = time.perf_counter()
     ensure_database()
+    ensure_elapsed_ms = elapsed_ms(ensure_started_at)
     start_date = parse_date_query_param(request.args.get("startDate"), "startDate")
     end_date = parse_date_query_param(request.args.get("endDate"), "endDate")
     if start_date > end_date:
         raise CliError("startDate must be on or before endDate.")
     with closing(connect(current_db_path())) as conn:
+        read_started_at = time.perf_counter()
         transaction_data = read_transaction_data(conn, start_date, end_date)
+        read_elapsed_ms = elapsed_ms(read_started_at)
         conn.commit()
-    return jsonify({"transactionData": transaction_data})
+    response = jsonify({"transactionData": transaction_data})
+    total_elapsed_ms = elapsed_ms(request_started_at)
+    response.headers["Server-Timing"] = (
+        f"ensure;dur={ensure_elapsed_ms:.1f}, "
+        f"read;dur={read_elapsed_ms:.1f}, "
+        f"handler;dur={total_elapsed_ms:.1f}"
+    )
+    response.headers["X-Transaction-Count"] = str(len(transaction_data["realTransactions"]))
+    response.headers["X-Raw-Transaction-Count"] = str(len(transaction_data["rawTransactions"]))
+    return response
 
 
 @app.post("/api/accounts")
@@ -389,6 +417,64 @@ def legacy_rule_match(match_description: str | None, match_category: str | None)
     raise CliError("Rule must match description, category, or both.")
 
 
+def opposite_match_amount(match_amount: str) -> str:
+    if match_amount == "positive":
+        return "negative"
+    if match_amount == "negative":
+        return "positive"
+    raise CliError("Only positive and negative match amounts can be split.")
+
+
+def fetch_rule_by_match_amount(
+    conn: sqlite3.Connection,
+    rule_type: str,
+    match_description: str | None,
+    match_category: str | None,
+    match_amount: str,
+    exclude_rule_id: int | None = None,
+) -> sqlite3.Row | None:
+    return fetch_duplicate_transaction_rule(
+        conn,
+        rule_type,
+        match_description,
+        match_category,
+        match_amount,
+        exclude_rule_id=exclude_rule_id,
+    )
+
+
+def prepare_rule_amount_create(
+    conn: sqlite3.Connection,
+    rule_type: str,
+    match_description: str | None,
+    match_category: str | None,
+    match_amount: str,
+) -> None:
+    duplicate = fetch_rule_by_match_amount(conn, rule_type, match_description, match_category, match_amount)
+    if duplicate is not None:
+        raise CliError(f"Duplicate rule matches existing rule {duplicate['id']}: {duplicate['name']}")
+
+    if match_amount == "any":
+        positive_rule = fetch_rule_by_match_amount(conn, rule_type, match_description, match_category, "positive")
+        negative_rule = fetch_rule_by_match_amount(conn, rule_type, match_description, match_category, "negative")
+        if positive_rule is not None or negative_rule is not None:
+            raise CliError("Match amount already has a positive or negative rule for the same match criteria.")
+        return
+
+    any_rule = fetch_rule_by_match_amount(conn, rule_type, match_description, match_category, "any")
+    if any_rule is None:
+        return
+    conn.execute(
+        """
+        UPDATE transaction_import_rules
+        SET match_amount = ?,
+            updated_at = datetime('now')
+        WHERE id = ?
+        """,
+        (opposite_match_amount(match_amount), any_rule["id"]),
+    )
+
+
 @app.post("/api/rules")
 def create_rule():
     ensure_database()
@@ -396,6 +482,7 @@ def create_rule():
     name = nonempty(str(data.get("name", "")), "name")
     rule_type = validate_rule_type(data.get("rule_type"))
     match_description, match_category = parse_rule_match_inputs(data)
+    match_amount = validate_match_amount(data.get("match_amount"))
     match_field, match_type, match_value = legacy_rule_match(match_description, match_category)
     set_category_id = int(data["set_category_id"]) if data.get("set_category_id") is not None else None
     set_clean_description = optional_nonempty(data.get("set_clean_description"), "set_clean_description")
@@ -406,9 +493,7 @@ def create_rule():
     validate_rule_payload(rule_type, set_category_id, set_clean_description, set_transaction_type, add_tag_id)
 
     with closing(connect(current_db_path())) as conn:
-        duplicate = fetch_duplicate_transaction_rule(conn, rule_type, match_description, match_category)
-        if duplicate is not None:
-            raise CliError(f"Duplicate rule matches existing rule {duplicate['id']}: {duplicate['name']}")
+        prepare_rule_amount_create(conn, rule_type, match_description, match_category, match_amount)
         if set_category_id is not None:
             require_category(conn, set_category_id)
         for tag_id in add_tag_ids:
@@ -423,12 +508,13 @@ def create_rule():
                 match_value,
                 match_description,
                 match_category,
+                match_amount,
                 set_category_id,
                 set_clean_description,
                 set_transaction_type,
                 add_tag_id
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 name,
@@ -438,6 +524,7 @@ def create_rule():
                 match_value,
                 match_description,
                 match_category,
+                match_amount,
                 set_category_id,
                 set_clean_description,
                 set_transaction_type,
@@ -447,10 +534,10 @@ def create_rule():
         rule_id = int(cursor.lastrowid)
         replace_rule_tags(conn, rule_id, add_tag_ids)
         rule = dict(fetch_transaction_rule(conn, rule_id))
-        state = read_state(conn)
+        payload = mutation_response_payload(conn, refresh_raw_status=True)
         conn.commit()
 
-    return jsonify({"transaction_rule": rule, "state": state}), 201
+    return jsonify({"transaction_rule": rule, **payload}), 201
 
 
 @app.patch("/api/rules/<int:rule_id>")
@@ -470,6 +557,7 @@ def update_rule(rule_id: int):
         next_add_tag_ids = fetch_rule_tag_ids(conn, rule_id)
         next_match_description = current["match_description"]
         next_match_category = current["match_category"]
+        next_match_amount = current["match_amount"]
 
         if "name" in data:
             updates.append("name = ?")
@@ -486,6 +574,10 @@ def update_rule(rule_id: int):
             next_match_category = optional_nonempty(data.get("match_category"), "match_category")
             updates.append("match_category = ?")
             values.append(next_match_category)
+        if "match_amount" in data:
+            next_match_amount = validate_match_amount(data.get("match_amount"))
+            updates.append("match_amount = ?")
+            values.append(next_match_amount)
         if "set_category_id" in data:
             raw_category_id = data.get("set_category_id")
             next_set_category_id = int(raw_category_id) if raw_category_id is not None else None
@@ -537,6 +629,7 @@ def update_rule(rule_id: int):
             next_rule_type,
             next_match_description,
             next_match_category,
+            next_match_amount,
             exclude_rule_id=rule_id,
         )
         if duplicate is not None:
@@ -548,10 +641,10 @@ def update_rule(rule_id: int):
         if "add_tag_ids" in data or "add_tag_id" in data:
             replace_rule_tags(conn, rule_id, next_add_tag_ids)
         rule = dict(fetch_transaction_rule(conn, rule_id))
-        state = read_state(conn)
+        payload = mutation_response_payload(conn, refresh_raw_status=True)
         conn.commit()
 
-    return jsonify({"transaction_rule": rule, "state": state})
+    return jsonify({"transaction_rule": rule, **payload})
 
 
 @app.delete("/api/rules/<int:rule_id>")
@@ -560,10 +653,10 @@ def delete_rule(rule_id: int):
     with closing(connect(current_db_path())) as conn:
         rule = dict(fetch_transaction_rule(conn, rule_id))
         conn.execute("DELETE FROM transaction_import_rules WHERE id = ?", (rule_id,))
-        state = read_state(conn)
+        payload = mutation_response_payload(conn, refresh_raw_status=True)
         conn.commit()
 
-    return jsonify({"status": "deleted", "transaction_rule": rule, "state": state})
+    return jsonify({"status": "deleted", "transaction_rule": rule, **payload})
 
 
 @app.delete("/api/transactions/<int:transaction_id>")
@@ -855,10 +948,10 @@ def import_selected_raw_rows():
                 for row_id, note in raw_row_notes.items()
             },
         )
-        state = read_state(conn)
+        payload = mutation_response_payload(conn, raw_status_current=True, include_reference=False)
         conn.commit()
 
-    return jsonify({"import_result": result, "state": state})
+    return jsonify({"import_result": result, **payload})
 
 
 @app.post("/api/raw-rows/<int:raw_row_id>/manual-import")
@@ -977,10 +1070,10 @@ def manual_import_raw_row(raw_row_id: int):
             )
             result = {"raw_row_id": raw_row_id, "status": "imported", "transaction_id": transaction_id}
 
-        state = read_state(conn)
+        payload = mutation_response_payload(conn, raw_status_current=True, include_reference=False)
         conn.commit()
 
-    return jsonify({"import_result": result, "state": state})
+    return jsonify({"import_result": result, **payload})
 
 
 @app.post("/api/dev/regenerate-database")
@@ -1015,13 +1108,59 @@ def current_db_path() -> Path:
 
 
 def ensure_database() -> None:
-    init_db(current_db_path())
+    db_path = current_db_path()
+    if db_path in ENSURED_DATABASE_PATHS and db_path.exists():
+        return
+    init_db(db_path)
+    ENSURED_DATABASE_PATHS.add(db_path)
 
 
 def parse_date_query_param(value: str | None, field_name: str) -> str:
     if value is None:
         raise CliError(f"{field_name} is required.")
     return parse_transaction_date(value)
+
+
+def optional_date_range_query() -> tuple[str, str] | None:
+    start_value = request.args.get("startDate")
+    end_value = request.args.get("endDate")
+    if start_value is None and end_value is None:
+        return None
+    if start_value is None or end_value is None:
+        raise CliError("startDate and endDate must be provided together.")
+    start_date = parse_date_query_param(start_value, "startDate")
+    end_date = parse_date_query_param(end_value, "endDate")
+    if start_date > end_date:
+        raise CliError("startDate must be on or before endDate.")
+    return start_date, end_date
+
+
+def mutation_response_payload(
+    conn: sqlite3.Connection,
+    *,
+    raw_status_current: bool = False,
+    refresh_raw_status: bool = False,
+    include_reference: bool = True,
+) -> dict[str, Any]:
+    date_range = optional_date_range_query()
+    if date_range is not None:
+        start_date, end_date = date_range
+        payload = {
+            "transactionData": read_transaction_data(
+                conn,
+                start_date,
+                end_date,
+                refresh_raw_status=refresh_raw_status,
+            ),
+        }
+        if include_reference:
+            payload["referenceData"] = read_reference_data(conn)
+        return payload
+    return {"state": read_state(conn, sync_status=not raw_status_current)}
+
+
+def elapsed_ms(started_at: float) -> float:
+    return (time.perf_counter() - started_at) * 1000
 
 
 def reference_data_from_state(state: dict[str, Any]) -> dict[str, Any]:
@@ -1221,16 +1360,21 @@ def read_reference_data(conn: sqlite3.Connection) -> dict[str, Any]:
     }
 
 
-def read_transaction_data(conn: sqlite3.Connection, start_date: str, end_date: str) -> dict[str, Any]:
-    sync_raw_row_importability_status(conn)
+def read_transaction_data(
+    conn: sqlite3.Connection,
+    start_date: str,
+    end_date: str,
+    *,
+    refresh_raw_status: bool = False,
+) -> dict[str, Any]:
     ensure_default_categories(conn)
     ensure_system_tags(conn)
     categories = read_categories(conn)
-    raw_rows = read_raw_rows(conn)
+    raw_rows = read_raw_rows(conn, start_date, end_date)
     transactions = read_transactions(conn, start_date, end_date)
     transaction_tags = read_transaction_tags(conn, start_date, end_date)
     apply_transaction_tags(transactions, transaction_tags)
-    apply_raw_row_previews(conn, raw_rows, categories)
+    apply_raw_row_previews(conn, raw_rows, categories, refresh_status=refresh_raw_status)
     return transaction_data_from_state(
         {
             "categories": categories,
@@ -1252,10 +1396,29 @@ def read_tags(conn: sqlite3.Connection) -> list[dict[str, Any]]:
     return rows_to_dicts(conn.execute("SELECT id, name, created_at FROM tags ORDER BY name, id").fetchall())
 
 
-def read_raw_rows(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+def read_raw_rows(conn: sqlite3.Connection, start_date: str | None = None, end_date: str | None = None) -> list[dict[str, Any]]:
+    date_expression = """
+        CASE
+            WHEN rr.raw_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' THEN rr.raw_date
+            WHEN rr.raw_date GLOB '[0-9][0-9]/[0-9][0-9]/[0-9][0-9][0-9][0-9]' THEN
+                substr(rr.raw_date, 7, 4) || '-' || substr(rr.raw_date, 1, 2) || '-' || substr(rr.raw_date, 4, 2)
+            WHEN rr.raw_date GLOB '[0-9][0-9]/[0-9][0-9]/[0-9][0-9]' THEN
+                '20' || substr(rr.raw_date, 7, 2) || '-' || substr(rr.raw_date, 1, 2) || '-' || substr(rr.raw_date, 4, 2)
+            ELSE NULL
+        END
+    """
+    filters: list[str] = []
+    values: list[Any] = []
+    if start_date is not None:
+        filters.append(f"({date_expression}) >= ?")
+        values.append(start_date)
+    if end_date is not None:
+        filters.append(f"({date_expression}) <= ?")
+        values.append(end_date)
+    where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
     return rows_to_dicts(
         conn.execute(
-            """
+            f"""
             SELECT
                 rr.id,
                 rr.imported_source_id,
@@ -1272,8 +1435,10 @@ def read_raw_rows(conn: sqlite3.Connection) -> list[dict[str, Any]]:
                 rr.updated_at
             FROM raw_imported_rows rr
             JOIN imported_source src ON src.id = rr.imported_source_id
+            {where_clause}
             ORDER BY rr.id
-            """
+            """,
+            values,
         ).fetchall()
     )
 
@@ -1373,6 +1538,7 @@ def read_rules(conn: sqlite3.Connection) -> list[dict[str, Any]]:
                 r.match_value,
                 r.match_description,
                 r.match_category,
+                r.match_amount,
                 r.set_category_id,
                 c.name AS set_category,
                 r.set_clean_description,
@@ -1390,7 +1556,6 @@ def read_rules(conn: sqlite3.Connection) -> list[dict[str, Any]]:
                     WHEN r.match_description IS NOT NULL AND r.match_category IS NOT NULL THEN 0
                     WHEN r.match_description IS NOT NULL THEN 1
                     WHEN r.match_category IS NOT NULL THEN 2
-                    ELSE 3
                 END,
                 r.id
             """
@@ -1449,21 +1614,43 @@ def apply_raw_row_previews(
     conn: sqlite3.Connection,
     raw_rows: list[dict[str, Any]],
     categories: list[dict[str, Any]],
+    *,
+    refresh_status: bool = False,
 ) -> None:
     auto_import_rules = fetch_active_rules(conn, "auto-import")
     template_rules = fetch_active_rules(conn, "template")
     rule_tag_ids_by_rule = fetch_rule_tag_ids_by_rule(conn)
+    auto_import_matchers = build_rule_matchers(auto_import_rules, rule_tag_ids_by_rule)
+    template_matchers = build_rule_matchers(template_rules, rule_tag_ids_by_rule)
     categories_by_id = {category["id"]: category["name"] for category in categories}
     for row in raw_rows:
         if row["import_status"] in ("auto-importable", "manual", "pre-fill"):
-            auto_import_preview = apply_import_rule_rows(auto_import_rules, row, rule_tag_ids_by_rule)
-            preview = (
-                auto_import_preview
-                if rule_preview_has_values(auto_import_preview)
-                else apply_import_rule_rows(template_rules, row, rule_tag_ids_by_rule)
-            )
+            row_match = build_raw_row_match(row)
+            auto_import_preview = apply_rule_matchers(auto_import_matchers, row_match)
+            if rule_preview_has_values(auto_import_preview):
+                preview = auto_import_preview
+                next_status = "auto-importable" if (
+                    preview.get("category_id") is not None
+                    and preview.get("transaction_type") is not None
+                    and normalize_text(preview.get("clean_description")) is not None
+                ) else "manual"
+            else:
+                preview = apply_rule_matchers(template_matchers, row_match)
+                next_status = "pre-fill" if rule_preview_has_values(preview) else "manual"
         else:
             preview = {}
+            next_status = row["import_status"]
+        if refresh_status and next_status != row["import_status"]:
+            conn.execute(
+                """
+                UPDATE raw_imported_rows
+                SET import_status = ?,
+                    updated_at = datetime('now')
+                WHERE id = ?
+                """,
+                (next_status, row["id"]),
+            )
+            row["import_status"] = next_status
         preview_category_id = preview.get("category_id")
         row["preview_category_id"] = preview_category_id
         row["preview_category"] = categories_by_id.get(preview_category_id) if preview_category_id is not None else None
@@ -1472,8 +1659,78 @@ def apply_raw_row_previews(
         row["preview_tag_ids"] = preview.get("tag_ids", [])
 
 
-def read_state(conn: sqlite3.Connection) -> dict[str, Any]:
-    sync_raw_row_importability_status(conn)
+def build_rule_matchers(rules: list[Any], rule_tag_ids_by_rule: dict[int, list[int]]) -> list[dict[str, Any]]:
+    matchers = []
+    for rule in rules:
+        rule_id = int(rule["id"])
+        tag_ids = rule_tag_ids_by_rule.get(rule_id)
+        if not tag_ids and rule["add_tag_id"] is not None:
+            tag_ids = [int(rule["add_tag_id"])]
+        matchers.append({
+            "id": rule_id,
+            "match_amount": rule["match_amount"] or "any",
+            "match_description": normalize_match_text(rule["match_description"]),
+            "match_category": normalize_match_text(rule["match_category"]),
+            "match_field": rule["match_field"],
+            "match_value": normalize_match_text(rule["match_value"]),
+            "set_category_id": int(rule["set_category_id"]) if rule["set_category_id"] is not None else None,
+            "set_clean_description": rule["set_clean_description"],
+            "set_transaction_type": rule["set_transaction_type"],
+            "tag_ids": tag_ids or [],
+        })
+    return matchers
+
+
+def build_raw_row_match(row: dict[str, Any]) -> dict[str, Any]:
+    try:
+        amount_cents = parse_amount_cents(row.get("raw_amount"))
+    except CliError:
+        amount_cents = None
+    return {
+        "description": normalize_match_text(row.get("raw_description")),
+        "category": normalize_match_text(row.get("raw_category")),
+        "amount_cents": amount_cents,
+    }
+
+
+def apply_rule_matchers(matchers: list[dict[str, Any]], row_match: dict[str, Any]) -> dict[str, Any]:
+    result: dict[str, Any] = {"category_id": None, "clean_description": None, "transaction_type": None, "tag_ids": []}
+    for matcher in matchers:
+        if not rule_matcher_matches(matcher, row_match):
+            continue
+        result["category_id"] = matcher["set_category_id"]
+        result["clean_description"] = matcher["set_clean_description"]
+        result["transaction_type"] = matcher["set_transaction_type"]
+        result["tag_ids"] = list(matcher["tag_ids"])
+        break
+    return result
+
+
+def rule_matcher_matches(matcher: dict[str, Any], row_match: dict[str, Any]) -> bool:
+    amount_match = matcher["match_amount"]
+    amount_cents = row_match["amount_cents"]
+    if amount_match == "positive" and (amount_cents is None or amount_cents <= 0):
+        return False
+    if amount_match == "negative" and (amount_cents is None or amount_cents >= 0):
+        return False
+
+    match_description = matcher["match_description"]
+    match_category = matcher["match_category"]
+    if match_description or match_category:
+        if match_description and match_description not in row_match["description"]:
+            return False
+        if match_category and match_category not in row_match["category"]:
+            return False
+        return True
+
+    field_value = row_match["category"] if matcher["match_field"] == "category" else row_match["description"]
+    needle = matcher["match_value"]
+    return bool(needle) and needle in field_value
+
+
+def read_state(conn: sqlite3.Connection, *, sync_status: bool = True) -> dict[str, Any]:
+    if sync_status:
+        sync_raw_row_importability_status(conn)
     reference_data = read_reference_data(conn)
     categories = reference_data["categories"]
     transactions = read_transactions(conn)
