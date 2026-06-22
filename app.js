@@ -56,6 +56,9 @@
   let dateRangeDraft = null;
   let rawMobileImportColumnVisible = false;
   let mobileDrawerHistoryActive = false;
+  let activeViewName = "overview";
+  const viewScrollPositions = new Map();
+  const sectionViewSelections = new Map();
   const tableSortState = {
     transactions: { key: "date", direction: "desc", type: "date" },
     accounts: { key: "name", direction: "asc", type: "text" },
@@ -256,7 +259,9 @@
   };
 
   elements.navItems.forEach((navItem) => {
-    navItem.addEventListener("click", () => activateView(navItem.dataset.defaultView));
+    navItem.addEventListener("click", () => {
+      activateView(sectionViewSelections.get(navItem.dataset.section) || navItem.dataset.defaultView);
+    });
   });
 
   elements.tabs.forEach((tab) => {
@@ -923,6 +928,9 @@
   }
 
   function activateView(viewName) {
+    if (activeViewName) {
+      viewScrollPositions.set(activeViewName, window.scrollY);
+    }
     const activeTab = [...elements.tabs].find((tab) => tab.dataset.view === viewName);
     const activeNavItem = [...elements.navItems].find((navItem) => navItem.dataset.defaultView === viewName);
     const activeSection = activeTab?.dataset.section || activeNavItem?.dataset.section || (viewName === "settings" ? "settings" : "dash");
@@ -945,6 +953,11 @@
     });
     elements.tabNav.hidden = visibleTabCount === 0;
     elements.views.forEach((view) => view.classList.toggle("is-active", view.id === `${viewName}View`));
+    activeViewName = viewName;
+    sectionViewSelections.set(activeSection, viewName);
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: viewScrollPositions.get(viewName) || 0, left: 0 });
+    });
   }
 
   function initializeSortableTables() {
@@ -2601,6 +2614,7 @@
     elements.categoryPickerClearButton.hidden = !canClear;
     renderCategoryPicker();
     openModal(elements.categoryPickerDialog);
+    scrollCategoryPickerToSelectedSection();
   }
 
   function closeCategoryPicker() {
@@ -2614,17 +2628,7 @@
       appendEmpty(elements.categoryPickerList);
       return;
     }
-    const selectedId = categoryPickerTarget === "transaction"
-      ? Number(elements.transactionCategoryInput.value) || null
-      : categoryPickerTarget === "transaction-filter"
-        ? Number(elements.transactionCategoryFilter.value) || null
-        : categoryPickerTarget === "rule-filter"
-          ? Number(elements.ruleCategoryFilter.value) || null
-          : categoryPickerTarget === "category-parent"
-            ? Number(elements.categoryParentInput.value) || null
-            : categoryPickerTarget === "manual-import"
-              ? Number(elements.manualImportCategoryInput.value) || null
-              : Number(elements.ruleCategoryInput.value) || null;
+    const selectedId = selectedCategoryPickerId();
     const parentOnly = categoryPickerTarget === "category-parent";
     renderCategorySections(elements.categoryPickerList, {
       selectable: true,
@@ -2632,6 +2636,58 @@
       parentOnly,
       onSelect: (category) => selectPickedCategory(category.id),
     });
+  }
+
+  function selectedCategoryPickerId() {
+    if (categoryPickerTarget === "transaction") {
+      return Number(elements.transactionCategoryInput.value) || null;
+    }
+    if (categoryPickerTarget === "transaction-filter") {
+      return Number(elements.transactionCategoryFilter.value) || null;
+    }
+    if (categoryPickerTarget === "rule-filter") {
+      return Number(elements.ruleCategoryFilter.value) || null;
+    }
+    if (categoryPickerTarget === "category-parent") {
+      return Number(elements.categoryParentInput.value) || null;
+    }
+    if (categoryPickerTarget === "manual-import") {
+      return Number(elements.manualImportCategoryInput.value) || null;
+    }
+    return Number(elements.ruleCategoryInput.value) || null;
+  }
+
+  function scrollCategoryPickerToSelectedSection() {
+    const selectedId = selectedCategoryPickerId();
+    const rootId = selectedId ? rootCategoryId(selectedId) : null;
+    const panel = elements.categoryPickerDialog.querySelector(".modal-panel");
+    const section = rootId
+      ? elements.categoryPickerList.querySelector(`[data-category-root-id="${rootId}"]`)
+      : null;
+    if (!panel || !section) {
+      return;
+    }
+    requestAnimationFrame(() => {
+      const panelRect = panel.getBoundingClientRect();
+      const sectionRect = section.getBoundingClientRect();
+      const centeredTop = panel.scrollTop
+        + sectionRect.top
+        - panelRect.top
+        - ((panel.clientHeight - sectionRect.height) / 2);
+      panel.scrollTo({ top: Math.max(0, centeredTop), left: 0 });
+    });
+  }
+
+  function rootCategoryId(categoryId) {
+    let category = state.categories.find((candidate) => candidate.id === Number(categoryId));
+    while (category?.parent_id) {
+      const parent = state.categories.find((candidate) => candidate.id === category.parent_id);
+      if (!parent) {
+        break;
+      }
+      category = parent;
+    }
+    return category?.id || null;
   }
 
   function selectPickedCategory(categoryId) {
@@ -2666,6 +2722,7 @@
       }
       const section = document.createElement("section");
       section.className = "category-section";
+      section.dataset.categoryRootId = String(root.id);
       const header = document.createElement("div");
       header.className = "category-section-heading";
       header.appendChild(el("h3", root.name));
