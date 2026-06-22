@@ -45,6 +45,7 @@
   let accountEditSnapshot = null;
   let categoryEditSnapshot = null;
   let ruleEditSnapshot = null;
+  let ruleRawRowPrefill = null;
   let transactionEditSnapshot = null;
   let confirmResolver = null;
   let duplicateRuleResolver = null;
@@ -269,6 +270,7 @@
   });
 
   initializeSortableTables();
+  initializeClearableTextFields();
 
   elements.accountAddButton.addEventListener("click", openAccountAddDialog);
   elements.accountForm.addEventListener("submit", saveAccount);
@@ -326,6 +328,7 @@
   });
   elements.ruleDialog.addEventListener("close", () => {
     editingRuleId = null;
+    ruleRawRowPrefill = null;
   });
   elements.duplicateRuleCloseButton.addEventListener("click", () => closeDuplicateRuleWarning("cancel"));
   elements.duplicateRuleCancelButton.addEventListener("click", () => closeDuplicateRuleWarning("cancel"));
@@ -1438,6 +1441,7 @@
   }
 
   function openRuleAddDialog(prefill = {}) {
+    ruleRawRowPrefill = prefill.rawRowPrefill || null;
     setRuleDialogCreateMode();
     elements.ruleMessage.textContent = "";
     elements.ruleMessage.classList.remove("error");
@@ -1446,7 +1450,7 @@
     const matchCategory = clean(prefill.matchCategory);
     elements.ruleForm.elements.matchDescription.value = matchDescription;
     elements.ruleForm.elements.matchCategory.value = matchCategory;
-    elements.ruleForm.elements.setCleanDescription.value = clean(prefill.setCleanDescription) || "";
+    elements.ruleForm.elements.setCleanDescription.value = clean(prefill.setCleanDescription) || rawRowPrefillCleanDescription();
     setTypeGroupValue(elements.ruleKindInput, elements.ruleKindGroup, prefill.ruleType || "auto-import");
     setTypeGroupValue(elements.ruleMatchAmountInput, elements.ruleMatchAmountGroup, prefill.matchAmount || "any");
     setTypeGroupValue(elements.ruleTypeInput, elements.ruleTypeGroup, prefill.setTransactionType || "expense");
@@ -1459,14 +1463,45 @@
   }
 
   function truncatePrefilledMatchDescription(value) {
-    return clean(value).slice(0, 20).trim();
+    return truncateIncludingCutoffWord(value, 25);
   }
 
   function truncatePrefilledDescription(value) {
-    return clean(value).slice(0, 20).trim();
+    return truncateIncludingCutoffWord(value, 25);
   }
 
-  function openRuleEditDialog(rule) {
+  function formatPrefilledCleanDescription(value) {
+    return titleCaseWords(removeSpecialDescriptionCharacters(truncateIncludingCutoffWord(value, 25)));
+  }
+
+  function rawRowPrefillCleanDescription() {
+    if (!ruleRawRowPrefill) {
+      return "";
+    }
+    return formatPrefilledCleanDescription(ruleRawRowPrefill.raw_description)
+      || truncateIncludingCutoffWord(ruleRawRowPrefill.raw_description, 25)
+      || clean(ruleRawRowPrefill.raw_description);
+  }
+
+  function removeSpecialDescriptionCharacters(value) {
+    return clean(value).replace(/[^a-zA-Z0-9'\s]+/g, " ").replace(/\s+/g, " ").trim();
+  }
+
+  function truncateIncludingCutoffWord(value, maxLength) {
+    const text = clean(value);
+    if (text.length <= maxLength) {
+      return text;
+    }
+    const nextSpace = text.indexOf(" ", maxLength);
+    return (nextSpace === -1 ? text : text.slice(0, nextSpace)).trim();
+  }
+
+  function titleCaseWords(value) {
+    return clean(value).toLowerCase().replace(/\b[a-z]/g, (letter) => letter.toUpperCase());
+  }
+
+  function openRuleEditDialog(rule, options = {}) {
+    ruleRawRowPrefill = options.rawRowPrefill || null;
     elements.ruleMessage.textContent = "";
     elements.ruleMessage.classList.remove("error");
     populateRuleEditDialog(rule);
@@ -1484,6 +1519,10 @@
     elements.ruleSubmitButton.textContent = "Create Rule";
     elements.ruleDismissButton.textContent = "Cancel";
     elements.ruleDeleteButton.hidden = true;
+    if (!clean(elements.ruleForm.elements.setCleanDescription.value)) {
+      elements.ruleForm.elements.setCleanDescription.value = rawRowPrefillCleanDescription();
+    }
+    updateClearableTextFields(elements.ruleForm);
   }
 
   function populateRuleEditDialog(rule) {
@@ -1500,7 +1539,7 @@
     form.elements.matchDescription.value = matches.description;
     form.elements.matchCategory.value = matches.category;
     setTypeGroupValue(elements.ruleMatchAmountInput, elements.ruleMatchAmountGroup, matches.amount);
-    form.elements.setCleanDescription.value = rule.set_clean_description || "";
+    form.elements.setCleanDescription.value = rule.set_clean_description || rawRowPrefillCleanDescription();
     setTypeGroupValue(elements.ruleTypeInput, elements.ruleTypeGroup, rule.set_transaction_type || "expense");
     setRuleCategoryValue(rule.set_category_id);
     renderRuleTags(rule.tag_ids || (rule.add_tag_id === null ? [] : [rule.add_tag_id]));
@@ -2266,8 +2305,8 @@
     setManualImportCategoryValue(rawRow.preview_category_id || null);
     const previewDescription = clean(rawRow.preview_clean_description);
     elements.manualImportForm.elements.cleanDescription.value = isTemplateRawRow(rawRow)
-      ? previewDescription
-      : previewDescription || truncatePrefilledDescription(rawRow.raw_description);
+      ? previewDescription || formatPrefilledCleanDescription(rawRow.raw_description)
+      : previewDescription || formatPrefilledCleanDescription(rawRow.raw_description);
     elements.manualImportForm.elements.note.value = rawRowStoredNote(rawRow);
     renderManualImportTags(rawRow.preview_tag_ids || []);
     openModal(elements.manualImportDialog);
@@ -2345,9 +2384,12 @@
     const autoImportRule = topMatchingRuleForRawRow(rawRow, "auto-import");
     const template = topMatchingRuleForRawRow(rawRow, "template");
     const rule = autoImportRule || template;
+    const rawRowPrefill = {
+      raw_description: rawRow.raw_description,
+    };
     if (rule) {
       closeRawRowDialog();
-      openRuleEditDialog(rule);
+      openRuleEditDialog(rule, { rawRowPrefill });
       return;
     }
     if (shouldOfferRuleCreation(rawRow)) {
@@ -2355,7 +2397,9 @@
       openRuleAddDialog({
         matchDescription: rawRow.raw_description,
         matchCategory: rawRow.raw_category,
+        setCleanDescription: formatPrefilledCleanDescription(rawRow.raw_description),
         setTransactionType: ruleTransactionTypeFromRawAmount(rawRow),
+        rawRowPrefill,
       });
       return;
     }
@@ -4060,6 +4104,7 @@
     if (panel) {
       panel.scrollTop = 0;
     }
+    updateClearableTextFields(dialog);
     updateModalScrollLock();
     if (focusSingleTextField) {
       const input = dialog.querySelector("input[type='text']");
@@ -4068,6 +4113,53 @@
       return;
     }
     dialog.focus({ preventScroll: true });
+  }
+
+  function initializeClearableTextFields() {
+    document.querySelectorAll("input[type='text'], input[type='search'], textarea").forEach((field) => {
+      if (field.closest(".clearable-field")) {
+        return;
+      }
+      const wrapper = document.createElement("span");
+      wrapper.className = "clearable-field";
+      if (field.matches("textarea")) {
+        wrapper.classList.add("clearable-textarea-field");
+      }
+      if (field.matches("input[type='search']")) {
+        wrapper.classList.add("clearable-search-field");
+      }
+      field.parentNode.insertBefore(wrapper, field);
+      wrapper.appendChild(field);
+      field.addEventListener("input", () => updateClearableField(field));
+      const clearButton = document.createElement("button");
+      clearButton.type = "button";
+      clearButton.className = "clear-field-button";
+      clearButton.setAttribute("aria-label", "Clear field");
+      clearButton.appendChild(el("span", "close_small", "material-symbols-outlined"));
+      clearButton.addEventListener("mousedown", (event) => event.preventDefault());
+      clearButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        field.value = "";
+        field.dispatchEvent(new Event("input", { bubbles: true }));
+        field.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+      wrapper.appendChild(clearButton);
+      updateClearableField(field);
+    });
+    document.querySelectorAll("form").forEach((form) => {
+      form.addEventListener("reset", () => requestAnimationFrame(() => updateClearableTextFields(form)));
+    });
+  }
+
+  function updateClearableTextFields(scope = document) {
+    scope.querySelectorAll(".clearable-field input, .clearable-field textarea").forEach((field) => {
+      updateClearableField(field);
+    });
+  }
+
+  function updateClearableField(field) {
+    field.closest(".clearable-field")?.classList.toggle("has-value", Boolean(field.value));
   }
 
   function updateModalScrollLock() {

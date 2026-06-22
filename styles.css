@@ -794,6 +794,68 @@ select {
   padding: 0 10px;
 }
 
+input[type="search"]::-webkit-search-cancel-button {
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.clearable-field {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+
+.clearable-field input,
+.clearable-field textarea {
+  padding-right: 34px;
+}
+
+.clear-field-button {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  min-height: 0;
+  padding: 0;
+  transform: translateY(-50%);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 760;
+  line-height: 1;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.clear-field-button .material-symbols-outlined {
+  font-size: 20px;
+  font-variation-settings: "FILL" 0, "wght" 520, "GRAD" 0, "opsz" 20;
+}
+
+.clearable-field.has-value .clear-field-button {
+  opacity: 0.84;
+  pointer-events: auto;
+}
+
+.clear-field-button:hover {
+  color: var(--text);
+}
+
+.clear-field-button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.clearable-textarea-field .clear-field-button {
+  top: 18px;
+}
+
 input[type="checkbox"]:not(.tag-chip-select input) {
   appearance: none;
   -webkit-appearance: none;
@@ -891,7 +953,8 @@ button:focus-visible {
 }
 
 .controls input,
-.controls select {
+.controls select,
+.controls .clearable-field {
   width: 180px;
 }
 
@@ -931,7 +994,9 @@ button:focus-visible {
 }
 
 .transaction-controls #transactionSearch,
-.rule-controls #ruleSearch {
+.rule-controls #ruleSearch,
+.transaction-controls .clearable-search-field,
+.rule-controls .clearable-search-field {
   flex: 1 1 220px;
   width: auto;
   min-width: 0;
