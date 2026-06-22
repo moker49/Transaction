@@ -82,6 +82,7 @@ DEFAULT_CATEGORIES = (
     {"name": "Personal", "color": "#7a5234", "children": ("Childcare", "Pet Expense", "Gift Given", "Personal Care", "Reimbursement")},
     {"name": "Business", "color": "#60943b", "children": ("Software", "Equipment", "Service", "Office Expense")},
     {"name": "Transfer", "color": "#787b80", "children": ("Internal Transfer", "Card Payment")},
+    {"name": "Unknown", "color": "#1f2328", "children": ()},
 )
 DEFAULT_CATEGORY_NAMES = frozenset(
     name
@@ -227,10 +228,10 @@ def create_account():
             (institution_id, name, account_type),
         )
         account = dict(fetch_account(conn, int(cursor.lastrowid)))
-        state = read_state(conn)
+        reference_data = read_reference_data(conn)
         conn.commit()
 
-    return jsonify({"account": account, "state": state}), 201
+    return jsonify({"account": account, "referenceData": reference_data}), 201
 
 
 @app.patch("/api/accounts/<int:account_id>")
@@ -258,10 +259,10 @@ def update_account(account_id: int):
         values.append(account_id)
         conn.execute(f"UPDATE accounts SET {', '.join(updates)} WHERE id = ?", values)
         account = dict(fetch_account(conn, account_id))
-        state = read_state(conn)
+        payload = mutation_response_payload(conn, raw_status_current=True)
         conn.commit()
 
-    return jsonify({"account": account, "state": state})
+    return jsonify({"account": account, **payload})
 
 
 @app.delete("/api/accounts/<int:account_id>")
@@ -271,10 +272,10 @@ def delete_account(account_id: int):
         account = dict(fetch_account(conn, account_id))
         require_account_unused(conn, account_id)
         conn.execute("DELETE FROM accounts WHERE id = ?", (account_id,))
-        state = read_state(conn)
+        reference_data = read_reference_data(conn)
         conn.commit()
 
-    return jsonify({"status": "deleted", "account": account, "state": state})
+    return jsonify({"status": "deleted", "account": account, "referenceData": reference_data})
 
 
 @app.post("/api/tags")

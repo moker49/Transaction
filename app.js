@@ -200,10 +200,13 @@
     transactionCategoryInput: document.querySelector("#transactionCategoryInput"),
     transactionCategoryButton: document.querySelector("#transactionCategoryButton"),
     transactionCategoryFilterButton: document.querySelector("#transactionCategoryFilterButton"),
+    ruleCategoryFilterButton: document.querySelector("#ruleCategoryFilterButton"),
     transactionTypeInput: document.querySelector("#transactionTypeInput"),
     transactionTypeGroup: document.querySelector("#transactionTypeGroup"),
     transactionCategoryFilter: document.querySelector("#transactionCategoryFilter"),
     transactionSearch: document.querySelector("#transactionSearch"),
+    ruleCategoryFilter: document.querySelector("#ruleCategoryFilter"),
+    ruleSearch: document.querySelector("#ruleSearch"),
     transactionTags: document.querySelector("#transactionTags"),
     transactionTagsEditButton: document.querySelector("#transactionTagsEditButton"),
     transactionRawValues: document.querySelector("#transactionRawValues"),
@@ -388,6 +391,7 @@
   });
   elements.transactionForm.addEventListener("submit", saveTransaction);
   elements.transactionCategoryFilterButton.addEventListener("click", () => openCategoryPicker("transaction-filter"));
+  elements.ruleCategoryFilterButton.addEventListener("click", () => openCategoryPicker("rule-filter"));
   elements.transactionCloseButton.addEventListener("click", closeTransactionDialog);
   elements.transactionCancelButton.addEventListener("click", closeTransactionDialog);
   elements.transactionTagsEditButton.addEventListener("click", toggleTransactionTagsEditMode);
@@ -405,6 +409,7 @@
     activeRawRowId = null;
   });
   elements.transactionSearch.addEventListener("input", renderTransactions);
+  elements.ruleSearch.addEventListener("input", renderRules);
   elements.transactionDialog.addEventListener("close", () => {
     activeTransactionId = null;
     transactionTagsEditMode = false;
@@ -1037,7 +1042,7 @@
     }
 
     try {
-      const response = await apiRequest(isEdit ? `/api/accounts/${editingAccountId}` : "/api/accounts", {
+      const response = await apiRequest(isEdit ? mutationPath(`/api/accounts/${editingAccountId}`) : "/api/accounts", {
         method: isEdit ? "PATCH" : "POST",
         body: JSON.stringify(payload),
       });
@@ -2545,6 +2550,12 @@
     renderTransactions();
   }
 
+  function setRuleCategoryFilterValue(categoryId) {
+    elements.ruleCategoryFilter.value = categoryId === null || categoryId === undefined ? "" : String(categoryId);
+    renderCategoryButton(elements.ruleCategoryFilterButton, elements.ruleCategoryFilter.value, "All categories");
+    renderRules();
+  }
+
   function renderCategories() {
     const categoryList = document.querySelector("#categoryList");
     clear(categoryList);
@@ -2558,6 +2569,7 @@
     renderCategoryButton(elements.manualImportCategoryButton, elements.manualImportCategoryInput.value);
     renderCategoryButton(elements.transactionCategoryButton, elements.transactionCategoryInput.value, "Select category");
     renderCategoryButton(elements.transactionCategoryFilterButton, elements.transactionCategoryFilter.value, "All categories");
+    renderCategoryButton(elements.ruleCategoryFilterButton, elements.ruleCategoryFilter.value, "All categories");
     renderCategoryButton(elements.categoryParentButton, elements.categoryParentInput.value, "No parent");
   }
 
@@ -2573,15 +2585,15 @@
 
   function openCategoryPicker(target) {
     categoryPickerTarget = target;
-    const canClear = target === "rule" || target === "manual-import" || target === "transaction-filter" || target === "category-parent";
+    const canClear = target === "rule" || target === "manual-import" || target === "transaction-filter" || target === "rule-filter" || target === "category-parent";
     elements.categoryPickerTitle.textContent = target === "rule" || target === "manual-import"
       ? "Select Clean Category"
-      : target === "transaction-filter"
+      : target === "transaction-filter" || target === "rule-filter"
         ? "Filter By Category"
         : target === "category-parent"
           ? "Select Parent Category"
           : "Select Category";
-    elements.categoryPickerClearButton.textContent = target === "transaction-filter"
+    elements.categoryPickerClearButton.textContent = target === "transaction-filter" || target === "rule-filter"
       ? "All Categories"
       : target === "category-parent"
         ? "No Parent"
@@ -2606,11 +2618,13 @@
       ? Number(elements.transactionCategoryInput.value) || null
       : categoryPickerTarget === "transaction-filter"
         ? Number(elements.transactionCategoryFilter.value) || null
-        : categoryPickerTarget === "category-parent"
-          ? Number(elements.categoryParentInput.value) || null
-          : categoryPickerTarget === "manual-import"
-            ? Number(elements.manualImportCategoryInput.value) || null
-            : Number(elements.ruleCategoryInput.value) || null;
+        : categoryPickerTarget === "rule-filter"
+          ? Number(elements.ruleCategoryFilter.value) || null
+          : categoryPickerTarget === "category-parent"
+            ? Number(elements.categoryParentInput.value) || null
+            : categoryPickerTarget === "manual-import"
+              ? Number(elements.manualImportCategoryInput.value) || null
+              : Number(elements.ruleCategoryInput.value) || null;
     const parentOnly = categoryPickerTarget === "category-parent";
     renderCategorySections(elements.categoryPickerList, {
       selectable: true,
@@ -2628,6 +2642,8 @@
       setTransactionCategoryValue(categoryId);
     } else if (categoryPickerTarget === "transaction-filter") {
       setTransactionCategoryFilterValue(categoryId);
+    } else if (categoryPickerTarget === "rule-filter") {
+      setRuleCategoryFilterValue(categoryId);
     } else if (categoryPickerTarget === "rule") {
       setRuleCategoryValue(categoryId);
     } else if (categoryPickerTarget === "manual-import") {
@@ -2820,12 +2836,24 @@
   function renderRules() {
     const tbody = document.querySelector("#rulesTable");
     clear(tbody);
-    if (!state.rules.length) {
+    const categoryFilter = Number(elements.ruleCategoryFilter.value) || null;
+    const categoryIds = categoryFilter === null ? null : new Set([categoryFilter, ...categoryDescendantIds(categoryFilter)]);
+    const search = clean(elements.ruleSearch.value).toLowerCase();
+    const rules = state.rules.filter((rule) => {
+      if (categoryIds && !categoryIds.has(Number(rule.set_category_id))) {
+        return false;
+      }
+      if (!search) {
+        return true;
+      }
+      return clean(rule.name).toLowerCase().includes(search);
+    });
+    if (!rules.length) {
       tbody.appendChild(emptyTableRow(3));
       return;
     }
 
-    sortedTableRows("rules", state.rules)
+    sortedTableRows("rules", rules)
       .forEach((rule) => {
         const category = state.categories.find((candidate) => candidate.id === rule.set_category_id);
         const kind = (rule.rule_type || "auto-import") === "template" ? "Pre-fill" : "Auto-import";
@@ -2943,7 +2971,7 @@
       const cells = [
         ["select", selectCell],
         ["date", cell(displayDateCell(rawRow.raw_date), "date-cell")],
-        ["category", cell(rawValueWithPreview(rawRow.raw_category, rawRow.preview_category))],
+        ["category", cell(rawCategoryValueWithPreview(rawRow))],
         ["description", cell(rawValueWithPreview(rawRow.raw_description, rawRow.preview_clean_description))],
         ["amount", cell(rawRow.raw_amount || "-", "amount")],
         ["account", cell(account ? account.name : "Unknown", "muted-cell")],
@@ -3128,6 +3156,22 @@
     wrapper.appendChild(el("span", rawValue || "-"));
     if (previewValue) {
       wrapper.appendChild(el("span", previewValue, "rule-preview"));
+    }
+    return wrapper;
+  }
+
+  function rawCategoryValueWithPreview(rawRow) {
+    const wrapper = document.createElement("div");
+    wrapper.className = "raw-value raw-category-value";
+    wrapper.appendChild(el("span", rawRow.raw_category || "-"));
+    const category = state.categories.find((candidate) => candidate.id === rawRow.preview_category_id);
+    if (category) {
+      const preview = document.createElement("span");
+      preview.className = "rule-preview raw-category-preview";
+      preview.appendChild(plainCategoryChip(category));
+      wrapper.appendChild(preview);
+    } else if (rawRow.preview_category) {
+      wrapper.appendChild(el("span", rawRow.preview_category, "rule-preview"));
     }
     return wrapper;
   }
