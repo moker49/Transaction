@@ -599,6 +599,13 @@ def normalize_match_text(value: str | None) -> str:
     return normalize_text(value).lower() if normalize_text(value) else ""
 
 
+def normalize_rule_match_text(value: str | None) -> str:
+    normalized = normalize_match_text(value)
+    if not normalized:
+        return ""
+    return re.sub(r"[^a-z0-9]+", "", normalized)
+
+
 def parse_transaction_date(value: str | None) -> str:
     raw_value = normalize_text(value)
     if raw_value is None:
@@ -694,12 +701,12 @@ def fetch_rule_tag_ids_by_rule(conn: sqlite3.Connection) -> dict[int, list[int]]
 def rule_matches(rule: sqlite3.Row, raw_row: sqlite3.Row) -> bool:
     if not rule_amount_matches(rule["match_amount"], raw_row):
         return False
-    match_description = normalize_match_text(rule["match_description"])
-    match_category = normalize_match_text(rule["match_category"])
+    match_description = normalize_rule_match_text(rule["match_description"])
+    match_category = normalize_rule_match_text(rule["match_category"])
     if match_description or match_category:
-        if match_description and match_description not in normalize_match_text(raw_row["raw_description"]):
+        if match_description and match_description not in normalize_rule_match_text(raw_row["raw_description"]):
             return False
-        if match_category and match_category not in normalize_match_text(raw_row["raw_category"]):
+        if match_category and match_category not in normalize_rule_match_text(raw_row["raw_category"]):
             return False
         return True
 
@@ -707,8 +714,8 @@ def rule_matches(rule: sqlite3.Row, raw_row: sqlite3.Row) -> bool:
         "category": raw_row["raw_category"],
         "description": raw_row["raw_description"],
     }.get(rule["match_field"])
-    haystack = normalize_match_text(field_value)
-    needle = normalize_match_text(rule["match_value"])
+    haystack = normalize_rule_match_text(field_value)
+    needle = normalize_rule_match_text(rule["match_value"])
 
     return bool(needle) and needle in haystack
 

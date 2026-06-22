@@ -53,6 +53,7 @@ from db_cli import (  # noqa: E402
     parse_transaction_date,
     make_transaction_hash,
     normalize_match_text,
+    normalize_rule_match_text,
     normalize_text,
 )
 from init_db import init_db  # noqa: E402
@@ -1670,10 +1671,10 @@ def build_rule_matchers(rules: list[Any], rule_tag_ids_by_rule: dict[int, list[i
         matchers.append({
             "id": rule_id,
             "match_amount": rule["match_amount"] or "any",
-            "match_description": normalize_match_text(rule["match_description"]),
-            "match_category": normalize_match_text(rule["match_category"]),
+            "match_description": normalize_rule_match_text(rule["match_description"]),
+            "match_category": normalize_rule_match_text(rule["match_category"]),
             "match_field": rule["match_field"],
-            "match_value": normalize_match_text(rule["match_value"]),
+            "match_value": normalize_rule_match_text(rule["match_value"]),
             "set_category_id": int(rule["set_category_id"]) if rule["set_category_id"] is not None else None,
             "set_clean_description": rule["set_clean_description"],
             "set_transaction_type": rule["set_transaction_type"],
@@ -1688,8 +1689,8 @@ def build_raw_row_match(row: dict[str, Any]) -> dict[str, Any]:
     except CliError:
         amount_cents = None
     return {
-        "description": normalize_match_text(row.get("raw_description")),
-        "category": normalize_match_text(row.get("raw_category")),
+        "description": normalize_rule_match_text(row.get("raw_description")),
+        "category": normalize_rule_match_text(row.get("raw_category")),
         "amount_cents": amount_cents,
     }
 

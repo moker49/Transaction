@@ -2355,10 +2355,16 @@
       openRuleAddDialog({
         matchDescription: rawRow.raw_description,
         matchCategory: rawRow.raw_category,
+        setTransactionType: ruleTransactionTypeFromRawAmount(rawRow),
       });
       return;
     }
     updateRawRowModalActions();
+  }
+
+  function ruleTransactionTypeFromRawAmount(rawRow) {
+    const amount = parseRawAmount(rawRow.raw_amount);
+    return Number.isFinite(amount) && amount > 0 ? "income" : "expense";
   }
 
   async function deleteActiveRawRow() {
