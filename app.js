@@ -458,6 +458,7 @@
     closeCategoryPicker();
   });
   document.querySelectorAll("dialog.modal").forEach((dialog) => {
+    dialog.addEventListener("close", () => clearModalErrorState(dialog));
     dialog.addEventListener("close", updateModalScrollLock);
   });
   document.addEventListener("keydown", (event) => {
@@ -1534,7 +1535,6 @@
     if (contextDescription) {
       elements.ruleForm.elements.setCleanDescription.value = contextDescription;
     }
-    updateClearableTextFields(elements.ruleForm);
   }
 
   function populateRuleEditDialog(rule) {
@@ -4214,7 +4214,6 @@
     if (panel) {
       panel.scrollTop = 0;
     }
-    updateClearableTextFields(dialog);
     updateModalScrollLock();
     if (focusSingleTextField) {
       const input = dialog.querySelector("input[type='text']");
@@ -4240,7 +4239,6 @@
       }
       field.parentNode.insertBefore(wrapper, field);
       wrapper.appendChild(field);
-      field.addEventListener("input", () => updateClearableField(field));
       const clearButton = document.createElement("button");
       clearButton.type = "button";
       clearButton.className = "clear-field-button";
@@ -4255,21 +4253,17 @@
         field.dispatchEvent(new Event("change", { bubbles: true }));
       });
       wrapper.appendChild(clearButton);
-      updateClearableField(field);
-    });
-    document.querySelectorAll("form").forEach((form) => {
-      form.addEventListener("reset", () => requestAnimationFrame(() => updateClearableTextFields(form)));
     });
   }
 
-  function updateClearableTextFields(scope = document) {
-    scope.querySelectorAll(".clearable-field input, .clearable-field textarea").forEach((field) => {
-      updateClearableField(field);
+  function clearModalErrorState(dialog) {
+    dialog.querySelectorAll(".field-error, .rule-field-error").forEach((element) => {
+      element.classList.remove("field-error", "rule-field-error");
     });
-  }
-
-  function updateClearableField(field) {
-    field.closest(".clearable-field")?.classList.toggle("has-value", Boolean(field.value));
+    dialog.querySelectorAll(".modal-message").forEach((element) => {
+      element.textContent = "";
+      element.classList.remove("error");
+    });
   }
 
   function updateModalScrollLock() {
