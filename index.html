@@ -225,10 +225,27 @@
       <section class="view" id="rawView">
         <section class="panel">
           <div class="panel-heading raw-controls-heading">
-            <span id="rawSelectedCount">0 selected</span>
-            <div class="controls raw-controls">
+            <div class="raw-header-left">
+              <div class="controls raw-controls">
+                <select id="rawAccountFilter" aria-label="Filter by account"></select>
+                <select id="rawStatusFilter" aria-label="Filter by import status">
+                  <option value="all">All rows</option>
+                  <option value="new" selected>New</option>
+                  <option value="auto-importable">New - Auto-importable</option>
+                  <option value="pre-fill">New - Pre-fill</option>
+                  <option value="manual">New - Manual Import</option>
+                  <option value="imported">Imported</option>
+                  <option value="duplicate">Duplicate</option>
+                  <option value="error">Error</option>
+                </select>
+              </div>
               <button type="button" class="text-button raw-select-all-button" id="selectVisibleRowsButton">Select
                 all</button>
+            </div>
+            <span id="rawSelectedCount">0 selected</span>
+          </div>
+          <div class="raw-table-header">
+            <div class="raw-mobile-selection-left">
               <label class="switch-toggle raw-column-toggle mobile-only" title="Show import column">
                 <input type="checkbox" id="rawColumnToggleInput" aria-label="Show import column">
                 <span class="switch-track" aria-hidden="true">
@@ -237,22 +254,9 @@
                   <span class="switch-icon switch-icon-on material-symbols-outlined">select_all</span>
                 </span>
               </label>
-              <select id="rawAccountFilter" aria-label="Filter by account"></select>
-              <select id="rawStatusFilter" aria-label="Filter by import status">
-                <option value="all">All rows</option>
-                <option value="new" selected>New</option>
-                <option value="auto-importable">New - Auto-importable</option>
-                <option value="pre-fill">New - Pre-fill</option>
-                <option value="manual">New - Manual Import</option>
-                <option value="imported">Imported</option>
-                <option value="duplicate">Duplicate</option>
-                <option value="error">Error</option>
-              </select>
+              <button type="button" class="text-button" id="selectVisibleRowsMobileButton">Select all</button>
             </div>
-          </div>
-          <div class="raw-table-header">
             <span id="rawSelectedCountMobile">0 selected</span>
-            <button type="button" class="text-button" id="selectVisibleRowsMobileButton">Select all</button>
           </div>
           <div class="table-wrap raw-table raw-table-wrap">
             <table id="rawRowsTableElement">
@@ -436,8 +440,7 @@
           </div>
           <div class="type-button-row">
             <input name="matchAmount" type="hidden" id="ruleMatchAmountInput" value="any">
-            <div class="connected-button-group" id="ruleMatchAmountGroup" role="radiogroup"
-              aria-label="Match amount">
+            <div class="connected-button-group" id="ruleMatchAmountGroup" role="radiogroup" aria-label="Match amount">
               <button type="button" class="connected-button" data-type-value="positive" role="radio">
                 <span class="material-symbols-outlined" aria-hidden="true">add</span>
                 <span>Positive</span>
