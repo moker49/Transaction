@@ -98,15 +98,20 @@ def normalize_text(value: str | None) -> str | None:
 
 
 def default_clean_description(value: str | None) -> str | None:
-    text = normalize_text(value) or ""
+    text = remove_default_description_special_characters(value)
     if len(text) > 25:
         next_space = text.find(" ", 25)
         text = (text if next_space == -1 else text[:next_space]).strip()
-    cleaned = re.sub(r"[^a-zA-Z0-9'\s]+", " ", text)
-    cleaned = re.sub(r"\s+", " ", cleaned).strip()
-    if not cleaned:
+    text = re.sub(r"\s+", " ", text).strip()
+    if not text:
         return normalize_text(value)
-    return re.sub(r"\b[a-z]", lambda match: match.group(0).upper(), cleaned.lower())
+    return re.sub(r"\b[a-z]", lambda match: match.group(0).upper(), text.lower())
+
+
+def remove_default_description_special_characters(value: str | None) -> str:
+    cleaned = re.sub(r"[^a-zA-Z0-9'\s]+", " ", normalize_text(value) or "")
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return cleaned
 
 
 def init_db(db_path: Path = DEFAULT_DB_PATH, schema_path: Path = SCHEMA_PATH) -> Path:

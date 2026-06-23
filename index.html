@@ -509,6 +509,74 @@
     </div>
   </dialog>
 
+  <dialog id="bulkImportDialog" class="modal small-modal" tabindex="-1">
+    <form id="bulkImportForm" class="modal-panel">
+      <div class="panel-heading">
+        <h2 id="bulkImportDialogTitle">Bulk Import</h2>
+        <button class="icon-only" type="button" id="bulkImportCloseButton" aria-label="Close">
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <div class="form-grid manual-import-grid">
+        <div class="rule-form-column">
+          <div class="type-button-row">
+            <input name="transactionType" type="hidden" id="bulkImportTypeInput" value="">
+            <div class="connected-button-group bulk-type-group" id="bulkImportTypeGroup" role="radiogroup"
+              aria-label="Transaction type">
+              <button type="button" class="connected-button" data-type-value="income" role="radio">
+                <span class="material-symbols-outlined" aria-hidden="true">payments</span>
+                <span>Income</span>
+              </button>
+              <button type="button" class="connected-button" data-type-value="expense" role="radio">
+                <span class="material-symbols-outlined" aria-hidden="true">receipt_long</span>
+                <span>Expense</span>
+              </button>
+              <button type="button" class="connected-button" data-type-value="transfer" role="radio">
+                <span class="material-symbols-outlined" aria-hidden="true">sync_alt</span>
+                <span>Transfer</span>
+              </button>
+            </div>
+          </div>
+          <div class="rule-clean-row">
+            <label>
+              <span>Category</span>
+              <input name="categoryId" type="hidden" id="bulkImportCategoryInput">
+              <button type="button" class="category-picker-button" id="bulkImportCategoryButton"></button>
+            </label>
+            <label>
+              <span>Description</span>
+              <input name="cleanDescription" type="text" autocomplete="off" placeholder="Keep description">
+            </label>
+          </div>
+          <div class="type-button-row">
+            <input name="tagsMode" type="hidden" id="bulkImportTagsModeInput" value="keep">
+            <div class="connected-button-group bulk-tags-mode-group" id="bulkImportTagsModeGroup" role="radiogroup"
+              aria-label="Tags mode">
+              <button type="button" class="connected-button" data-type-value="keep" role="radio">
+                <span class="material-symbols-outlined" aria-hidden="true">keep</span>
+                <span>Keep Tags</span>
+              </button>
+              <button type="button" class="connected-button" data-type-value="overwrite" role="radio">
+                <span class="material-symbols-outlined" aria-hidden="true">sell</span>
+                <span>Overwrite Tags</span>
+              </button>
+            </div>
+          </div>
+          <label class="tag-field">
+            <span>Tags</span>
+            <div id="bulkImportTags" class="tag-check-list"></div>
+          </label>
+        </div>
+      </div>
+      <div id="bulkImportMessage" class="modal-message" role="status" aria-live="polite"></div>
+      <div class="modal-actions">
+        <button type="button" class="icon-button" id="bulkImportCancelButton">Cancel</button>
+        <button type="button" class="icon-button" id="bulkImportResetButton">Reset</button>
+        <button type="submit" class="primary" id="bulkImportSubmitButton">Import</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="manualImportDialog" class="modal small-modal" tabindex="-1">
     <form id="manualImportForm" class="modal-panel">
       <div class="panel-heading">

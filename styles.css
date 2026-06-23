@@ -301,6 +301,15 @@ h2 {
   background: var(--accent);
 }
 
+.primary.warning-button {
+  background: var(--warning-bg);
+  color: var(--warning-text);
+}
+
+.primary.warning-button:hover {
+  background: var(--warning-bg);
+}
+
 .danger-button {
   flex: 0 0 auto;
   background: transparent;
@@ -719,6 +728,14 @@ h2 {
 .panel {
   min-width: 0;
   overflow: hidden;
+}
+
+.bulk-type-group {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.bulk-tags-mode-group {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .panel-heading {

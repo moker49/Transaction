@@ -72,7 +72,7 @@ DEFAULT_CATEGORIES = (
     {"name": "Housing", "color": "#c4588e", "children": ("Rent", "Mortgage", "Property Tax", "HOA", "Home Insurance", "Home Maintenance")},
     {"name": "Utility", "color": "#91a82f", "children": ("Electric", "Gas", "Water", "Sewer", "Trash", "Internet", "Phone")},
     {"name": "Food", "color": "#d16630", "children": ("Groceries", "Restaurant", "Cafe", "Convenience")},
-    {"name": "Transportation", "color": "#3a67c2", "children": ("Car Payment", "Fuel", "Charging", "Auto Insurance", "Maintenance", "Registration", "Parking", "Toll", "Public Transit", "Ride-share")},
+    {"name": "Transportation", "color": "#3a67c2", "children": ("Car Payment", "Fuel", "Charging", "Auto Insurance", "Maintenance", "Registration", "Parking", "Toll", "Public Transit", "Taxi")},
     {"name": "Shopping", "color": "#8161c2", "children": ("Clothing", "Electronic", "Household", "Furniture")},
     {"name": "Health", "color": "#ad3131", "children": ("Medical", "Dental", "Vision", "Pharmacy", "Fitness")},
     {"name": "Lifestyle", "color": "#36b36a", "children": ("Activity", "Hobby", "Alcohol", "Substance")},
@@ -943,6 +943,9 @@ def import_selected_raw_rows():
     raw_row_notes = data.get("raw_row_notes") or {}
     if not isinstance(raw_row_notes, dict):
         raise CliError("raw_row_notes must be an object.")
+    raw_row_overrides = data.get("raw_row_overrides") or {}
+    if not isinstance(raw_row_overrides, dict):
+        raise CliError("raw_row_overrides must be an object.")
 
     with closing(connect(current_db_path())) as conn:
         result = import_raw_rows(
@@ -952,6 +955,7 @@ def import_selected_raw_rows():
                 parse_positive_int(str(row_id), "raw_row_note id"): str(note)
                 for row_id, note in raw_row_notes.items()
             },
+            raw_row_overrides,
         )
         payload = mutation_response_payload(conn, raw_status_current=True, include_reference=False)
         conn.commit()

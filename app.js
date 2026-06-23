@@ -146,6 +146,21 @@
     duplicateRuleCloseButton: document.querySelector("#duplicateRuleCloseButton"),
     duplicateRuleCancelButton: document.querySelector("#duplicateRuleCancelButton"),
     duplicateRuleGoButton: document.querySelector("#duplicateRuleGoButton"),
+    bulkImportDialog: document.querySelector("#bulkImportDialog"),
+    bulkImportForm: document.querySelector("#bulkImportForm"),
+    bulkImportDialogTitle: document.querySelector("#bulkImportDialogTitle"),
+    bulkImportCloseButton: document.querySelector("#bulkImportCloseButton"),
+    bulkImportCancelButton: document.querySelector("#bulkImportCancelButton"),
+    bulkImportResetButton: document.querySelector("#bulkImportResetButton"),
+    bulkImportSubmitButton: document.querySelector("#bulkImportSubmitButton"),
+    bulkImportMessage: document.querySelector("#bulkImportMessage"),
+    bulkImportTypeInput: document.querySelector("#bulkImportTypeInput"),
+    bulkImportTypeGroup: document.querySelector("#bulkImportTypeGroup"),
+    bulkImportCategoryInput: document.querySelector("#bulkImportCategoryInput"),
+    bulkImportCategoryButton: document.querySelector("#bulkImportCategoryButton"),
+    bulkImportTagsModeInput: document.querySelector("#bulkImportTagsModeInput"),
+    bulkImportTagsModeGroup: document.querySelector("#bulkImportTagsModeGroup"),
+    bulkImportTags: document.querySelector("#bulkImportTags"),
     manualImportDialog: document.querySelector("#manualImportDialog"),
     manualImportForm: document.querySelector("#manualImportForm"),
     manualImportDialogTitle: document.querySelector("#manualImportDialogTitle"),
@@ -288,7 +303,7 @@
   elements.rawStatusFilter.addEventListener("change", renderRawRows);
   elements.selectVisibleRowsButton.addEventListener("click", selectVisibleRawRows);
   elements.selectVisibleRowsMobileButton.addEventListener("click", selectVisibleRawRows);
-  elements.importSelectedRowsButton.addEventListener("click", importSelectedRawRows);
+  elements.importSelectedRowsButton.addEventListener("click", openBulkImportDialog);
   elements.regenerateDatabaseButton.addEventListener("click", regenerateDatabase);
   elements.dummyDatabaseToggle.addEventListener("change", updateDatabaseMode);
   elements.ruleAddButton.addEventListener("click", () => openRuleAddDialog());
@@ -331,6 +346,28 @@
   elements.duplicateRuleCloseButton.addEventListener("click", () => closeDuplicateRuleWarning("cancel"));
   elements.duplicateRuleCancelButton.addEventListener("click", () => closeDuplicateRuleWarning("cancel"));
   elements.duplicateRuleGoButton.addEventListener("click", () => closeDuplicateRuleWarning("go"));
+  elements.bulkImportForm.addEventListener("submit", importSelectedRawRows);
+  elements.bulkImportCloseButton.addEventListener("click", closeBulkImportDialog);
+  elements.bulkImportCancelButton.addEventListener("click", closeBulkImportDialog);
+  elements.bulkImportResetButton.addEventListener("click", resetBulkImportForm);
+  elements.bulkImportCategoryButton.addEventListener("click", () => openCategoryPicker("bulk-import"));
+  elements.bulkImportTypeGroup.addEventListener("click", (event) => {
+    selectOptionalTypeFromGroup(event, elements.bulkImportTypeInput, elements.bulkImportTypeGroup);
+    updateBulkImportActionState();
+  });
+  elements.bulkImportTypeGroup.addEventListener("keydown", (event) => {
+    navigateOptionalTypeGroup(event, elements.bulkImportTypeInput, elements.bulkImportTypeGroup);
+    updateBulkImportActionState();
+  });
+  elements.bulkImportTagsModeGroup.addEventListener("click", (event) => {
+    selectTypeFromGroup(event, elements.bulkImportTagsModeInput, elements.bulkImportTagsModeGroup);
+    updateBulkImportActionState();
+  });
+  elements.bulkImportTagsModeGroup.addEventListener("keydown", (event) => {
+    navigateTypeGroup(event, elements.bulkImportTagsModeInput, elements.bulkImportTagsModeGroup);
+    updateBulkImportActionState();
+  });
+  elements.bulkImportForm.elements.cleanDescription.addEventListener("input", updateBulkImportActionState);
   elements.manualImportForm.addEventListener("submit", importManualRawRow);
   elements.manualImportCloseButton.addEventListener("click", closeManualImportDialog);
   elements.manualImportCancelButton.addEventListener("click", closeManualImportDialog);
@@ -1424,6 +1461,14 @@
     setTypeGroupValue(input, group, button.dataset.typeValue);
   }
 
+  function selectOptionalTypeFromGroup(event, input, group) {
+    const button = event.target.closest("[data-type-value]");
+    if (!button || button.disabled || !group.contains(button)) {
+      return;
+    }
+    setOptionalTypeGroupValue(input, group, input.value === button.dataset.typeValue ? "" : button.dataset.typeValue);
+  }
+
   function setTypeGroupValue(input, group, value) {
     const normalized = clean(value) || "expense";
     input.value = normalized;
@@ -1436,6 +1481,18 @@
     if (input === elements.ruleKindInput && normalized === "template") {
       clearRuleFieldErrors();
     }
+  }
+
+  function setOptionalTypeGroupValue(input, group, value) {
+    const normalized = clean(value);
+    input.value = normalized;
+    const buttons = [...group.querySelectorAll("[data-type-value]")];
+    buttons.forEach((button, index) => {
+      const isSelected = Boolean(normalized) && button.dataset.typeValue === normalized;
+      button.classList.toggle("is-selected", isSelected);
+      button.setAttribute("aria-checked", isSelected ? "true" : "false");
+      button.tabIndex = isSelected || (!normalized && index === 0) ? 0 : -1;
+    });
   }
 
   function setTypeGroupDisabled(group, isDisabled) {
@@ -1462,6 +1519,28 @@
       nextIndex = buttons.length - 1;
     }
     setTypeGroupValue(input, group, buttons[nextIndex].dataset.typeValue);
+    buttons[nextIndex].focus();
+  }
+
+  function navigateOptionalTypeGroup(event, input, group) {
+    const buttons = [...group.querySelectorAll("[data-type-value]")].filter((button) => !button.disabled);
+    if (!buttons.length || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
+      return;
+    }
+    event.preventDefault();
+    const foundIndex = buttons.findIndex((button) => button.dataset.typeValue === input.value);
+    const currentIndex = foundIndex >= 0 ? foundIndex : 0;
+    let nextIndex = currentIndex;
+    if (event.key === "ArrowLeft") {
+      nextIndex = (currentIndex - 1 + buttons.length) % buttons.length;
+    } else if (event.key === "ArrowRight") {
+      nextIndex = (currentIndex + 1) % buttons.length;
+    } else if (event.key === "Home") {
+      nextIndex = 0;
+    } else if (event.key === "End") {
+      nextIndex = buttons.length - 1;
+    }
+    setOptionalTypeGroupValue(input, group, buttons[nextIndex].dataset.typeValue);
     buttons[nextIndex].focus();
   }
 
@@ -2193,6 +2272,31 @@
     };
   }
 
+  function buildBulkImportOverrides() {
+    const form = new FormData(elements.bulkImportForm);
+    const overrides = {};
+    const transactionType = clean(form.get("transactionType"));
+    const categoryId = Number(form.get("categoryId")) || null;
+    const cleanDescription = clean(form.get("cleanDescription")) || null;
+    if (transactionType && transactionType !== "keep") {
+      overrides.transaction_type = transactionType;
+    }
+    if (categoryId) {
+      overrides.category_id = categoryId;
+    }
+    if (cleanDescription) {
+      overrides.clean_description = cleanDescription;
+    }
+    if (clean(form.get("tagsMode")) === "overwrite") {
+      overrides.tag_ids = selectedTagIdsFrom(elements.bulkImportTags);
+    }
+    return overrides;
+  }
+
+  function bulkImportHasOverrides() {
+    return Object.keys(buildBulkImportOverrides()).length > 0;
+  }
+
   function matchAmountLabel(matchAmount) {
     return {
       positive: "Positive",
@@ -2573,6 +2677,16 @@
     renderSelectableTags(elements.manualImportTags, selectedTagIds, "tagIds");
   }
 
+  function renderBulkImportTags(selectedTagIds) {
+    renderSelectableTags(elements.bulkImportTags, selectedTagIds, "tagIds");
+    elements.bulkImportTags.querySelectorAll("input[type='checkbox']").forEach((checkbox) => {
+      checkbox.addEventListener("change", () => {
+        setTypeGroupValue(elements.bulkImportTagsModeInput, elements.bulkImportTagsModeGroup, "overwrite");
+        updateBulkImportActionState();
+      });
+    });
+  }
+
   function renderSelectableTags(container, selectedTagIds, inputName) {
     clear(container);
     const selected = new Set(selectedTagIds.map((tagId) => Number(tagId)));
@@ -2618,6 +2732,12 @@
     }
   }
 
+  function setBulkImportCategoryValue(categoryId) {
+    elements.bulkImportCategoryInput.value = categoryId === null || categoryId === undefined ? "" : String(categoryId);
+    renderCategoryButton(elements.bulkImportCategoryButton, elements.bulkImportCategoryInput.value, "Keep category");
+    updateBulkImportActionState();
+  }
+
   function setTransactionCategoryValue(categoryId) {
     elements.transactionCategoryInput.value = categoryId === null || categoryId === undefined ? "" : String(categoryId);
     renderCategoryButton(elements.transactionCategoryButton, elements.transactionCategoryInput.value, "Select category");
@@ -2646,6 +2766,7 @@
 
     renderCategoryButton(elements.ruleCategoryButton, elements.ruleCategoryInput.value);
     renderCategoryButton(elements.manualImportCategoryButton, elements.manualImportCategoryInput.value);
+    renderCategoryButton(elements.bulkImportCategoryButton, elements.bulkImportCategoryInput.value, "Keep category");
     renderCategoryButton(elements.transactionCategoryButton, elements.transactionCategoryInput.value, "Select category");
     renderCategoryButton(elements.transactionCategoryFilterButton, elements.transactionCategoryFilter.value, "All categories");
     renderCategoryButton(elements.ruleCategoryFilterButton, elements.ruleCategoryFilter.value, "All categories");
@@ -2664,8 +2785,8 @@
 
   function openCategoryPicker(target) {
     categoryPickerTarget = target;
-    const canClear = target === "rule" || target === "manual-import" || target === "transaction-filter" || target === "rule-filter" || target === "category-parent";
-    elements.categoryPickerTitle.textContent = target === "rule" || target === "manual-import"
+    const canClear = target === "rule" || target === "manual-import" || target === "bulk-import" || target === "transaction-filter" || target === "rule-filter" || target === "category-parent";
+    elements.categoryPickerTitle.textContent = target === "rule" || target === "manual-import" || target === "bulk-import"
       ? "Select Clean Category"
       : target === "transaction-filter" || target === "rule-filter"
         ? "Filter By Category"
@@ -2676,6 +2797,8 @@
       ? "All Categories"
       : target === "category-parent"
         ? "No Parent"
+        : target === "bulk-import"
+          ? "Keep Category"
         : "No Category";
     elements.categoryPickerClearButton.hidden = !canClear;
     renderCategoryPicker();
@@ -2719,6 +2842,9 @@
     }
     if (categoryPickerTarget === "manual-import") {
       return Number(elements.manualImportCategoryInput.value) || null;
+    }
+    if (categoryPickerTarget === "bulk-import") {
+      return Number(elements.bulkImportCategoryInput.value) || null;
     }
     return Number(elements.ruleCategoryInput.value) || null;
   }
@@ -2770,6 +2896,8 @@
       setRuleCategoryValue(categoryId);
     } else if (categoryPickerTarget === "manual-import") {
       setManualImportCategoryValue(categoryId);
+    } else if (categoryPickerTarget === "bulk-import") {
+      setBulkImportCategoryValue(categoryId);
     } else if (categoryPickerTarget === "category-parent") {
       setCategoryParentValue(categoryId);
     }
@@ -3126,19 +3254,63 @@
     updateSelectVisibleButton();
   }
 
-  async function importSelectedRawRows() {
+  function selectedImportableRawRowIds() {
+    return [...selectedRawRowIds].filter((rowId) => {
+      const rawRow = state.rawRows.find((candidate) => candidate.id === rowId);
+      return rawRow && isSelectableRawRow(rawRow);
+    });
+  }
+
+  function openBulkImportDialog() {
+    const rowIds = selectedImportableRawRowIds();
+    if (!rowIds.length) {
+      return;
+    }
+    elements.bulkImportDialogTitle.textContent = `Bulk Import ${rowIds.length}`;
+    resetBulkImportForm();
+    openModal(elements.bulkImportDialog);
+  }
+
+  function closeBulkImportDialog() {
+    elements.bulkImportDialog.close();
+  }
+
+  function resetBulkImportForm() {
+    elements.bulkImportMessage.textContent = "";
+    elements.bulkImportMessage.classList.remove("error");
+    elements.bulkImportForm.reset();
+    setOptionalTypeGroupValue(elements.bulkImportTypeInput, elements.bulkImportTypeGroup, "");
+    setBulkImportCategoryValue(null);
+    setTypeGroupValue(elements.bulkImportTagsModeInput, elements.bulkImportTagsModeGroup, "keep");
+    renderBulkImportTags([]);
+    updateBulkImportActionState();
+  }
+
+  function updateBulkImportActionState() {
+    const hasOverrides = bulkImportHasOverrides();
+    elements.bulkImportSubmitButton.textContent = hasOverrides ? "Overwrite" : "Import";
+    elements.bulkImportSubmitButton.classList.toggle("warning-button", hasOverrides);
+  }
+
+  async function importSelectedRawRows(event) {
+    event?.preventDefault();
+    const overrides = buildBulkImportOverrides();
     const rowIds = [...selectedRawRowIds].filter((rowId) => {
       const rawRow = state.rawRows.find((candidate) => candidate.id === rowId);
       return rawRow && isSelectableRawRow(rawRow);
     });
     if (!rowIds.length) {
+      closeBulkImportDialog();
       return;
     }
     await importRawRows(rowIds, {
-      button: elements.importSelectedRowsButton,
+      button: elements.bulkImportSubmitButton,
+      overrides,
+      messageElement: elements.bulkImportMessage,
       successMessage: ({ counts }) => `Imported ${counts.imported}; duplicates ${counts.duplicate}; errors ${counts.error}.`,
       onSuccess: () => {
         selectedRawRowIds.clear();
+        closeBulkImportDialog();
       },
       errorMessage: "Could not import selected rows.",
     });
@@ -3161,7 +3333,7 @@
     try {
       const payload = await apiRequest(mutationPath("/api/raw-rows/import"), {
         method: "POST",
-        body: JSON.stringify({ raw_row_ids: rowIds, raw_row_notes: notes }),
+        body: JSON.stringify({ raw_row_ids: rowIds, raw_row_notes: notes, raw_row_overrides: options.overrides || {} }),
       });
       rowIds.forEach((rowId) => rawRowNotes.delete(rowId));
       if (options.onSuccess) {
@@ -3174,7 +3346,12 @@
         counts.error > 0,
       );
     } catch (error) {
-      showPopup(error.message || options.errorMessage || "Could not import raw rows.", "error");
+      const message = error.message || options.errorMessage || "Could not import raw rows.";
+      if (options.messageElement) {
+        setModalMessage(options.messageElement, message, true);
+      } else {
+        showPopup(message, "error");
+      }
     } finally {
       if (button) {
         button.disabled = false;

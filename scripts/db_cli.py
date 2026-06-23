@@ -606,12 +606,18 @@ def normalize_rule_match_text(value: str | None) -> str:
 
 
 def format_prefilled_clean_description(value: str | None) -> str | None:
-    truncated = truncate_including_cutoff_word(value, 25)
-    cleaned = re.sub(r"[^a-zA-Z0-9'\s]+", " ", truncated)
-    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    cleaned = remove_default_description_special_characters(value)
+    truncated = truncate_including_cutoff_word(cleaned, 25)
+    cleaned = re.sub(r"\s+", " ", truncated).strip()
     if not cleaned:
         return normalize_text(value)
     return re.sub(r"\b[a-z]", lambda match: match.group(0).upper(), cleaned.lower())
+
+
+def remove_default_description_special_characters(value: str | None) -> str:
+    cleaned = re.sub(r"[^a-zA-Z0-9'\s]+", " ", normalize_text(value) or "")
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return cleaned
 
 
 def truncate_including_cutoff_word(value: str | None, max_length: int) -> str:
@@ -931,6 +937,7 @@ def import_raw_rows(
     conn: sqlite3.Connection,
     row_ids: Iterable[int],
     raw_row_notes: dict[int, str] | None = None,
+    raw_row_overrides: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     normalized_ids = sorted({int(row_id) for row_id in row_ids})
     if not normalized_ids:
@@ -940,6 +947,7 @@ def import_raw_rows(
         for row_id, note in (raw_row_notes or {}).items()
         if normalize_text(note) is not None
     }
+    overrides = normalize_raw_row_import_overrides(conn, raw_row_overrides or {})
 
     raw_rows = fetch_raw_rows_for_import(conn, normalized_ids)
     found_ids = {int(row["id"]) for row in raw_rows}
@@ -979,6 +987,7 @@ def import_raw_rows(
     undescribed_rows = []
     for raw_row in raw_rows:
         rule_result = import_rule_result_for_status(conn, raw_row, current_status_by_row_id[int(raw_row["id"])])
+        rule_result = apply_raw_row_import_overrides(rule_result, overrides)
         if rule_result["category_id"] is None:
             uncategorized_rows.append(str(raw_row["id"]))
         if rule_result["transaction_type"] is None:
@@ -1003,6 +1012,7 @@ def import_raw_rows(
                 raise CliError("raw_description is required.")
 
             rule_result = import_rule_result_for_status(conn, raw_row, current_status_by_row_id[int(raw_row["id"])])
+            rule_result = apply_raw_row_import_overrides(rule_result, overrides)
             clean_description = normalize_text(rule_result["clean_description"]) or description
             transaction_hash = make_transaction_hash(
                 int(raw_row["account_id"]),
@@ -1129,6 +1139,67 @@ def import_raw_rows(
             results.append({"raw_row_id": raw_row["id"], "status": "error", "error": error})
 
     return {"requested_raw_row_ids": normalized_ids, "counts": counts, "results": results}
+
+
+def normalize_raw_row_import_overrides(
+    conn: sqlite3.Connection,
+    raw_overrides: dict[str, Any],
+) -> dict[str, Any]:
+    if not isinstance(raw_overrides, dict):
+        raise CliError("raw_row_overrides must be an object.")
+
+    overrides: dict[str, Any] = {}
+    if "transaction_type" in raw_overrides:
+        transaction_type = validate_transaction_type(raw_overrides.get("transaction_type"), allow_empty=True)
+        if transaction_type is not None:
+            overrides["transaction_type"] = transaction_type
+
+    if "category_id" in raw_overrides:
+        raw_category_id = raw_overrides.get("category_id")
+        if raw_category_id not in (None, ""):
+            try:
+                category_id = int(raw_category_id)
+            except (TypeError, ValueError) as exc:
+                raise CliError("category_id override must be an integer.") from exc
+            if category_id < 1:
+                raise CliError("category_id override must be greater than 0.")
+            require_category(conn, category_id)
+            overrides["category_id"] = category_id
+
+    if "clean_description" in raw_overrides:
+        clean_description = normalize_text(raw_overrides.get("clean_description"))
+        if clean_description is not None:
+            overrides["clean_description"] = clean_description
+
+    if "tag_ids" in raw_overrides:
+        raw_tag_ids = raw_overrides.get("tag_ids")
+        if not isinstance(raw_tag_ids, list):
+            raise CliError("tag_ids override must be a list.")
+        try:
+            tag_ids = sorted({int(tag_id) for tag_id in raw_tag_ids if tag_id not in (None, "")})
+        except (TypeError, ValueError) as exc:
+            raise CliError("tag_ids override values must be integers.") from exc
+        if any(tag_id < 1 for tag_id in tag_ids):
+            raise CliError("tag_ids override values must be greater than 0.")
+        for tag_id in tag_ids:
+            fetch_tag_by_id(conn, tag_id)
+        overrides["tag_ids"] = tag_ids
+
+    return overrides
+
+
+def apply_raw_row_import_overrides(rule_result: dict[str, Any], overrides: dict[str, Any]) -> dict[str, Any]:
+    if not overrides:
+        return rule_result
+    merged = {
+        "category_id": rule_result["category_id"],
+        "clean_description": rule_result["clean_description"],
+        "transaction_type": rule_result["transaction_type"],
+        "tag_ids": list(rule_result["tag_ids"]),
+    }
+    for key, value in overrides.items():
+        merged[key] = list(value) if key == "tag_ids" else value
+    return merged
 
 
 def ensure_readonly_sql(sql: str) -> None:
