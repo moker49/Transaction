@@ -246,17 +246,9 @@
           </div>
           <div class="raw-table-header">
             <div class="raw-mobile-selection-left">
-              <label class="switch-toggle raw-column-toggle mobile-only" title="Show import column">
-                <input type="checkbox" id="rawColumnToggleInput" aria-label="Show import column">
-                <span class="switch-track" aria-hidden="true">
-                  <span class="switch-thumb"></span>
-                  <span class="switch-icon switch-icon-off material-symbols-outlined">calendar_today</span>
-                  <span class="switch-icon switch-icon-on material-symbols-outlined">select_all</span>
-                </span>
-              </label>
-              <button type="button" class="text-button" id="selectVisibleRowsMobileButton">Select all</button>
+              <span id="rawSelectedCountMobile">0 selected</span>
             </div>
-            <span id="rawSelectedCountMobile">0 selected</span>
+            <button type="button" class="text-button" id="selectVisibleRowsMobileButton">Select all</button>
           </div>
           <div class="table-wrap raw-table raw-table-wrap">
             <table id="rawRowsTableElement">

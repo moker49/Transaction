@@ -56,7 +56,6 @@
   let categoryColorDraft = "#2f8f2f";
   let popupTimer = null;
   let dateRangeDraft = null;
-  let rawMobileImportColumnVisible = false;
   let mobileDrawerHistoryActive = false;
   let activeViewName = "overview";
   const viewScrollPositions = new Map();
@@ -120,7 +119,6 @@
     dummyDatabaseDescription: document.querySelector("#dummyDatabaseDescription"),
     rawAccountFilter: document.querySelector("#rawAccountFilter"),
     rawStatusFilter: document.querySelector("#rawStatusFilter"),
-    rawColumnToggleInput: document.querySelector("#rawColumnToggleInput"),
     rawSelectedCount: document.querySelector("#rawSelectedCount"),
     rawSelectedCountMobile: document.querySelector("#rawSelectedCountMobile"),
     rawRowsTableElement: document.querySelector("#rawRowsTableElement"),
@@ -288,7 +286,6 @@
   elements.ruleForm.addEventListener("submit", saveRule);
   elements.rawAccountFilter.addEventListener("change", renderRawRows);
   elements.rawStatusFilter.addEventListener("change", renderRawRows);
-  elements.rawColumnToggleInput.addEventListener("change", toggleRawMobileColumn);
   elements.selectVisibleRowsButton.addEventListener("click", selectVisibleRawRows);
   elements.selectVisibleRowsMobileButton.addEventListener("click", selectVisibleRawRows);
   elements.importSelectedRowsButton.addEventListener("click", importSelectedRawRows);
@@ -3020,7 +3017,6 @@
     if (statusFilter !== "all") {
       hiddenColumns.add("status");
     }
-    updateRawMobileColumnToggle();
     updateRawColumnHeaders(hiddenColumns);
     const rawColumnCount = 8 - hiddenColumns.size;
 
@@ -3059,7 +3055,7 @@
     sortedRows.forEach((rawRow) => {
       const account = state.accounts.find((candidate) => candidate.id === rawRow.account_id);
       const tr = document.createElement("tr");
-      tr.classList.toggle("is-importable-row", isImportableRawRow(rawRow));
+      tr.classList.toggle("is-selected-row", selectedRawRowIds.has(rawRow.id));
       makeEditableRow(tr, `View raw transaction ${rawRow.id}`, () => openRawRowDialog(rawRow));
       const checkbox = document.createElement("input");
       checkbox.className = "row-checkbox";
@@ -3100,10 +3096,17 @@
         event.stopPropagation();
         checkbox.click();
       });
+      const dateCell = cell(displayDateCell(rawRow.raw_date), "date-cell raw-date-select-cell");
+      dateCell.addEventListener("click", (event) => {
+        event.stopPropagation();
+        if (!checkbox.disabled) {
+          checkbox.click();
+        }
+      });
 
       const cells = [
         ["select", selectCell],
-        ["date", cell(displayDateCell(rawRow.raw_date), "date-cell")],
+        ["date", dateCell],
         ["category", cell(rawCategoryValueWithPreview(rawRow))],
         ["description", cell(rawValueWithPreview(rawRow.raw_description, rawRowPreviewCleanDescription(rawRow)))],
         ["amount", cell(rawRow.raw_amount || "-", "amount")],
@@ -3227,21 +3230,7 @@
     } else if (targetStatus === "pre-fill") {
       prefillIds.forEach((rowId) => selectedRawRowIds.add(rowId));
     }
-    rawMobileImportColumnVisible = true;
     renderRawRows();
-  }
-
-  function toggleRawMobileColumn() {
-    rawMobileImportColumnVisible = elements.rawColumnToggleInput.checked;
-    updateRawMobileColumnToggle();
-  }
-
-  function updateRawMobileColumnToggle() {
-    elements.rawRowsTableElement.classList.toggle("show-mobile-import-column", rawMobileImportColumnVisible);
-    elements.rawColumnToggleInput.checked = rawMobileImportColumnVisible;
-    const label = rawMobileImportColumnVisible ? "Show date column" : "Show import column";
-    elements.rawColumnToggleInput.setAttribute("aria-label", label);
-    elements.rawColumnToggleInput.closest(".raw-column-toggle").title = label;
   }
 
   function updateImportSelectedButton() {
