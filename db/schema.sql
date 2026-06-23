@@ -119,6 +119,7 @@ CREATE TABLE IF NOT EXISTS raw_imported_rows (
     raw_date TEXT,
     raw_category TEXT,
     raw_description TEXT,
+    default_clean_description TEXT,
     raw_amount TEXT,
     parsed_transaction_id INTEGER REFERENCES transactions(id) ON DELETE SET NULL,
     import_status TEXT NOT NULL DEFAULT 'manual',

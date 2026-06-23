@@ -899,10 +899,11 @@ def import_csv():
                 raw_date,
                 raw_category,
                 raw_description,
+                default_clean_description,
                 raw_amount,
                 raw_row_hash
             )
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
@@ -910,6 +911,7 @@ def import_csv():
                     row["raw_date"],
                     row["raw_category"],
                     row["raw_description"],
+                    format_prefilled_clean_description(row["raw_description"]),
                     row["raw_amount"],
                     raw_row_hash(row),
                 )
@@ -1429,6 +1431,7 @@ def read_raw_rows(conn: sqlite3.Connection, start_date: str | None = None, end_d
                 rr.raw_date,
                 rr.raw_category,
                 rr.raw_description,
+                rr.default_clean_description,
                 rr.raw_amount,
                 rr.parsed_transaction_id,
                 rr.import_status,
@@ -1641,7 +1644,7 @@ def apply_raw_row_previews(
                 preview = apply_rule_matchers(template_matchers, row_match)
                 next_status = "pre-fill" if rule_preview_has_values(preview) else "manual"
                 if next_status == "pre-fill" and normalize_text(preview.get("clean_description")) is None:
-                    preview["clean_description"] = format_prefilled_clean_description(row.get("raw_description"))
+                    preview["clean_description"] = normalize_text(row.get("default_clean_description"))
         else:
             preview = {}
             next_status = row["import_status"]

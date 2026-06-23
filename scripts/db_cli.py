@@ -831,7 +831,7 @@ def import_rule_result_for_status(
     rule_type = "template" if import_status == "pre-fill" else "auto-import"
     result = apply_import_rules(conn, raw_row, rule_type)
     if import_status == "pre-fill" and normalize_text(result["clean_description"]) is None:
-        result["clean_description"] = format_prefilled_clean_description(raw_row["raw_description"])
+        result["clean_description"] = normalize_text(raw_row["default_clean_description"])
     return result
 
 
@@ -840,7 +840,7 @@ def sync_raw_row_importability_status(conn: sqlite3.Connection) -> None:
     template_rules = fetch_active_rules(conn, "template")
     rows = conn.execute(
         """
-        SELECT id, raw_category, raw_description, raw_amount, import_status
+        SELECT id, raw_category, raw_description, default_clean_description, raw_amount, import_status
         FROM raw_imported_rows
         WHERE import_status IN ('auto-importable', 'manual', 'pre-fill', 'importable', 'notImportable', 'template')
         ORDER BY id
@@ -913,6 +913,7 @@ def fetch_raw_rows_for_import(conn: sqlite3.Connection, row_ids: list[int]) -> l
             rr.raw_date,
             rr.raw_category,
             rr.raw_description,
+            rr.default_clean_description,
             rr.raw_amount,
             rr.parsed_transaction_id,
             rr.import_status,
@@ -1380,10 +1381,11 @@ def command_import_csv(args: argparse.Namespace) -> None:
                 raw_date,
                 raw_category,
                 raw_description,
+                default_clean_description,
                 raw_amount,
                 raw_row_hash
             )
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
@@ -1391,6 +1393,7 @@ def command_import_csv(args: argparse.Namespace) -> None:
                     row["raw_date"],
                     row["raw_category"],
                     row["raw_description"],
+                    format_prefilled_clean_description(row["raw_description"]),
                     row["raw_amount"],
                     raw_row_hash(row),
                 )

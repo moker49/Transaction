@@ -1493,25 +1493,12 @@
     return truncateIncludingCutoffWord(value, 25);
   }
 
-  function truncatePrefilledDescription(value) {
-    return truncateIncludingCutoffWord(value, 25);
-  }
-
-  function formatPrefilledCleanDescription(value) {
-    return titleCaseWords(removeSpecialDescriptionCharacters(truncateIncludingCutoffWord(value, 25)));
-  }
-
   function rawRowPrefillCleanDescription() {
     if (!ruleRawRowPrefill) {
       return "";
     }
-    return formatPrefilledCleanDescription(ruleRawRowPrefill.raw_description)
-      || truncateIncludingCutoffWord(ruleRawRowPrefill.raw_description, 25)
+    return clean(ruleRawRowPrefill.default_clean_description)
       || clean(ruleRawRowPrefill.raw_description);
-  }
-
-  function removeSpecialDescriptionCharacters(value) {
-    return clean(value).replace(/[^a-zA-Z0-9'\s]+/g, " ").replace(/\s+/g, " ").trim();
   }
 
   function truncateIncludingCutoffWord(value, maxLength) {
@@ -1521,10 +1508,6 @@
     }
     const nextSpace = text.indexOf(" ", maxLength);
     return (nextSpace === -1 ? text : text.slice(0, nextSpace)).trim();
-  }
-
-  function titleCaseWords(value) {
-    return clean(value).toLowerCase().replace(/\b[a-z]/g, (letter) => letter.toUpperCase());
   }
 
   function openRuleEditDialog(rule, options = {}) {
@@ -2334,8 +2317,8 @@
     setManualImportCategoryValue(rawRow.preview_category_id || null);
     const previewDescription = clean(rawRow.preview_clean_description);
     elements.manualImportForm.elements.cleanDescription.value = isTemplateRawRow(rawRow)
-      ? previewDescription || formatPrefilledCleanDescription(rawRow.raw_description)
-      : previewDescription || formatPrefilledCleanDescription(rawRow.raw_description);
+      ? previewDescription || clean(rawRow.default_clean_description)
+      : previewDescription || clean(rawRow.default_clean_description);
     elements.manualImportForm.elements.note.value = rawRowStoredNote(rawRow);
     renderManualImportTags(rawRow.preview_tag_ids || []);
     openModal(elements.manualImportDialog);
@@ -2415,6 +2398,7 @@
     const rule = autoImportRule || template;
     const rawRowPrefill = {
       raw_description: rawRow.raw_description,
+      default_clean_description: rawRow.default_clean_description,
     };
     if (rule) {
       closeRawRowDialog();
@@ -2426,7 +2410,7 @@
       openRuleAddDialog({
         matchDescription: rawRow.raw_description,
         matchCategory: rawRow.raw_category,
-        setCleanDescription: formatPrefilledCleanDescription(rawRow.raw_description),
+        setCleanDescription: rawRow.default_clean_description,
         setTransactionType: ruleTransactionTypeFromRawAmount(rawRow),
         rawRowPrefill,
       });
@@ -3318,7 +3302,7 @@
 
   function rawRowPreviewCleanDescription(rawRow) {
     return clean(rawRow.preview_clean_description)
-      || (isTemplateRawRow(rawRow) ? formatPrefilledCleanDescription(rawRow.raw_description) : "");
+      || (isTemplateRawRow(rawRow) ? clean(rawRow.default_clean_description) : "");
   }
 
   function rawCategoryValueWithPreview(rawRow) {
@@ -4469,7 +4453,7 @@
       return {
         date: item.raw_date,
         category: clean(item.preview_category) || item.raw_category,
-        description: clean(item.preview_clean_description) || item.raw_description,
+        description: clean(item.preview_clean_description) || item.default_clean_description || item.raw_description,
         amount: item.raw_amount,
         account: account?.name,
         status: statusLabel(item.import_status),

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import sqlite3
 from contextlib import closing
 from pathlib import Path
@@ -75,6 +76,7 @@ EXPECTED_RAW_IMPORTED_ROW_COLUMNS = {
     "raw_date",
     "raw_category",
     "raw_description",
+    "default_clean_description",
     "raw_amount",
     "parsed_transaction_id",
     "import_status",
@@ -86,6 +88,25 @@ EXPECTED_RAW_IMPORTED_ROW_COLUMNS = {
 NEW_TRANSACTION_TYPES = ("income", "expense", "transfer")
 RULE_TYPES = ("auto-import", "template")
 BILL_TAG_NAME = "bill"
+
+
+def normalize_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = re.sub(r"\s+", " ", str(value).strip())
+    return normalized or None
+
+
+def default_clean_description(value: str | None) -> str | None:
+    text = normalize_text(value) or ""
+    if len(text) > 25:
+        next_space = text.find(" ", 25)
+        text = (text if next_space == -1 else text[:next_space]).strip()
+    cleaned = re.sub(r"[^a-zA-Z0-9'\s]+", " ", text)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    if not cleaned:
+        return normalize_text(value)
+    return re.sub(r"\b[a-z]", lambda match: match.group(0).upper(), cleaned.lower())
 
 
 def init_db(db_path: Path = DEFAULT_DB_PATH, schema_path: Path = SCHEMA_PATH) -> Path:
@@ -282,6 +303,10 @@ def migrate_existing_schema(conn: sqlite3.Connection, tables: Iterable[str]) -> 
             conn.commit()
             rebuild_raw_imported_rows_with_importability_status(conn)
             conn.commit()
+        raw_imported_row_columns = {row[1] for row in conn.execute("PRAGMA table_info(raw_imported_rows)").fetchall()}
+        if "default_clean_description" not in raw_imported_row_columns:
+            conn.execute("ALTER TABLE raw_imported_rows ADD COLUMN default_clean_description TEXT")
+        backfill_default_clean_descriptions(conn)
         normalize_raw_imported_row_spaces(conn)
     conn.commit()
 
@@ -296,6 +321,25 @@ def table_ddl(conn: sqlite3.Connection, table: str) -> str:
         (table,),
     ).fetchone()
     return row[0] if row else ""
+
+
+def backfill_default_clean_descriptions(conn: sqlite3.Connection, *, force: bool = False) -> None:
+    where_clause = "" if force else "WHERE default_clean_description IS NULL OR default_clean_description = ''"
+    rows = conn.execute(
+        f"""
+        SELECT id, raw_description
+        FROM raw_imported_rows
+        {where_clause}
+        """
+    ).fetchall()
+    conn.executemany(
+        """
+        UPDATE raw_imported_rows
+        SET default_clean_description = ?
+        WHERE id = ?
+        """,
+        [(default_clean_description(row[1]), row[0]) for row in rows],
+    )
 
 
 def ensure_bill_tag(conn: sqlite3.Connection) -> int:
@@ -580,6 +624,7 @@ def rebuild_raw_imported_rows_with_importability_status(conn: sqlite3.Connection
                 raw_date TEXT,
                 raw_category TEXT,
                 raw_description TEXT,
+                default_clean_description TEXT,
                 raw_amount TEXT,
                 parsed_transaction_id INTEGER REFERENCES transactions(id) ON DELETE SET NULL,
                 import_status TEXT NOT NULL DEFAULT 'manual',
@@ -605,6 +650,7 @@ def rebuild_raw_imported_rows_with_importability_status(conn: sqlite3.Connection
                 raw_date,
                 raw_category,
                 raw_description,
+                default_clean_description,
                 raw_amount,
                 parsed_transaction_id,
                 import_status,
@@ -619,6 +665,7 @@ def rebuild_raw_imported_rows_with_importability_status(conn: sqlite3.Connection
                 raw_date,
                 raw_category,
                 raw_description,
+                NULL,
                 raw_amount,
                 parsed_transaction_id,
                 CASE import_status
@@ -639,6 +686,7 @@ def rebuild_raw_imported_rows_with_importability_status(conn: sqlite3.Connection
         )
         conn.execute("DROP TABLE raw_imported_rows")
         conn.execute("ALTER TABLE raw_imported_rows_rebuild RENAME TO raw_imported_rows")
+        backfill_default_clean_descriptions(conn)
         conn.execute(
             """
             CREATE INDEX IF NOT EXISTS idx_raw_imported_rows_imported_source_id
@@ -685,6 +733,7 @@ def normalize_raw_imported_row_spaces(conn: sqlite3.Connection) -> None:
             )
             if cursor.rowcount == 0:
                 break
+    backfill_default_clean_descriptions(conn, force=True)
 
 
 def schema_is_compatible(conn: sqlite3.Connection) -> bool:
