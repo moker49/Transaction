@@ -34,6 +34,7 @@ from db_cli import (  # noqa: E402
     fetch_tag_by_id,
     fetch_tag_by_name,
     fetch_transaction_rule,
+    format_prefilled_clean_description,
     get_or_create_institution,
     import_raw_rows,
     nonempty,
@@ -1639,6 +1640,8 @@ def apply_raw_row_previews(
             else:
                 preview = apply_rule_matchers(template_matchers, row_match)
                 next_status = "pre-fill" if rule_preview_has_values(preview) else "manual"
+                if next_status == "pre-fill" and normalize_text(preview.get("clean_description")) is None:
+                    preview["clean_description"] = format_prefilled_clean_description(row.get("raw_description"))
         else:
             preview = {}
             next_status = row["import_status"]

@@ -192,10 +192,9 @@ def validate_rule_payload(
         raise CliError("An auto-import rule must set a category, description, and type.")
     if rule_type == "template" and (
         set_category_id is None
-        and set_clean_description is None
-        and set_transaction_type is None
+        or set_transaction_type is None
     ):
-        raise CliError("A template must set a category, description, or type.")
+        raise CliError("A pre-fill rule must set a category and type.")
 
 
 def rule_specificity_order_sql() -> str:
@@ -606,6 +605,23 @@ def normalize_rule_match_text(value: str | None) -> str:
     return re.sub(r"[^a-z0-9]+", "", normalized)
 
 
+def format_prefilled_clean_description(value: str | None) -> str | None:
+    truncated = truncate_including_cutoff_word(value, 25)
+    cleaned = re.sub(r"[^a-zA-Z0-9'\s]+", " ", truncated)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    if not cleaned:
+        return normalize_text(value)
+    return re.sub(r"\b[a-z]", lambda match: match.group(0).upper(), cleaned.lower())
+
+
+def truncate_including_cutoff_word(value: str | None, max_length: int) -> str:
+    text = normalize_text(value) or ""
+    if len(text) <= max_length:
+        return text
+    next_space = text.find(" ", max_length)
+    return (text if next_space == -1 else text[:next_space]).strip()
+
+
 def parse_transaction_date(value: str | None) -> str:
     raw_value = normalize_text(value)
     if raw_value is None:
@@ -813,7 +829,10 @@ def import_rule_result_for_status(
     import_status: str,
 ) -> dict[str, Any]:
     rule_type = "template" if import_status == "pre-fill" else "auto-import"
-    return apply_import_rules(conn, raw_row, rule_type)
+    result = apply_import_rules(conn, raw_row, rule_type)
+    if import_status == "pre-fill" and normalize_text(result["clean_description"]) is None:
+        result["clean_description"] = format_prefilled_clean_description(raw_row["raw_description"])
+    return result
 
 
 def sync_raw_row_importability_status(conn: sqlite3.Connection) -> None:
@@ -949,7 +968,10 @@ def import_raw_rows(
         if current_status_by_row_id[int(row["id"])] not in IMPORTABLE_RAW_ROW_STATUSES
     ]
     if unavailable_rows:
-        raise CliError(f"Only auto-importable raw rows can be imported: {', '.join(unavailable_rows)}")
+        raise CliError(f"Only auto-importable or pre-fill raw rows can be imported: {', '.join(unavailable_rows)}")
+    import_statuses = {current_status_by_row_id[int(row["id"])] for row in raw_rows}
+    if len(import_statuses) > 1:
+        raise CliError("Batch import cannot mix auto-importable and pre-fill raw rows.")
 
     uncategorized_rows = []
     untyped_rows = []

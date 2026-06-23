@@ -13,8 +13,9 @@
     { value: "this-month", label: "This month" },
     { value: "last-month", label: "Last month" },
     { value: "this-year", label: "This year" },
-    { value: "last-year", label: "Last year" },
   ];
+  const YEAR_RANGE_PREFIX = "year-";
+  const FIRST_YEAR_RANGE = 2020;
 
   const defaultState = {
     accounts: [],
@@ -502,7 +503,11 @@
   }
 
   function dateRangeValues() {
-    return new Set([...dateRangePresets.map((preset) => preset.value), CUSTOM_DATE_RANGE]);
+    return new Set([
+      ...dateRangePresets.map((preset) => preset.value),
+      ...dateRangeYearOptions().map((option) => option.value),
+      CUSTOM_DATE_RANGE,
+    ]);
   }
 
   function openDateRangeDialog() {
@@ -568,7 +573,8 @@
 
   function currentDateRangeState() {
     const savedRange = localStorage.getItem(DATE_RANGE_KEY) || DEFAULT_DATE_RANGE;
-    const range = dateRangeValues().has(savedRange) ? savedRange : DEFAULT_DATE_RANGE;
+    const normalizedRange = savedRange === "last-year" ? yearRangeValue(lastFullYear()) : savedRange;
+    const range = dateRangeValues().has(normalizedRange) ? normalizedRange : DEFAULT_DATE_RANGE;
     return dateRangeState(range);
   }
 
@@ -606,6 +612,27 @@
       button.addEventListener("click", () => selectDateRangePreset(preset.value));
       elements.dateRangePresetList.appendChild(button);
     });
+    const yearSelect = document.createElement("select");
+    yearSelect.className = "range-preset-button range-year-select";
+    yearSelect.setAttribute("aria-label", "Year");
+    const placeholderOption = document.createElement("option");
+    placeholderOption.value = "";
+    placeholderOption.textContent = "Select year";
+    yearSelect.appendChild(placeholderOption);
+    dateRangeYearOptions().forEach((option) => {
+      const yearOption = document.createElement("option");
+      yearOption.value = option.value;
+      yearOption.textContent = option.label;
+      yearSelect.appendChild(yearOption);
+    });
+    yearSelect.value = isYearRange(dateRangeDraft?.range) ? dateRangeDraft.range : "";
+    yearSelect.classList.toggle("is-active", isYearRange(dateRangeDraft?.range));
+    yearSelect.addEventListener("change", () => {
+      if (yearSelect.value) {
+        selectDateRangePreset(yearSelect.value);
+      }
+    });
+    elements.dateRangePresetList.appendChild(yearSelect);
   }
 
   function selectDateRangePreset(range) {
@@ -1602,9 +1629,11 @@
       setModalMessage(elements.ruleMessage, "Auto-import rules need a category and description.", true);
       return;
     }
-    if (payload.rule_type === "template" && !payload.set_category_id && !payload.set_clean_description && !payload.set_transaction_type) {
-      setRuleFieldErrors(["setCategory", "setCleanDescription"]);
-      setModalMessage(elements.ruleMessage, "Templates need a category or description.", true);
+    if (payload.rule_type === "template" && (!payload.set_category_id || !payload.set_transaction_type)) {
+      setRuleFieldErrors([
+        ...(!payload.set_category_id ? ["setCategory"] : []),
+      ]);
+      setModalMessage(elements.ruleMessage, "Pre-fill rules need a category and type.", true);
       return;
     }
 
@@ -2338,7 +2367,7 @@
     renderDefinitionList(elements.rawRowCleanValues, [
       ["Type", transactionTypeLabel(rawRow.preview_type)],
       ["Category", rawRow.preview_category],
-      ["Description", rawRow.preview_clean_description],
+      ["Description", rawRowPreviewCleanDescription(rawRow)],
     ]);
     renderDefinitionList(elements.rawRowImportValues, [
       ["Account", account ? accountLabel(account) : "Unknown"],
@@ -3007,7 +3036,14 @@
 
     [...selectedRawRowIds].forEach((rowId) => {
       const rawRow = state.rawRows.find((candidate) => candidate.id === rowId);
-      if (!rawRow || !isSelectableRawRow(rawRow)) {
+      if (!rawRow || !isBaseSelectableRawRow(rawRow)) {
+        selectedRawRowIds.delete(rowId);
+      }
+    });
+    const lockedStatus = selectedRawRowStatus();
+    [...selectedRawRowIds].forEach((rowId) => {
+      const rawRow = state.rawRows.find((candidate) => candidate.id === rowId);
+      if (lockedStatus && rawRow?.import_status !== lockedStatus) {
         selectedRawRowIds.delete(rowId);
       }
     });
@@ -3045,12 +3081,12 @@
       checkbox.addEventListener("keydown", (event) => event.stopPropagation());
       checkbox.addEventListener("change", () => {
         if (checkbox.checked) {
+          clearSelectedRawRowsExceptStatus(rawRow.import_status);
           selectedRawRowIds.add(rawRow.id);
         } else {
           selectedRawRowIds.delete(rawRow.id);
         }
-        updateImportSelectedButton();
-        updateSelectVisibleButton();
+        renderRawRows();
       });
       const noteInput = document.createElement("input");
       noteInput.type = "text";
@@ -3079,7 +3115,7 @@
         ["select", selectCell],
         ["date", cell(displayDateCell(rawRow.raw_date), "date-cell")],
         ["category", cell(rawCategoryValueWithPreview(rawRow))],
-        ["description", cell(rawValueWithPreview(rawRow.raw_description, rawRow.preview_clean_description))],
+        ["description", cell(rawValueWithPreview(rawRow.raw_description, rawRowPreviewCleanDescription(rawRow)))],
         ["amount", cell(rawRow.raw_amount || "-", "amount")],
         ["account", cell(account ? account.name : "Unknown", "muted-cell")],
         ["status", cell(statusBadge(rawRow), "status-cell")],
@@ -3191,10 +3227,16 @@
   }
 
   function selectVisibleRawRows() {
-    const selectableIds = visibleRawRows
-      .filter((row) => isSelectableRawRow(row))
-      .map((row) => row.id);
-    selectableIds.forEach((rowId) => selectedRawRowIds.add(rowId));
+    const selectedStatus = selectedRawRowStatus();
+    const autoImportIds = visibleSelectableRawRowIds("auto-importable");
+    const prefillIds = visibleSelectableRawRowIds("pre-fill");
+    const targetStatus = nextSelectVisibleStatus(selectedStatus, autoImportIds, prefillIds);
+    selectedRawRowIds.clear();
+    if (targetStatus === "auto-importable") {
+      autoImportIds.forEach((rowId) => selectedRawRowIds.add(rowId));
+    } else if (targetStatus === "pre-fill") {
+      prefillIds.forEach((rowId) => selectedRawRowIds.add(rowId));
+    }
     rawMobileImportColumnVisible = true;
     renderRawRows();
   }
@@ -3227,17 +3269,24 @@
   }
 
   function updateSelectVisibleButton() {
-    const selectableIds = visibleRawRows
-      .filter((row) => isSelectableRawRow(row))
-      .map((row) => row.id);
-    elements.selectVisibleRowsButton.disabled = selectableIds.length === 0;
-    elements.selectVisibleRowsButton.title = "Select all visible";
+    const autoImportIds = visibleSelectableRawRowIds("auto-importable");
+    const prefillIds = visibleSelectableRawRowIds("pre-fill");
+    const selectedStatus = selectedRawRowStatus();
+    const nextStatus = nextSelectVisibleStatus(selectedStatus, autoImportIds, prefillIds);
+    const selectableCount = autoImportIds.length + prefillIds.length;
+    const title = nextStatus === "auto-importable"
+      ? "Select all auto-importable"
+      : nextStatus === "pre-fill"
+        ? "Select all pre-fill"
+        : "Clear selection";
+    elements.selectVisibleRowsButton.disabled = selectableCount === 0 && selectedRawRowIds.size === 0;
+    elements.selectVisibleRowsButton.title = title;
     elements.selectVisibleRowsButton.setAttribute("aria-label", elements.selectVisibleRowsButton.title);
-    elements.selectVisibleRowsButton.textContent = "Select all";
-    elements.selectVisibleRowsMobileButton.disabled = selectableIds.length === 0;
+    elements.selectVisibleRowsButton.textContent = title;
+    elements.selectVisibleRowsMobileButton.disabled = elements.selectVisibleRowsButton.disabled;
     elements.selectVisibleRowsMobileButton.title = elements.selectVisibleRowsButton.title;
     elements.selectVisibleRowsMobileButton.setAttribute("aria-label", elements.selectVisibleRowsButton.title);
-    elements.selectVisibleRowsMobileButton.textContent = "Select all";
+    elements.selectVisibleRowsMobileButton.textContent = title;
   }
 
   function updateRawColumnHeaders(hiddenColumns) {
@@ -3267,6 +3316,11 @@
     return wrapper;
   }
 
+  function rawRowPreviewCleanDescription(rawRow) {
+    return clean(rawRow.preview_clean_description)
+      || (isTemplateRawRow(rawRow) ? formatPrefilledCleanDescription(rawRow.raw_description) : "");
+  }
+
   function rawCategoryValueWithPreview(rawRow) {
     const wrapper = document.createElement("div");
     wrapper.className = "raw-value raw-category-value";
@@ -3292,19 +3346,55 @@
   }
 
   function isSelectableRawRow(rawRow) {
-    if (isImportableRawRow(rawRow)) {
-      return true;
-    }
-    if (!isTemplateRawRow(rawRow)) {
+    if (!isBaseSelectableRawRow(rawRow)) {
       return false;
     }
-    const template = topMatchingRuleForRawRow(rawRow, "template");
-    return Boolean(
-      template
-      && template.set_transaction_type
-      && template.set_category_id
-      && clean(template.set_clean_description),
-    );
+    const selectedStatus = selectedRawRowStatus();
+    return !selectedStatus || rawRow.import_status === selectedStatus;
+  }
+
+  function isBaseSelectableRawRow(rawRow) {
+    return isImportableRawRow(rawRow) || isTemplateRawRow(rawRow);
+  }
+
+  function selectedRawRowStatus() {
+    for (const rowId of selectedRawRowIds) {
+      const rawRow = state.rawRows.find((candidate) => candidate.id === rowId);
+      if (rawRow && isBaseSelectableRawRow(rawRow)) {
+        return rawRow.import_status;
+      }
+    }
+    return null;
+  }
+
+  function clearSelectedRawRowsExceptStatus(status) {
+    [...selectedRawRowIds].forEach((rowId) => {
+      const rawRow = state.rawRows.find((candidate) => candidate.id === rowId);
+      if (!rawRow || rawRow.import_status !== status) {
+        selectedRawRowIds.delete(rowId);
+      }
+    });
+  }
+
+  function visibleSelectableRawRowIds(status) {
+    return visibleRawRows
+      .filter((row) => row.import_status === status && isBaseSelectableRawRow(row))
+      .map((row) => row.id);
+  }
+
+  function nextSelectVisibleStatus(selectedStatus, autoImportIds, prefillIds) {
+    if (selectedStatus === "auto-importable") {
+      const allAutoImportSelected = autoImportIds.length > 0 && autoImportIds.every((rowId) => selectedRawRowIds.has(rowId));
+      if (!allAutoImportSelected) {
+        return "auto-importable";
+      }
+      return prefillIds.length ? "pre-fill" : null;
+    }
+    if (selectedStatus === "pre-fill") {
+      const allPrefillSelected = prefillIds.length > 0 && prefillIds.every((rowId) => selectedRawRowIds.has(rowId));
+      return allPrefillSelected ? null : "pre-fill";
+    }
+    return autoImportIds.length ? "auto-importable" : prefillIds.length ? "pre-fill" : null;
   }
 
   function topMatchingRuleForRawRow(rawRow, ruleType = null) {
@@ -3381,7 +3471,7 @@
   }
 
   function normalizeMatchText(value) {
-    return clean(value).toLowerCase();
+    return clean(value).toLowerCase().replace(/[^a-z0-9]+/g, "");
   }
 
   function rawRowMatchesStatusFilter(rawRow, filter) {
@@ -3572,6 +3662,9 @@
     if (range === "last-year") {
       return lastFullYearPeriod();
     }
+    if (isYearRange(range)) {
+      return fullYearPeriod(Number(range.slice(YEAR_RANGE_PREFIX.length)));
+    }
     if (range === CUSTOM_DATE_RANGE) {
       return customDateRangePeriod() || lastFullMonthPeriod();
     }
@@ -3584,6 +3677,30 @@
       start: "2020-01-01",
       end: formatDateKey(new Date(today.getFullYear(), 11, 31)),
     };
+  }
+
+  function dateRangeYearOptions() {
+    const years = [];
+    for (let year = lastFullYear(); year >= FIRST_YEAR_RANGE; year -= 1) {
+      years.push({ value: yearRangeValue(year), label: String(year) });
+    }
+    return years;
+  }
+
+  function yearRangeValue(year) {
+    return `${YEAR_RANGE_PREFIX}${year}`;
+  }
+
+  function isYearRange(range) {
+    if (!String(range || "").startsWith(YEAR_RANGE_PREFIX)) {
+      return false;
+    }
+    const year = Number(String(range).slice(YEAR_RANGE_PREFIX.length));
+    return Number.isInteger(year) && year >= FIRST_YEAR_RANGE && year <= lastFullYear();
+  }
+
+  function lastFullYear() {
+    return new Date().getFullYear() - 1;
   }
 
   function rangeStartDate(range) {
@@ -3603,9 +3720,12 @@
   }
 
   function lastFullYearPeriod() {
-    const now = new Date();
-    const start = new Date(now.getFullYear() - 1, 0, 1);
-    const end = new Date(now.getFullYear() - 1, 11, 31);
+    return fullYearPeriod(lastFullYear());
+  }
+
+  function fullYearPeriod(year) {
+    const start = new Date(year, 0, 1);
+    const end = new Date(year, 11, 31);
     return {
       start: formatDateKey(start),
       end: formatDateKey(end),
