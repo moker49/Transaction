@@ -46,7 +46,7 @@
   let accountEditSnapshot = null;
   let categoryEditSnapshot = null;
   let ruleEditSnapshot = null;
-  let ruleRawRowPrefill = null;
+  let ruleRawRowContext = null;
   let transactionEditSnapshot = null;
   let confirmResolver = null;
   let duplicateRuleResolver = null;
@@ -329,7 +329,7 @@
   });
   elements.ruleDialog.addEventListener("close", () => {
     editingRuleId = null;
-    ruleRawRowPrefill = null;
+    ruleRawRowContext = null;
   });
   elements.duplicateRuleCloseButton.addEventListener("click", () => closeDuplicateRuleWarning("cancel"));
   elements.duplicateRuleCancelButton.addEventListener("click", () => closeDuplicateRuleWarning("cancel"));
@@ -1468,7 +1468,7 @@
   }
 
   function openRuleAddDialog(prefill = {}) {
-    ruleRawRowPrefill = prefill.rawRowPrefill || null;
+    ruleRawRowContext = prefill.rawRowContext || null;
     setRuleDialogCreateMode();
     elements.ruleMessage.textContent = "";
     elements.ruleMessage.classList.remove("error");
@@ -1477,7 +1477,7 @@
     const matchCategory = clean(prefill.matchCategory);
     elements.ruleForm.elements.matchDescription.value = matchDescription;
     elements.ruleForm.elements.matchCategory.value = matchCategory;
-    elements.ruleForm.elements.setCleanDescription.value = clean(prefill.setCleanDescription) || rawRowPrefillCleanDescription();
+    elements.ruleForm.elements.setCleanDescription.value = clean(prefill.setCleanDescription) || ruleContextCleanDescription();
     setTypeGroupValue(elements.ruleKindInput, elements.ruleKindGroup, prefill.ruleType || "auto-import");
     setTypeGroupValue(elements.ruleMatchAmountInput, elements.ruleMatchAmountGroup, prefill.matchAmount || "any");
     setTypeGroupValue(elements.ruleTypeInput, elements.ruleTypeGroup, prefill.setTransactionType || "expense");
@@ -1493,12 +1493,13 @@
     return truncateIncludingCutoffWord(value, 25);
   }
 
-  function rawRowPrefillCleanDescription() {
-    if (!ruleRawRowPrefill) {
-      return "";
-    }
-    return clean(ruleRawRowPrefill.default_clean_description)
-      || clean(ruleRawRowPrefill.raw_description);
+  function ruleContextCleanDescription(selectedRule = null) {
+    return clean(selectedRule?.set_clean_description)
+      || clean(ruleRawRowContext?.selectedRule?.set_clean_description)
+      || clean(ruleRawRowContext?.autoImportRule?.set_clean_description)
+      || clean(ruleRawRowContext?.templateRule?.set_clean_description)
+      || clean(ruleRawRowContext?.rawRow?.default_clean_description)
+      || clean(ruleRawRowContext?.rawRow?.raw_description);
   }
 
   function truncateIncludingCutoffWord(value, maxLength) {
@@ -1511,7 +1512,7 @@
   }
 
   function openRuleEditDialog(rule, options = {}) {
-    ruleRawRowPrefill = options.rawRowPrefill || null;
+    ruleRawRowContext = options.rawRowContext || null;
     elements.ruleMessage.textContent = "";
     elements.ruleMessage.classList.remove("error");
     populateRuleEditDialog(rule);
@@ -1529,8 +1530,9 @@
     elements.ruleSubmitButton.textContent = "Create Rule";
     elements.ruleDismissButton.textContent = "Cancel";
     elements.ruleDeleteButton.hidden = true;
-    if (!clean(elements.ruleForm.elements.setCleanDescription.value)) {
-      elements.ruleForm.elements.setCleanDescription.value = rawRowPrefillCleanDescription();
+    const contextDescription = ruleContextCleanDescription();
+    if (contextDescription) {
+      elements.ruleForm.elements.setCleanDescription.value = contextDescription;
     }
     updateClearableTextFields(elements.ruleForm);
   }
@@ -1538,6 +1540,9 @@
   function populateRuleEditDialog(rule) {
     ruleDialogMode = "edit";
     editingRuleId = rule.id;
+    if (ruleRawRowContext) {
+      ruleRawRowContext.selectedRule = rule;
+    }
     clearRuleFieldErrors();
     elements.ruleDialogTitle.textContent = "Edit Rule";
     elements.ruleSubmitButton.textContent = "Save";
@@ -1549,7 +1554,7 @@
     form.elements.matchDescription.value = matches.description;
     form.elements.matchCategory.value = matches.category;
     setTypeGroupValue(elements.ruleMatchAmountInput, elements.ruleMatchAmountGroup, matches.amount);
-    form.elements.setCleanDescription.value = rule.set_clean_description || rawRowPrefillCleanDescription();
+    form.elements.setCleanDescription.value = ruleContextCleanDescription(rule);
     setTypeGroupValue(elements.ruleTypeInput, elements.ruleTypeGroup, rule.set_transaction_type || "expense");
     setRuleCategoryValue(rule.set_category_id);
     renderRuleTags(rule.tag_ids || (rule.add_tag_id === null ? [] : [rule.add_tag_id]));
@@ -2396,13 +2401,15 @@
     const autoImportRule = topMatchingRuleForRawRow(rawRow, "auto-import");
     const template = topMatchingRuleForRawRow(rawRow, "template");
     const rule = autoImportRule || template;
-    const rawRowPrefill = {
-      raw_description: rawRow.raw_description,
-      default_clean_description: rawRow.default_clean_description,
+    const rawRowContext = {
+      rawRow,
+      autoImportRule,
+      templateRule: template,
+      selectedRule: rule || null,
     };
     if (rule) {
       closeRawRowDialog();
-      openRuleEditDialog(rule, { rawRowPrefill });
+      openRuleEditDialog(rule, { rawRowContext });
       return;
     }
     if (shouldOfferRuleCreation(rawRow)) {
@@ -2410,9 +2417,8 @@
       openRuleAddDialog({
         matchDescription: rawRow.raw_description,
         matchCategory: rawRow.raw_category,
-        setCleanDescription: rawRow.default_clean_description,
         setTransactionType: ruleTransactionTypeFromRawAmount(rawRow),
-        rawRowPrefill,
+        rawRowContext,
       });
       return;
     }
