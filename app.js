@@ -4130,10 +4130,15 @@
       const swatch = document.createElement("span");
       swatch.className = "chart-legend-swatch";
       swatch.style.background = segment.color;
-      item.append(
-        swatch,
+      const label = document.createElement("span");
+      label.className = "chart-legend-label";
+      label.append(
         el("span", segment.label),
         el("strong", `${Math.round((segment.value / total) * 100)}%`),
+      );
+      item.append(
+        swatch,
+        label,
       );
       legend.appendChild(item);
     });

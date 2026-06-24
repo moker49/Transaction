@@ -715,6 +715,20 @@ h2 {
   background: var(--surface-muted);
 }
 
+.pie-chart-frame {
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+}
+
+.pie-chart-frame h2 {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
 .chart-legend {
   display: grid;
   gap: 8px;
@@ -723,7 +737,7 @@ h2 {
 
 .chart-legend-item {
   display: grid;
-  grid-template-columns: 12px minmax(0, 1fr) auto;
+  grid-template-columns: 12px minmax(0, 1fr);
   align-items: center;
   gap: 8px;
   color: var(--muted);
@@ -731,9 +745,24 @@ h2 {
   font-weight: 700;
 }
 
+.chart-legend-label {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.chart-legend-label span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .chart-legend-item strong {
   color: var(--text);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .chart-legend-swatch {
@@ -2660,9 +2689,12 @@ tr.is-selected-row td {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .chart-panel,
-  .stacked-bar-legend {
+  .chart-panel {
     grid-template-columns: 1fr;
+  }
+
+  .stacked-bar-legend {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .chart-panel {
@@ -2681,15 +2713,9 @@ tr.is-selected-row td {
   }
 
   .chart-legend-item {
-    grid-template-columns: 10px minmax(0, 1fr) auto;
+    grid-template-columns: 10px minmax(0, 1fr);
     gap: 6px;
     font-size: 0.72rem;
-  }
-
-  .chart-legend-item span:nth-child(2) {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   .primary-nav {
