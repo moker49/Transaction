@@ -4402,6 +4402,7 @@
     if (panel) {
       panel.scrollTop = 0;
     }
+    anchorModalToCurrentViewportCenter(dialog);
     updateModalScrollLock();
     if (focusSingleTextField) {
       const input = dialog.querySelector("input[type='text']");
@@ -4410,6 +4411,20 @@
       return;
     }
     dialog.focus({ preventScroll: true });
+  }
+
+  function anchorModalToCurrentViewportCenter(dialog) {
+    if (!window.matchMedia(MOBILE_LAYOUT_QUERY).matches) {
+      dialog.style.removeProperty("--modal-top-offset");
+      return;
+    }
+    const viewport = window.visualViewport;
+    const viewportHeight = viewport?.height || window.innerHeight;
+    const viewportTop = viewport?.offsetTop || 0;
+    const minimumTop = 12;
+    const dialogHeight = dialog.getBoundingClientRect().height;
+    const centeredTop = viewportTop + Math.max(minimumTop, (viewportHeight - dialogHeight) / 2);
+    dialog.style.setProperty("--modal-top-offset", `${Math.round(centeredTop)}px`);
   }
 
   function initializeClearableTextFields() {

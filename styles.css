@@ -2357,6 +2357,15 @@ tr.is-selected-row td {
     background: var(--bg);
   }
 
+  .modal {
+    margin-top: var(--modal-top-offset, max(12px, env(safe-area-inset-top)));
+    margin-bottom: auto;
+  }
+
+  .modal-panel {
+    max-height: calc(100dvh - var(--modal-top-offset, max(12px, env(safe-area-inset-top))) - 12px);
+  }
+
   .mobile-menu-button {
     display: inline-flex;
     align-items: center;
