@@ -285,8 +285,11 @@ def require_category_allowed_for_transaction_type(
     transaction_type: str | None,
 ) -> None:
     require_category(conn, category_id)
-    if category_is_transfer(conn, category_id) and transaction_type != "transfer":
+    is_transfer_category = category_is_transfer(conn, category_id)
+    if is_transfer_category and transaction_type != "transfer":
         raise CliError("Transfer categories require transaction_type transfer.")
+    if transaction_type == "transfer" and not is_transfer_category:
+        raise CliError("Transfer transactions require a Transfer category.")
 
 
 def category_is_transfer(conn: sqlite3.Connection, category_id: int) -> bool:

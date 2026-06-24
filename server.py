@@ -828,6 +828,111 @@ def update_transaction(transaction_id: int):
     return jsonify({"transaction": updated_transaction, "state": state})
 
 
+@app.post("/api/transactions/bulk-edit")
+def bulk_edit_transactions():
+    ensure_database()
+    data = request.get_json(silent=True) or {}
+    raw_transaction_ids = data.get("transaction_ids")
+    overrides = data.get("overrides") or {}
+    if not isinstance(raw_transaction_ids, list) or not raw_transaction_ids:
+        raise CliError("transaction_ids must be a non-empty list.")
+    if not isinstance(overrides, dict):
+        raise CliError("overrides must be an object.")
+    transaction_ids = sorted({int(transaction_id) for transaction_id in raw_transaction_ids})
+    allowed_override_keys = {"transaction_type", "category_id", "clean_description", "tag_ids"}
+    unknown_keys = sorted(set(overrides) - allowed_override_keys)
+    if unknown_keys:
+        raise CliError(f"Unsupported bulk edit field: {', '.join(unknown_keys)}")
+
+    next_transaction_type = None
+    if "transaction_type" in overrides:
+        next_transaction_type = validate_transaction_type(overrides.get("transaction_type"), allow_empty=False)
+
+    next_category_id = None
+    if "category_id" in overrides:
+        raw_category_id = overrides.get("category_id")
+        if raw_category_id in (None, ""):
+            raise CliError("category_id cannot be empty.")
+        next_category_id = int(raw_category_id)
+
+    next_clean_description = None
+    if "clean_description" in overrides:
+        next_clean_description = optional_nonempty(overrides.get("clean_description"), "clean_description")
+
+    tag_ids_requested = "tag_ids" in overrides
+    tag_ids: list[int] = []
+    if tag_ids_requested:
+        raw_tag_ids = overrides.get("tag_ids")
+        if not isinstance(raw_tag_ids, list):
+            raise CliError("tag_ids must be a list.")
+        tag_ids = sorted({int(tag_id) for tag_id in raw_tag_ids})
+
+    if next_transaction_type is None and next_category_id is None and next_clean_description is None and not tag_ids_requested:
+        raise CliError("No changes requested.")
+
+    with closing(connect(current_db_path())) as conn:
+        if next_category_id is not None:
+            require_category(conn, next_category_id)
+        for tag_id in tag_ids:
+            fetch_tag_by_id(conn, tag_id)
+
+        transactions = conn.execute(
+            f"""
+            SELECT id, account_id, category_id, transaction_type, posted_date, amount_cents, clean_description
+            FROM transactions
+            WHERE id IN ({','.join('?' for _ in transaction_ids)})
+            """,
+            transaction_ids,
+        ).fetchall()
+        found_ids = {int(transaction["id"]) for transaction in transactions}
+        missing_ids = [transaction_id for transaction_id in transaction_ids if transaction_id not in found_ids]
+        if missing_ids:
+            raise CliError(f"Transaction not found: {missing_ids[0]}")
+
+        for transaction in transactions:
+            transaction_id = int(transaction["id"])
+            final_category_id = next_category_id if next_category_id is not None else int(transaction["category_id"])
+            final_transaction_type = next_transaction_type if next_transaction_type is not None else transaction["transaction_type"]
+            final_clean_description = next_clean_description if next_clean_description is not None else transaction["clean_description"]
+            require_category_allowed_for_transaction_type(conn, final_category_id, final_transaction_type)
+
+            updates: list[str] = []
+            values: list[Any] = []
+            if next_transaction_type is not None:
+                updates.append("transaction_type = ?")
+                values.append(next_transaction_type)
+            if next_category_id is not None:
+                updates.append("category_id = ?")
+                values.append(next_category_id)
+            if next_clean_description is not None:
+                updates.append("clean_description = ?")
+                values.append(next_clean_description)
+            if updates:
+                updates.append("transaction_hash = ?")
+                values.append(
+                    make_transaction_hash(
+                        int(transaction["account_id"]),
+                        transaction["posted_date"],
+                        int(transaction["amount_cents"]),
+                        final_clean_description,
+                    )
+                )
+                updates.append("updated_at = datetime('now')")
+                values.append(transaction_id)
+                conn.execute(f"UPDATE transactions SET {', '.join(updates)} WHERE id = ?", values)
+            if tag_ids_requested:
+                conn.execute("DELETE FROM transaction_tags WHERE transaction_id = ?", (transaction_id,))
+                conn.executemany(
+                    "INSERT INTO transaction_tags (transaction_id, tag_id) VALUES (?, ?)",
+                    [(transaction_id, tag_id) for tag_id in tag_ids],
+                )
+
+        state = read_state(conn)
+        conn.commit()
+
+    return jsonify({"status": "updated", "updated_count": len(transaction_ids), "state": state})
+
+
 @app.post("/api/imports/csv")
 def import_csv():
     ensure_database()
@@ -1222,9 +1327,7 @@ def raw_row_in_date_range(raw_row: dict[str, Any], start_date: str, end_date: st
 
 
 def dashboard_data(transactions: list[dict[str, Any]], categories: list[dict[str, Any]]) -> dict[str, Any]:
-    dashboard_transactions = [
-        transaction for transaction in transactions if transaction["transaction_type"] != "transfer"
-    ]
+    dashboard_transactions = transactions
     income = sum_typed_transactions(dashboard_transactions, "income", False)
     bills = sum_expense_transactions(dashboard_transactions, True)
     splurge = sum_expense_transactions(dashboard_transactions, False)

@@ -1147,7 +1147,8 @@ button:focus-visible {
 }
 
 .import-fab,
-.manage-fab {
+.manage-fab,
+.transaction-edit-fab {
   position: fixed;
   right: max(18px, env(safe-area-inset-right));
   bottom: max(18px, env(safe-area-inset-bottom));
@@ -1314,6 +1315,11 @@ td.amount {
   gap: 14px;
 }
 
+.dashboard-filter-list {
+  display: grid;
+  gap: 14px;
+}
+
 .category-section {
   display: grid;
   gap: 8px;
@@ -1342,6 +1348,41 @@ td.amount {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.dashboard-filter-chip {
+  cursor: pointer;
+}
+
+.dashboard-filter-chip.is-selected {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 30px;
+  padding: 5px 10px;
+  border: 1px solid color-mix(in srgb, var(--category-color) 65%, white);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--category-color) 65%, black);
+  color: color-mix(in srgb, var(--category-color) 55%, white);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 700;
+  text-align: left;
+}
+
+.dashboard-filter-chip-check {
+  flex: 0 0 auto;
+  width: 18px;
+  font-size: 18px;
+  color: currentColor;
+  font-variation-settings: "FILL" 0, "wght" 500, "GRAD" 0, "opsz" 20;
+}
+
+.dashboard-filter-chip:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
 }
 
 .category-picker-button,
@@ -1414,6 +1455,24 @@ label.field-error .empty-category-chip {
   display: grid;
   gap: 3px;
   min-width: 0;
+}
+
+.setting-text-button {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.setting-text-button:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 4px;
 }
 
 .range-setting-button {
@@ -2288,6 +2347,7 @@ select:disabled {
 }
 
 th[data-raw-column="select"],
+.transaction-select-column,
 .raw-select-cell {
   text-align: center;
   vertical-align: middle;
@@ -2295,7 +2355,8 @@ th[data-raw-column="select"],
 }
 
 .raw-select-cell,
-.raw-date-select-cell {
+.raw-date-select-cell,
+.transaction-date-select-cell {
   cursor: pointer;
 }
 
@@ -2585,8 +2646,14 @@ tr.is-selected-row td {
 
   .import-fab,
   .csv-upload-fab,
-  .manage-fab {
+  .manage-fab,
+  .transaction-edit-fab {
     bottom: calc(86px + env(safe-area-inset-bottom));
+  }
+
+  .transaction-select-column,
+  .transaction-select-cell {
+    display: none;
   }
 
   .scroll-top-fab {
