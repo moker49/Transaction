@@ -10,6 +10,7 @@
   const CUSTOM_DATE_RANGE = "custom";
   const MOBILE_LAYOUT_QUERY = "(max-width: 860px)";
   const SCROLL_TOP_BUTTON_THRESHOLD = 200;
+  const DASHBOARD_CATEGORY_SEGMENT_LIMIT = 7;
   const dateRangePresets = [
     { value: "this-month", label: "This month" },
     { value: "last-month", label: "Last month" },
@@ -59,6 +60,11 @@
   let dateRangeDraft = null;
   let mobileDrawerHistoryActive = false;
   let activeViewName = "overview";
+  let scrollTopAnimationFrame = null;
+  let dashboardCategoryPieMode = "spending";
+  let dashboardSplurgePieMode = "splurge";
+  let shouldAnimateDashboardCategoryPie = false;
+  let shouldAnimateDashboardSplurgePie = false;
   const viewScrollPositions = new Map();
   const sectionViewSelections = new Map();
   const tableSortState = {
@@ -94,8 +100,12 @@
     mobileDevMessage: document.querySelector("#mobileDevMessage"),
     dashboardTypeBar: document.querySelector("#dashboardTypeBar"),
     dashboardTypeBarLegend: document.querySelector("#dashboardTypeBarLegend"),
+    dashboardCategoryPieFrame: document.querySelector("#dashboardCategoryPieFrame"),
+    dashboardCategoryPieTitle: document.querySelector("#dashboardCategoryPieTitle"),
     dashboardCategoryPie: document.querySelector("#dashboardCategoryPie"),
     dashboardCategoryLegend: document.querySelector("#dashboardCategoryLegend"),
+    dashboardSplurgePieFrame: document.querySelector("#dashboardSplurgePieFrame"),
+    dashboardSplurgePieTitle: document.querySelector("#dashboardSplurgePieTitle"),
     dashboardSplurgePie: document.querySelector("#dashboardSplurgePie"),
     dashboardSplurgeLegend: document.querySelector("#dashboardSplurgeLegend"),
     accountAddButton: document.querySelector("#accountAddButton"),
@@ -284,6 +294,10 @@
   elements.tabs.forEach((tab) => {
     tab.addEventListener("click", () => activateView(tab.dataset.view));
   });
+  elements.dashboardCategoryPieFrame.addEventListener("click", toggleDashboardCategoryPieMode);
+  elements.dashboardCategoryPieFrame.addEventListener("keydown", (event) => activateDashboardPieToggleFromKeyboard(event, toggleDashboardCategoryPieMode));
+  elements.dashboardSplurgePieFrame.addEventListener("click", toggleDashboardSplurgePieMode);
+  elements.dashboardSplurgePieFrame.addEventListener("keydown", (event) => activateDashboardPieToggleFromKeyboard(event, toggleDashboardSplurgePieMode));
   window.addEventListener("scroll", updateScrollTopButton, { passive: true });
   elements.scrollTopButton.addEventListener("click", scrollActiveViewToTop);
 
@@ -323,8 +337,14 @@
     navigateTypeGroup(event, elements.ruleKindInput, elements.ruleKindGroup);
     syncRuleDialogModeForSelectedType();
   });
-  elements.ruleTypeGroup.addEventListener("click", (event) => selectTypeFromGroup(event, elements.ruleTypeInput, elements.ruleTypeGroup));
-  elements.ruleTypeGroup.addEventListener("keydown", (event) => navigateTypeGroup(event, elements.ruleTypeInput, elements.ruleTypeGroup));
+  elements.ruleTypeGroup.addEventListener("click", (event) => {
+    selectTypeFromGroup(event, elements.ruleTypeInput, elements.ruleTypeGroup);
+    clearTransferCategoryIfTypeIsNotTransfer("rule");
+  });
+  elements.ruleTypeGroup.addEventListener("keydown", (event) => {
+    navigateTypeGroup(event, elements.ruleTypeInput, elements.ruleTypeGroup);
+    clearTransferCategoryIfTypeIsNotTransfer("rule");
+  });
   elements.ruleMatchAmountGroup.addEventListener("click", (event) => selectTypeFromGroup(event, elements.ruleMatchAmountInput, elements.ruleMatchAmountGroup));
   elements.ruleMatchAmountGroup.addEventListener("keydown", (event) => navigateTypeGroup(event, elements.ruleMatchAmountInput, elements.ruleMatchAmountGroup));
   elements.ruleForm.elements.matchDescription.addEventListener("input", updateRuleFieldErrorState);
@@ -357,10 +377,12 @@
   elements.bulkImportCategoryButton.addEventListener("click", () => openCategoryPicker("bulk-import"));
   elements.bulkImportTypeGroup.addEventListener("click", (event) => {
     selectOptionalTypeFromGroup(event, elements.bulkImportTypeInput, elements.bulkImportTypeGroup);
+    clearTransferCategoryIfTypeIsNotTransfer("bulk-import");
     updateBulkImportActionState();
   });
   elements.bulkImportTypeGroup.addEventListener("keydown", (event) => {
     navigateOptionalTypeGroup(event, elements.bulkImportTypeInput, elements.bulkImportTypeGroup);
+    clearTransferCategoryIfTypeIsNotTransfer("bulk-import");
     updateBulkImportActionState();
   });
   elements.bulkImportTagsModeGroup.addEventListener("click", (event) => {
@@ -376,8 +398,14 @@
   elements.manualImportCloseButton.addEventListener("click", closeManualImportDialog);
   elements.manualImportCancelButton.addEventListener("click", closeManualImportDialog);
   elements.manualImportCategoryButton.addEventListener("click", () => openCategoryPicker("manual-import"));
-  elements.manualImportTypeGroup.addEventListener("click", (event) => selectTypeFromGroup(event, elements.manualImportTypeInput, elements.manualImportTypeGroup));
-  elements.manualImportTypeGroup.addEventListener("keydown", (event) => navigateTypeGroup(event, elements.manualImportTypeInput, elements.manualImportTypeGroup));
+  elements.manualImportTypeGroup.addEventListener("click", (event) => {
+    selectTypeFromGroup(event, elements.manualImportTypeInput, elements.manualImportTypeGroup);
+    clearTransferCategoryIfTypeIsNotTransfer("manual-import");
+  });
+  elements.manualImportTypeGroup.addEventListener("keydown", (event) => {
+    navigateTypeGroup(event, elements.manualImportTypeInput, elements.manualImportTypeGroup);
+    clearTransferCategoryIfTypeIsNotTransfer("manual-import");
+  });
   elements.manualImportForm.elements.cleanDescription.addEventListener("input", updateManualImportFieldErrorState);
   elements.manualImportDialog.addEventListener("close", () => {
     activeManualImportRawRowId = null;
@@ -446,8 +474,14 @@
   elements.transactionCategoryButton.addEventListener("click", () => {
     openCategoryPicker("transaction");
   });
-  elements.transactionTypeGroup.addEventListener("click", (event) => selectTypeFromGroup(event, elements.transactionTypeInput, elements.transactionTypeGroup));
-  elements.transactionTypeGroup.addEventListener("keydown", (event) => navigateTypeGroup(event, elements.transactionTypeInput, elements.transactionTypeGroup));
+  elements.transactionTypeGroup.addEventListener("click", (event) => {
+    selectTypeFromGroup(event, elements.transactionTypeInput, elements.transactionTypeGroup);
+    clearTransferCategoryIfTypeIsNotTransfer("transaction");
+  });
+  elements.transactionTypeGroup.addEventListener("keydown", (event) => {
+    navigateTypeGroup(event, elements.transactionTypeInput, elements.transactionTypeGroup);
+    clearTransferCategoryIfTypeIsNotTransfer("transaction");
+  });
   elements.rawRowCloseButton.addEventListener("click", closeRawRowDialog);
   elements.rawRowImportButton.addEventListener("click", importActiveRawRow);
   elements.rawRowDeleteButton.addEventListener("click", deleteActiveRawRow);
@@ -2063,8 +2097,44 @@
     setText("#dashboardSplurge", formatDollars(dashboard.splurge || 0));
     setText("#dashboardSaved", formatDollars(dashboard.saved || 0));
     renderStackedBar(elements.dashboardTypeBar, elements.dashboardTypeBarLegend, dashboard.typeSegments || []);
-    renderPieChart(elements.dashboardCategoryPie, elements.dashboardCategoryLegend, dashboard.categorySegments || []);
-    renderPieChart(elements.dashboardSplurgePie, elements.dashboardSplurgeLegend, dashboard.splurgeSegments || []);
+    const categorySegments = dashboardCategoryPieMode === "income"
+      ? dashboard.incomeSegments || []
+      : dashboard.categorySegments || [];
+    const splurgeSegments = dashboardSplurgePieMode === "bills"
+      ? dashboard.billSegments || []
+      : dashboard.splurgeSegments || [];
+    elements.dashboardCategoryPieTitle.textContent = dashboardCategoryPieMode === "income" ? "Income" : "Spending";
+    elements.dashboardSplurgePieTitle.textContent = dashboardSplurgePieMode === "bills" ? "Bills" : "Splurge";
+    elements.dashboardCategoryPieFrame.setAttribute("aria-pressed", dashboardCategoryPieMode === "income" ? "true" : "false");
+    elements.dashboardSplurgePieFrame.setAttribute("aria-pressed", dashboardSplurgePieMode === "bills" ? "true" : "false");
+    renderPieChart(elements.dashboardCategoryPie, elements.dashboardCategoryLegend, categorySegments, {
+      animate: shouldAnimateDashboardCategoryPie,
+    });
+    renderPieChart(elements.dashboardSplurgePie, elements.dashboardSplurgeLegend, splurgeSegments, {
+      animate: shouldAnimateDashboardSplurgePie,
+    });
+    shouldAnimateDashboardCategoryPie = false;
+    shouldAnimateDashboardSplurgePie = false;
+  }
+
+  function toggleDashboardCategoryPieMode() {
+    dashboardCategoryPieMode = dashboardCategoryPieMode === "income" ? "spending" : "income";
+    shouldAnimateDashboardCategoryPie = true;
+    renderDashboard();
+  }
+
+  function toggleDashboardSplurgePieMode() {
+    dashboardSplurgePieMode = dashboardSplurgePieMode === "bills" ? "splurge" : "bills";
+    shouldAnimateDashboardSplurgePie = true;
+    renderDashboard();
+  }
+
+  function activateDashboardPieToggleFromKeyboard(event, toggle) {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+    event.preventDefault();
+    toggle();
   }
 
   function renderAccounts() {
@@ -2845,6 +2915,7 @@
       selectable: true,
       selectedId,
       parentOnly,
+      allowTransferCategories: categoryPickerAllowsTransferCategories(),
       onSelect: (category) => selectPickedCategory(category.id),
     });
   }
@@ -2904,6 +2975,70 @@
     return category?.id || null;
   }
 
+  function categoryPickerAllowsTransferCategories() {
+    return !["transaction", "rule", "manual-import", "bulk-import"].includes(categoryPickerTarget || "")
+      || pendingCategoryPickerTransactionType() === "transfer";
+  }
+
+  function pendingCategoryPickerTransactionType() {
+    if (categoryPickerTarget === "transaction") {
+      return clean(elements.transactionTypeInput.value);
+    }
+    if (categoryPickerTarget === "rule") {
+      return clean(elements.ruleTypeInput.value);
+    }
+    if (categoryPickerTarget === "manual-import") {
+      return clean(elements.manualImportTypeInput.value);
+    }
+    if (categoryPickerTarget === "bulk-import") {
+      return clean(elements.bulkImportTypeInput.value);
+    }
+    return "";
+  }
+
+  function isTransferCategory(categoryOrId) {
+    const category = typeof categoryOrId === "object"
+      ? categoryOrId
+      : state.categories.find((candidate) => candidate.id === Number(categoryOrId));
+    if (!category) {
+      return false;
+    }
+    const rootId = rootCategoryId(category.id);
+    const root = state.categories.find((candidate) => candidate.id === rootId);
+    return clean(root?.name).toLowerCase() === "transfer";
+  }
+
+  function clearTransferCategoryIfTypeIsNotTransfer(target) {
+    if (pendingTransactionTypeForTarget(target) === "transfer") {
+      return;
+    }
+    if (target === "transaction" && isTransferCategory(Number(elements.transactionCategoryInput.value))) {
+      setTransactionCategoryValue(null);
+    } else if (target === "rule" && isTransferCategory(Number(elements.ruleCategoryInput.value))) {
+      setRuleCategoryValue(null);
+    } else if (target === "manual-import" && isTransferCategory(Number(elements.manualImportCategoryInput.value))) {
+      setManualImportCategoryValue(null);
+    } else if (target === "bulk-import" && isTransferCategory(Number(elements.bulkImportCategoryInput.value))) {
+      setBulkImportCategoryValue(null);
+    }
+  }
+
+  function pendingTransactionTypeForTarget(target) {
+    if (target === "transaction") {
+      return clean(elements.transactionTypeInput.value);
+    }
+    if (target === "rule") {
+      return clean(elements.ruleTypeInput.value);
+    }
+    if (target === "manual-import") {
+      return clean(elements.manualImportTypeInput.value);
+    }
+    if (target === "bulk-import") {
+      return clean(elements.bulkImportTypeInput.value);
+    }
+    return "";
+  }
+
   function selectPickedCategory(categoryId) {
     if (categoryPickerTarget === "transaction") {
       if (categoryId === null) {
@@ -2929,9 +3064,17 @@
   function renderCategorySections(categoryList, options = {}) {
     const selectable = Boolean(options.selectable);
     const parentOnly = Boolean(options.parentOnly);
+    const allowTransferCategories = options.allowTransferCategories !== false;
     const roots = orderedCategories().filter((category) => category.parent_id === null);
     const rendered = new Set();
     roots.forEach((root) => {
+      if (!allowTransferCategories && isTransferCategory(root)) {
+        rendered.add(root.id);
+        orderedCategories()
+          .filter((category) => category.parent_id === root.id)
+          .forEach((category) => rendered.add(category.id));
+        return;
+      }
       if (parentOnly && root.id === editingCategoryId) {
         rendered.add(root.id);
         return;
@@ -2947,7 +3090,9 @@
       }
       const chips = document.createElement("div");
       chips.className = "category-section-chips";
-      const children = parentOnly ? [] : orderedCategories().filter((category) => category.parent_id === root.id);
+      const children = parentOnly
+        ? []
+        : orderedCategories().filter((category) => category.parent_id === root.id && (allowTransferCategories || !isTransferCategory(category)));
       if (selectable) {
         chips.appendChild(selectableCategoryChip(root, options.selectedId === root.id, options.onSelect));
         rendered.add(root.id);
@@ -2969,7 +3114,7 @@
       rendered.add(root.id);
     });
     orderedCategories()
-      .filter((category) => !rendered.has(category.id) && (!parentOnly || category.parent_id === null))
+      .filter((category) => !rendered.has(category.id) && (!parentOnly || category.parent_id === null) && (allowTransferCategories || !isTransferCategory(category)))
       .forEach((category) => categoryList.appendChild(selectable
         ? selectableCategoryChip(category, options.selectedId === category.id, options.onSelect)
         : categoryChip(category)));
@@ -4029,7 +4174,9 @@
         { label: "Splurge", value: splurge, color: "#7c6bc2" },
         { label: "Saved", value: Math.max(saved, 0), color: "#2f8f2f" },
       ],
+      incomeSegments: categoryTransactionSegments(dashboardTransactions, "income"),
       categorySegments: categorySpendingSegments(dashboardTransactions, "all-expenses"),
+      billSegments: categorySpendingSegments(dashboardTransactions, "bills"),
       splurgeSegments: categorySpendingSegments(dashboardTransactions, "splurge"),
     };
   }
@@ -4041,13 +4188,23 @@
     if (mode === "splurge") {
       return !hasBillTag(transaction);
     }
+    if (mode === "bills") {
+      return hasBillTag(transaction);
+    }
     return true;
   }
 
   function categorySpendingSegments(transactions, expenseMode) {
+    return categoryTransactionSegments(
+      transactions.filter((transaction) => isDashboardExpense(transaction, expenseMode)),
+      "expense",
+    );
+  }
+
+  function categoryTransactionSegments(transactions, transactionType) {
     const totals = new Map();
     transactions
-      .filter((transaction) => isDashboardExpense(transaction, expenseMode))
+      .filter((transaction) => transaction.transaction_type === transactionType)
       .forEach((transaction) => {
         const parent = parentCategoryForTransaction(transaction);
         if (!parent) {
@@ -4061,11 +4218,12 @@
         });
       });
     const segments = [...totals.values()].sort((a, b) => b.value - a.value);
-    if (segments.length <= 6) {
+    if (segments.length <= DASHBOARD_CATEGORY_SEGMENT_LIMIT) {
       return segments;
     }
-    const visible = segments.slice(0, 5);
-    const otherValue = segments.slice(5).reduce((sum, segment) => sum + segment.value, 0);
+    const visibleLimit = DASHBOARD_CATEGORY_SEGMENT_LIMIT - 1;
+    const visible = segments.slice(0, visibleLimit);
+    const otherValue = segments.slice(visibleLimit).reduce((sum, segment) => sum + segment.value, 0);
     if (otherValue > 0) {
       visible.push({ label: "All others", value: otherValue, color: "#000000" });
     }
@@ -4083,7 +4241,7 @@
     return state.categories.find((candidate) => candidate.id === category.parent_id) || category;
   }
 
-  function renderPieChart(chart, legend, rawSegments) {
+  function renderPieChart(chart, legend, rawSegments, options = {}) {
     const segments = rawSegments.filter((segment) => segment.value > 0);
     const total = segments.reduce((sum, segment) => sum + segment.value, 0);
     clear(legend);
@@ -4100,6 +4258,24 @@
     });
     chart.style.background = `conic-gradient(${stops.join(", ")})`;
     renderChartLegend(legend, segments, total);
+    if (options.animate) {
+      animatePieChartToggle(chart, legend);
+    }
+  }
+
+  function animatePieChartToggle(chart, legend) {
+    const frame = chart.closest(".pie-chart-frame");
+    [frame, legend].forEach((element) => {
+      if (!element) {
+        return;
+      }
+      element.classList.remove("is-pie-toggle-animating");
+      void element.offsetWidth;
+      element.classList.add("is-pie-toggle-animating");
+      element.addEventListener("animationend", () => {
+        element.classList.remove("is-pie-toggle-animating");
+      }, { once: true });
+    });
   }
 
   function renderStackedBar(bar, legend, rawSegments) {

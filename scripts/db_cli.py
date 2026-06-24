@@ -279,6 +279,23 @@ def require_category(conn: sqlite3.Connection, category_id: int) -> None:
         raise CliError(f"Category not found: {category_id}")
 
 
+def require_category_allowed_for_transaction_type(
+    conn: sqlite3.Connection,
+    category_id: int,
+    transaction_type: str | None,
+) -> None:
+    require_category(conn, category_id)
+    if category_is_transfer(conn, category_id) and transaction_type != "transfer":
+        raise CliError("Transfer categories require transaction_type transfer.")
+
+
+def category_is_transfer(conn: sqlite3.Connection, category_id: int) -> bool:
+    category = fetch_category_by_id(conn, category_id)
+    while category["parent_id"] is not None:
+        category = fetch_category_by_id(conn, int(category["parent_id"]))
+    return str(category["name"]).casefold() == "transfer"
+
+
 def require_tag_id(conn: sqlite3.Connection, tag_id: int) -> None:
     row = conn.execute("SELECT 1 FROM tags WHERE id = ?", (tag_id,)).fetchone()
     if row is None:
@@ -994,6 +1011,8 @@ def import_raw_rows(
             untyped_rows.append(str(raw_row["id"]))
         if normalize_text(rule_result["clean_description"]) is None:
             undescribed_rows.append(str(raw_row["id"]))
+        if rule_result["category_id"] is not None and rule_result["transaction_type"] is not None:
+            require_category_allowed_for_transaction_type(conn, int(rule_result["category_id"]), rule_result["transaction_type"])
     if uncategorized_rows:
         raise CliError(f"Raw rows require a matched category before import: {', '.join(uncategorized_rows)}")
     if untyped_rows:
@@ -1013,6 +1032,7 @@ def import_raw_rows(
 
             rule_result = import_rule_result_for_status(conn, raw_row, current_status_by_row_id[int(raw_row["id"])])
             rule_result = apply_raw_row_import_overrides(rule_result, overrides)
+            require_category_allowed_for_transaction_type(conn, int(rule_result["category_id"]), rule_result["transaction_type"])
             clean_description = normalize_text(rule_result["clean_description"]) or description
             transaction_hash = make_transaction_hash(
                 int(raw_row["account_id"]),

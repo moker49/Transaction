@@ -721,6 +721,16 @@ h2 {
   justify-items: center;
 }
 
+.pie-chart-frame.is-clickable {
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.pie-chart-frame.is-clickable:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 4px;
+}
+
 .pie-chart-frame h2 {
   margin: 0;
   color: var(--muted);
@@ -769,6 +779,22 @@ h2 {
   width: 12px;
   height: 12px;
   border-radius: 3px;
+}
+
+.is-pie-toggle-animating {
+  animation: pie-toggle 260ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes pie-toggle {
+  0% {
+    opacity: 0.58;
+    transform: scale(0.98);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .date-stack {

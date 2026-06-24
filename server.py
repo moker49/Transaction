@@ -40,6 +40,7 @@ from db_cli import (  # noqa: E402
     nonempty,
     optional_nonempty,
     read_csv_import_rows,
+    require_category_allowed_for_transaction_type,
     require_category,
     require_account_unused,
     require_category_unused,
@@ -66,6 +67,7 @@ DUMMY_DB_PATH = DEFAULT_DB_PATH.with_name("transactions.dummy.sqlite")
 DUMMY_RESTORE_DB_PATH = DEFAULT_DB_PATH.with_name("transactions.dummy.restore.sqlite")
 BILL_TAG_NAME = "bill"
 TRANSACTION_TYPES = ("income", "expense", "transfer")
+DASHBOARD_CATEGORY_SEGMENT_LIMIT = 8
 ENSURED_DATABASE_PATHS: set[Path] = set()
 DEFAULT_CATEGORIES = (
     {"name": "Income", "color": "#208020", "children": ("Salary", "Bonus", "Interest", "Dividend", "Refund", "Gift Received", "Resale")},
@@ -498,7 +500,7 @@ def create_rule():
     with closing(connect(current_db_path())) as conn:
         prepare_rule_amount_create(conn, rule_type, match_description, match_category, match_amount)
         if set_category_id is not None:
-            require_category(conn, set_category_id)
+            require_category_allowed_for_transaction_type(conn, set_category_id, set_transaction_type)
         for tag_id in add_tag_ids:
             fetch_tag_by_id(conn, tag_id)
         cursor = conn.execute(
@@ -627,6 +629,8 @@ def update_rule(rule_id: int):
             values.append(match_value)
 
         validate_rule_payload(next_rule_type, next_set_category_id, next_set_clean_description, next_set_transaction_type, next_add_tag_id)
+        if next_set_category_id is not None:
+            require_category_allowed_for_transaction_type(conn, int(next_set_category_id), next_set_transaction_type)
         duplicate = fetch_duplicate_transaction_rule(
             conn,
             next_rule_type,
@@ -727,7 +731,7 @@ def update_transaction(transaction_id: int):
     with closing(connect(current_db_path())) as conn:
         transaction = conn.execute(
             """
-            SELECT id, account_id, posted_date, amount_cents, clean_description
+            SELECT id, account_id, category_id, transaction_type, posted_date, amount_cents, clean_description
             FROM transactions
             WHERE id = ?
             """,
@@ -736,6 +740,8 @@ def update_transaction(transaction_id: int):
         if transaction is None:
             raise CliError(f"Transaction not found: {transaction_id}")
         next_account_id = int(transaction["account_id"])
+        next_category_id = int(transaction["category_id"]) if transaction["category_id"] is not None else None
+        next_transaction_type = transaction["transaction_type"]
         next_posted_date = transaction["posted_date"]
         next_amount_cents = int(transaction["amount_cents"])
         next_clean_description = transaction["clean_description"]
@@ -751,10 +757,12 @@ def update_transaction(transaction_id: int):
                 raise CliError("category_id cannot be empty.")
             category_id = int(raw_category_id)
             require_category(conn, category_id)
+            next_category_id = category_id
             updates.append("category_id = ?")
             values.append(category_id)
         if "transaction_type" in data:
             transaction_type = validate_transaction_type(data.get("transaction_type"), allow_empty=False)
+            next_transaction_type = transaction_type
             updates.append("transaction_type = ?")
             values.append(transaction_type)
         if "amount" in data:
@@ -778,6 +786,8 @@ def update_transaction(transaction_id: int):
                 fetch_tag_by_id(conn, tag_id)
 
         if updates:
+            if next_category_id is not None:
+                require_category_allowed_for_transaction_type(conn, next_category_id, next_transaction_type)
             updates.append("transaction_hash = ?")
             values.append(
                 make_transaction_hash(
@@ -977,7 +987,7 @@ def manual_import_raw_row(raw_row_id: int):
     note = normalize_text(data.get("note"))
 
     with closing(connect(current_db_path())) as conn:
-        require_category(conn, category_id)
+        require_category_allowed_for_transaction_type(conn, category_id, transaction_type)
         for tag_id in tag_ids:
             fetch_tag_by_id(conn, tag_id)
         raw_row = conn.execute(
@@ -1228,7 +1238,9 @@ def dashboard_data(transactions: list[dict[str, Any]], categories: list[dict[str
             {"label": "Splurge", "value": splurge, "color": "#7c6bc2"},
             {"label": "Saved", "value": max(income - bills - splurge, 0), "color": "#2f8f2f"},
         ],
+        "incomeSegments": category_transaction_segments(dashboard_transactions, categories, "income"),
         "categorySegments": category_spending_segments(dashboard_transactions, categories, "all-expenses"),
+        "billSegments": category_spending_segments(dashboard_transactions, categories, "bills"),
         "splurgeSegments": category_spending_segments(dashboard_transactions, categories, "splurge"),
     }
 
@@ -1261,10 +1273,22 @@ def category_spending_segments(
     categories: list[dict[str, Any]],
     expense_mode: str,
 ) -> list[dict[str, Any]]:
+    return category_transaction_segments(
+        [transaction for transaction in transactions if is_dashboard_expense(transaction, expense_mode)],
+        categories,
+        "expense",
+    )
+
+
+def category_transaction_segments(
+    transactions: list[dict[str, Any]],
+    categories: list[dict[str, Any]],
+    transaction_type: str,
+) -> list[dict[str, Any]]:
     categories_by_id = {int(category["id"]): category for category in categories}
     totals: dict[int, dict[str, Any]] = {}
     for transaction in transactions:
-        if not is_dashboard_expense(transaction, expense_mode):
+        if transaction["transaction_type"] != transaction_type:
             continue
         parent = parent_category_for_transaction(transaction, categories_by_id)
         if parent is None:
@@ -1276,12 +1300,13 @@ def category_spending_segments(
             "color": parent.get("color") or "#000000",
         }
     segments = sorted(totals.values(), key=lambda item: item["value"], reverse=True)
-    if len(segments) <= 6:
+    if len(segments) <= DASHBOARD_CATEGORY_SEGMENT_LIMIT:
         return segments
-    visible = segments[:5]
+    visible_limit = DASHBOARD_CATEGORY_SEGMENT_LIMIT - 1
+    visible = segments[:visible_limit]
     visible.append({
         "label": "Other",
-        "value": sum(segment["value"] for segment in segments[5:]),
+        "value": sum(segment["value"] for segment in segments[visible_limit:]),
         "color": "#888888",
     })
     return visible
@@ -1292,6 +1317,8 @@ def is_dashboard_expense(transaction: dict[str, Any], mode: str) -> bool:
         return False
     if mode == "splurge":
         return not has_bill_tag(transaction)
+    if mode == "bills":
+        return has_bill_tag(transaction)
     return True
 
 
