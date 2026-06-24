@@ -9,6 +9,7 @@
   const DEFAULT_DATE_RANGE = "last-month";
   const CUSTOM_DATE_RANGE = "custom";
   const MOBILE_LAYOUT_QUERY = "(max-width: 860px)";
+  const SCROLL_TOP_BUTTON_THRESHOLD = 200;
   const dateRangePresets = [
     { value: "this-month", label: "This month" },
     { value: "last-month", label: "Last month" },
@@ -77,6 +78,7 @@
     tabNav: document.querySelector(".tabs"),
     tabs: document.querySelectorAll(".tab"),
     views: document.querySelectorAll(".view"),
+    scrollTopButton: document.querySelector("#scrollTopButton"),
     appMessage: document.querySelector("#appMessage"),
     appMessageIcon: document.querySelector("#appMessageIcon"),
     appMessageText: document.querySelector("#appMessageText"),
@@ -282,6 +284,8 @@
   elements.tabs.forEach((tab) => {
     tab.addEventListener("click", () => activateView(tab.dataset.view));
   });
+  window.addEventListener("scroll", updateScrollTopButton, { passive: true });
+  elements.scrollTopButton.addEventListener("click", scrollActiveViewToTop);
 
   initializeSortableTables();
   initializeClearableTextFields();
@@ -1022,7 +1026,25 @@
     sectionViewSelections.set(activeSection, viewName);
     requestAnimationFrame(() => {
       window.scrollTo({ top: viewScrollPositions.get(viewName) || 0, left: 0 });
+      updateScrollTopButton();
     });
+  }
+
+  function updateScrollTopButton() {
+    if (!elements.scrollTopButton) {
+      return;
+    }
+    const activeView = document.querySelector(`#${activeViewName}View`);
+    elements.scrollTopButton.hidden = !activeView || window.scrollY < SCROLL_TOP_BUTTON_THRESHOLD;
+  }
+
+  function scrollActiveViewToTop() {
+    const shouldAnimate = window.scrollY <= (window.innerHeight * 2);
+    if (activeViewName) {
+      viewScrollPositions.set(activeViewName, 0);
+    }
+    window.scrollTo({ top: 0, left: 0, behavior: shouldAnimate ? "smooth" : "auto" });
+    updateScrollTopButton();
   }
 
   function initializeSortableTables() {
@@ -2799,7 +2821,7 @@
         ? "No Parent"
         : target === "bulk-import"
           ? "Keep Category"
-        : "No Category";
+          : "No Category";
     elements.categoryPickerClearButton.hidden = !canClear;
     renderCategoryPicker();
     openModal(elements.categoryPickerDialog);

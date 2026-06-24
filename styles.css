@@ -450,6 +450,72 @@ h2 {
   font-variation-settings: "FILL" 0, "wght" 500, "GRAD" 0, "opsz" 24;
 }
 
+.scroll-top-fab {
+  position: fixed;
+  left: 50%;
+  bottom: 26px;
+  z-index: 60;
+  transform: translateX(-50%);
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  min-width: 42px;
+  height: 42px;
+  min-height: 42px;
+  padding: 0;
+  border: 1px solid var(--control-border);
+  border-radius: 14px;
+  background: var(--connected-bg);
+  color: var(--text);
+  box-shadow: 0 5px 9px color-mix(in srgb, var(--shadow-color) 18%, transparent),
+    0 1px 3px color-mix(in srgb, var(--shadow-color) 18%, transparent);
+  transition: background-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+
+.scroll-top-fab[hidden] {
+  display: none;
+}
+
+.scroll-top-fab::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  background: currentColor;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms ease;
+}
+
+.scroll-top-fab:hover {
+  background: var(--connected-bg);
+  box-shadow: 0 7px 11px color-mix(in srgb, var(--shadow-color) 20%, transparent),
+    0 2px 4px color-mix(in srgb, var(--shadow-color) 18%, transparent);
+}
+
+.scroll-top-fab:hover::before {
+  opacity: 0.08;
+}
+
+.scroll-top-fab:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.scroll-top-fab:active::before {
+  opacity: 0.12;
+}
+
+.scroll-top-fab .material-symbols-outlined {
+  position: relative;
+  z-index: 1;
+  font-size: 22px;
+  font-variation-settings: "FILL" 1, "wght" 500, "GRAD" 0, "opsz" 24;
+}
+
 .fab-label {
   white-space: nowrap;
 }
@@ -2456,6 +2522,10 @@ tr.is-selected-row td {
   .import-fab,
   .csv-upload-fab,
   .manage-fab {
+    bottom: calc(86px + env(safe-area-inset-bottom));
+  }
+
+  .scroll-top-fab {
     bottom: calc(86px + env(safe-area-inset-bottom));
   }
 
