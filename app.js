@@ -409,6 +409,7 @@
   elements.ruleDialog.addEventListener("close", () => {
     editingRuleId = null;
     ruleRawRowContext = null;
+    updateRuleFillButtons();
   });
   elements.duplicateRuleCloseButton.addEventListener("click", () => closeDuplicateRuleWarning("cancel"));
   elements.duplicateRuleCancelButton.addEventListener("click", () => closeDuplicateRuleWarning("cancel"));
@@ -477,6 +478,7 @@
   elements.manualImportForm.elements.cleanDescription.addEventListener("input", updateManualImportFieldErrorState);
   elements.manualImportDialog.addEventListener("close", () => {
     activeManualImportRawRowId = null;
+    updateManualImportFillButtons();
   });
   elements.mobileMenuButton.addEventListener("click", openMobileDrawer);
   elements.mobileDrawerBackdrop.addEventListener("click", closeMobileDrawer);
@@ -1695,6 +1697,7 @@
       openModal(elements.ruleDialog);
     }
     syncRuleDialogModeForSelectedType();
+    updateRuleFillButtons();
   }
 
   function truncatePrefilledMatchDescription(value) {
@@ -1742,6 +1745,7 @@
     if (contextDescription) {
       elements.ruleForm.elements.setCleanDescription.value = contextDescription;
     }
+    updateRuleFillButtons();
   }
 
   function populateRuleEditDialog(rule) {
@@ -1766,6 +1770,7 @@
     setRuleCategoryValue(rule.set_category_id);
     renderRuleTags(rule.tag_ids || (rule.add_tag_id === null ? [] : [rule.add_tag_id]));
     ruleEditSnapshot = buildRulePayload();
+    updateRuleFillButtons();
   }
 
   function handleRuleDismissButton() {
@@ -2703,6 +2708,7 @@
     elements.manualImportForm.elements.note.value = rawRowStoredNote(rawRow);
     renderManualImportTags(rawRow.preview_tag_ids || []);
     openModal(elements.manualImportDialog);
+    updateManualImportFillButtons();
   }
 
   function closeManualImportDialog() {
@@ -5065,17 +5071,80 @@
       clearButton.type = "button";
       clearButton.className = "clear-field-button";
       clearButton.setAttribute("aria-label", "Clear field");
-      clearButton.appendChild(el("span", "close_small", "material-symbols-outlined"));
+      const icon = el("span", "close_small", "material-symbols-outlined");
+      clearButton.appendChild(icon);
       clearButton.addEventListener("mousedown", (event) => event.preventDefault());
       clearButton.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
-        field.value = "";
+        const fillValue = clearButton.dataset.clearAction === "fill" ? ruleRawRowFillValueForField(field) : "";
+        field.value = fillValue;
         field.dispatchEvent(new Event("input", { bubbles: true }));
         field.dispatchEvent(new Event("change", { bubbles: true }));
       });
       wrapper.appendChild(clearButton);
+      field.addEventListener("input", () => updateClearableFieldButton(field));
+      field.addEventListener("change", () => updateClearableFieldButton(field));
+      updateClearableFieldButton(field);
     });
+  }
+
+  function updateClearableFieldButton(field) {
+    const button = field.closest(".clearable-field")?.querySelector(".clear-field-button");
+    if (!button) {
+      return;
+    }
+    const fillValue = ruleRawRowFillValueForField(field);
+    const shouldFill = Boolean(fillValue) && !clean(field.value);
+    button.dataset.clearAction = shouldFill ? "fill" : "clear";
+    button.setAttribute("aria-label", shouldFill ? "Fill from raw row" : "Clear field");
+    const icon = button.querySelector(".material-symbols-outlined");
+    if (icon) {
+      icon.textContent = shouldFill ? "ink_pen" : "close_small";
+    }
+  }
+
+  function updateRuleFillButtons() {
+    if (!elements.ruleForm) {
+      return;
+    }
+    ["matchDescription", "matchCategory", "setCleanDescription"].forEach((fieldName) => {
+      updateClearableFieldButton(elements.ruleForm.elements[fieldName]);
+    });
+  }
+
+  function updateManualImportFillButtons() {
+    if (!elements.manualImportForm) {
+      return;
+    }
+    updateClearableFieldButton(elements.manualImportForm.elements.cleanDescription);
+  }
+
+  function ruleRawRowFillValueForField(field) {
+    if (!field) {
+      return "";
+    }
+    if (field.form === elements.manualImportForm) {
+      const rawRow = activeManualImportRawRow();
+      if (!rawRow || field.name !== "cleanDescription") {
+        return "";
+      }
+      return clean(rawRow.default_clean_description) || clean(rawRow.raw_description);
+    }
+    if (field.form !== elements.ruleForm || !ruleRawRowContext?.rawRow) {
+      return "";
+    }
+    const rawRow = ruleRawRowContext.rawRow;
+    if (field.name === "matchCategory") {
+      return clean(rawRow.raw_category);
+    }
+    if (field.name === "matchDescription") {
+      return clean(rawRow.raw_description);
+    }
+    if (field.name === "setCleanDescription") {
+      return clean(rawRow.default_clean_description) || clean(rawRow.raw_description);
+    }
+    return "";
   }
 
   function clearModalErrorState(dialog) {
