@@ -378,7 +378,7 @@ h2 {
   outline-offset: -3px;
 }
 
-.fab-button {
+.fab {
   position: relative;
   isolation: isolate;
   display: inline-flex;
@@ -389,7 +389,7 @@ h2 {
   min-width: 56px;
   height: 56px;
   min-height: 56px;
-  padding: 0 16px;
+  padding: 0;
   border-radius: 16px;
   background: var(--accent);
   color: var(--accent-contrast);
@@ -401,7 +401,7 @@ h2 {
   transition: background-color 150ms ease, box-shadow 150ms ease;
 }
 
-.fab-button::before {
+.fab::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -413,39 +413,35 @@ h2 {
   transition: opacity 150ms ease;
 }
 
-.fab-button:hover {
+.fab:hover {
   background: var(--accent);
   box-shadow: 0 8px 12px color-mix(in srgb, var(--shadow-color) 20%, transparent),
     0 2px 4px color-mix(in srgb, var(--shadow-color) 18%, transparent);
 }
 
-.fab-button:hover::before {
+.fab:hover::before {
   opacity: 0.08;
 }
 
-.fab-button:focus-visible {
+.fab:focus-visible {
   outline: 3px solid var(--focus);
   outline-offset: 3px;
 }
 
-.fab-button:active::before {
+.fab:active::before {
   opacity: 0.12;
 }
 
-.fab-button:disabled {
+.fab:disabled {
   cursor: progress;
   opacity: 0.68;
 }
 
-.manage-fab {
-  padding: 0;
-}
-
-.fab-button[hidden] {
+.fab[hidden] {
   display: none;
 }
 
-.fab-button .material-symbols-outlined {
+.fab .material-symbols-outlined {
   font-size: 24px;
   font-variation-settings: "FILL" 0, "wght" 500, "GRAD" 0, "opsz" 24;
 }
@@ -520,26 +516,18 @@ h2 {
   white-space: nowrap;
 }
 
-.manage-fab .fab-label {
-  display: none;
-}
-
-.import-fab {
+.extended-fab {
   width: auto;
   min-width: 80px;
-  padding-right: 20px;
+  padding: 0 20px 0 16px;
   border-radius: 16px;
 }
 
-.csv-upload-fab {
+.fixed-fab {
   position: fixed;
   right: max(18px, env(safe-area-inset-right));
   bottom: max(18px, env(safe-area-inset-bottom));
   z-index: 25;
-  width: auto;
-  min-width: 132px;
-  padding-right: 20px;
-  border-radius: 16px;
 }
 
 .primary-nav {
@@ -1142,15 +1130,6 @@ button:focus-visible {
 .raw-controls .icon-only {
   flex: 0 0 42px;
   height: 38px;
-}
-
-.import-fab,
-.manage-fab,
-.transaction-edit-fab {
-  position: fixed;
-  right: max(18px, env(safe-area-inset-right));
-  bottom: max(18px, env(safe-area-inset-bottom));
-  z-index: 25;
 }
 
 .mobile-only {
@@ -2646,10 +2625,7 @@ tr.is-selected-row td {
     flex: 0 0 auto;
   }
 
-  .import-fab,
-  .csv-upload-fab,
-  .manage-fab,
-  .transaction-edit-fab {
+  .fixed-fab {
     bottom: calc(86px + env(safe-area-inset-bottom));
   }
 
