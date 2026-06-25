@@ -676,7 +676,6 @@ h2 {
   display: flex;
   height: 18px;
   overflow: hidden;
-  border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--surface-muted);
 }
@@ -710,7 +709,6 @@ h2 {
 .pie-chart {
   width: 170px;
   aspect-ratio: 1;
-  border: 1px solid var(--border);
   border-radius: 50%;
   background: var(--surface-muted);
 }
