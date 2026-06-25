@@ -135,7 +135,6 @@
     importTable: document.querySelector("#importTable"),
     uploadedFileDialog: document.querySelector("#uploadedFileDialog"),
     uploadedFileDialogTitle: document.querySelector("#uploadedFileDialogTitle"),
-    uploadedFileSubtitle: document.querySelector("#uploadedFileSubtitle"),
     uploadedFileCloseButton: document.querySelector("#uploadedFileCloseButton"),
     uploadedFileDismissButton: document.querySelector("#uploadedFileDismissButton"),
     uploadedFileDeleteButton: document.querySelector("#uploadedFileDeleteButton"),
@@ -3008,7 +3007,6 @@
     const transactions = uploadTransactions(item);
     activeUploadedFileId = item.id;
     elements.uploadedFileDialogTitle.textContent = item.filename || "Uploaded File";
-    elements.uploadedFileSubtitle.textContent = item.metadata?.layout || "CSV";
     renderDefinitionList(elements.uploadedFileFileValues, [
       ["Filename", item.filename],
       ["Source type", item.source_type],

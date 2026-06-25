@@ -461,7 +461,6 @@ h2 {
   height: 42px;
   min-height: 42px;
   padding: 0;
-  border: 1px solid var(--control-border);
   border-radius: 14px;
   background: var(--connected-bg);
   color: var(--text);
