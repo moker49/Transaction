@@ -3071,7 +3071,10 @@
     const result = await confirmDestructive({
       title: "Delete Uploaded File",
       message: destructiveMessage(
-        `Delete "${item.filename}"? This will also delete ${rawRowCount} raw rows and ${transactionCount} transactions.`,
+        `Delete "${item.filename}"?\n
+        This will also delete:
+        - ${rawRowCount} raw transactions
+        - ${transactionCount} transactions\n`,
       ),
       actionLabel: "Delete",
     });
