@@ -2354,6 +2354,10 @@ th[data-raw-column="select"],
   padding-right: 0;
 }
 
+.uploaded-file-modal .detail-list dd {
+  overflow-wrap: anywhere;
+}
+
 .raw-select-cell,
 .raw-date-select-cell,
 .transaction-date-select-cell {
@@ -2717,6 +2721,7 @@ tr.is-selected-row td {
   #accountsView td:nth-child(3),
   #rulesView th:nth-child(2),
   #rulesView td:nth-child(2),
+  .uploaded-date-column,
   #rawRowsTableElement th[data-raw-column="account"],
   #rawRowsTableElement th[data-raw-column="status"],
   #rawRowsTableElement th[data-raw-column="notes"],

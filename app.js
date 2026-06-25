@@ -43,6 +43,7 @@
   let editingCategoryId = null;
   let activeTransactionId = null;
   let activeRawRowId = null;
+  let activeUploadedFileId = null;
   let activeManualImportRawRowId = null;
   let transactionTagsEditMode = false;
   let transactionTagDraftIds = null;
@@ -131,6 +132,16 @@
     ruleKindInput: document.querySelector("#ruleKindInput"),
     ruleKindGroup: document.querySelector("#ruleKindGroup"),
     importMessage: document.querySelector("#importMessage"),
+    importTable: document.querySelector("#importTable"),
+    uploadedFileDialog: document.querySelector("#uploadedFileDialog"),
+    uploadedFileDialogTitle: document.querySelector("#uploadedFileDialogTitle"),
+    uploadedFileSubtitle: document.querySelector("#uploadedFileSubtitle"),
+    uploadedFileCloseButton: document.querySelector("#uploadedFileCloseButton"),
+    uploadedFileDismissButton: document.querySelector("#uploadedFileDismissButton"),
+    uploadedFileDeleteButton: document.querySelector("#uploadedFileDeleteButton"),
+    uploadedFileFileValues: document.querySelector("#uploadedFileFileValues"),
+    uploadedFileUploadValues: document.querySelector("#uploadedFileUploadValues"),
+    uploadedFileImpactValues: document.querySelector("#uploadedFileImpactValues"),
     devMessage: document.querySelector("#devMessage"),
     importAccountSelect: document.querySelector("#importAccountSelect"),
     dashboardFilterButton: document.querySelector("#dashboardFilterButton"),
@@ -358,6 +369,12 @@
   elements.importFileDropZone.addEventListener("dragover", handleImportFileDrag);
   elements.importFileDropZone.addEventListener("dragleave", handleImportFileDrag);
   elements.importFileDropZone.addEventListener("drop", handleImportFileDrop);
+  elements.uploadedFileCloseButton.addEventListener("click", closeUploadedFileDialog);
+  elements.uploadedFileDismissButton.addEventListener("click", closeUploadedFileDialog);
+  elements.uploadedFileDeleteButton.addEventListener("click", deleteActiveUploadedFile);
+  elements.uploadedFileDialog.addEventListener("close", () => {
+    activeUploadedFileId = null;
+  });
   elements.categoryAddButton.addEventListener("click", openCategoryAddDialog);
   elements.tagAddButton.addEventListener("click", addTag);
   elements.ruleForm.addEventListener("submit", saveRule);
@@ -1275,7 +1292,7 @@
 
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
-    const accountId = Number(form.get("accountId"));
+    const accountId = Number(elements.importAccountSelect.value);
     const file = form.get("csvFile");
     const sourceType = "csv";
 
@@ -2963,27 +2980,115 @@
   }
 
   function renderImports() {
-    const importList = document.querySelector("#importList");
-    clear(importList);
+    clear(elements.importTable);
 
     if (!state.imports.length) {
-      appendEmpty(importList);
+      elements.importTable.appendChild(emptyTableRow(5));
       return;
     }
 
-    state.imports.slice().reverse().slice(0, 5).forEach((item) => importList.appendChild(importListItem(item)));
+    state.imports.slice().reverse().forEach((item) => {
+      const account = state.accounts.find((candidate) => candidate.id === item.account_id);
+      const row = tableRow([
+        displayDateCell(item.first_date),
+        displayDateCell(item.last_date),
+        account ? accountLabel(account) : "Unknown",
+        String(uploadRawRowCount(item)),
+        formatDateTime(item.imported_at),
+      ]);
+      row.children[4]?.classList.add("uploaded-date-column");
+      makeEditableRow(row, `View upload ${item.filename}`, () => openUploadedFileDialog(item));
+      elements.importTable.appendChild(row);
+    });
   }
 
-  function importListItem(item) {
+  function openUploadedFileDialog(item) {
     const account = state.accounts.find((candidate) => candidate.id === item.account_id);
-    const node = document.createElement("div");
-    node.className = "list-item";
-    node.append(
-      el("strong", item.filename),
-      el("span", `${account ? accountLabel(account) : "Unknown account"} | ${item.row_count} rows | ${item.metadata.layout}`, "list-meta"),
-      el("span", formatDateTime(item.imported_at), "list-meta"),
-    );
-    return node;
+    const rawRows = uploadRawRows(item);
+    const transactions = uploadTransactions(item);
+    activeUploadedFileId = item.id;
+    elements.uploadedFileDialogTitle.textContent = item.filename || "Uploaded File";
+    elements.uploadedFileSubtitle.textContent = item.metadata?.layout || "CSV";
+    renderDefinitionList(elements.uploadedFileFileValues, [
+      ["Filename", item.filename],
+      ["Source type", item.source_type],
+      ["Layout", item.metadata?.layout],
+      ["SHA-256", item.sha256],
+      ["Columns", (item.metadata?.columns || []).join(", ")],
+    ]);
+    renderDefinitionList(elements.uploadedFileUploadValues, [
+      ["Account", account ? accountLabel(account) : "Unknown"],
+      ["First", item.first_date || uploadFirstDate(item)],
+      ["Last", item.last_date || uploadLastDate(item)],
+      ["Uploaded", formatDateTime(item.imported_at)],
+      ["Source ID", item.id],
+    ]);
+    renderDefinitionList(elements.uploadedFileImpactValues, [
+      ["Rows", uploadRawRowCount(item)],
+      ["Original rows", item.row_count],
+      ["Transactions", item.transaction_count ?? transactions.length],
+    ]);
+    openModal(elements.uploadedFileDialog);
+  }
+
+  function closeUploadedFileDialog() {
+    elements.uploadedFileDialog.close();
+  }
+
+  async function deleteActiveUploadedFile() {
+    const item = state.imports.find((candidate) => candidate.id === activeUploadedFileId);
+    if (!item) {
+      return;
+    }
+    const rawRowCount = uploadRawRowCount(item);
+    const transactionCount = item.transaction_count ?? uploadTransactions(item).length;
+    const result = await confirmDestructive({
+      title: "Delete Uploaded File",
+      message: destructiveMessage(
+        `Delete "${item.filename}"? This will also delete ${rawRowCount} raw rows and ${transactionCount} transactions.`,
+      ),
+      actionLabel: "Delete",
+    });
+    if (!result) {
+      return;
+    }
+    try {
+      const payload = await apiRequest(`/api/imports/${item.id}`, { method: "DELETE" });
+      closeUploadedFileDialog();
+      applyStateFromPayload(payload);
+      showPopup("Uploaded file deleted.", "success");
+    } catch (error) {
+      showPopup(error.message || "Could not delete uploaded file.", "error");
+    }
+  }
+
+  function uploadRawRows(item) {
+    return state.rawRows.filter((row) => row.imported_source_id === item.id);
+  }
+
+  function uploadRawRowCount(item) {
+    return item.raw_row_count ?? uploadRawRows(item).length;
+  }
+
+  function uploadTransactions(item) {
+    const rawRowIds = new Set(uploadRawRows(item).map((row) => Number(row.id)));
+    return state.transactions.filter((transaction) => rawRowIds.has(Number(transaction.raw_imported_row_id)));
+  }
+
+  function uploadFirstDate(item) {
+    return sortedUploadDates(item)[0] || null;
+  }
+
+  function uploadLastDate(item) {
+    const dates = sortedUploadDates(item);
+    return dates[dates.length - 1] || null;
+  }
+
+  function sortedUploadDates(item) {
+    return uploadRawRows(item)
+      .map((row) => clean(row.raw_date))
+      .filter(Boolean)
+      .sort();
   }
 
   function renderTags() {

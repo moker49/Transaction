@@ -236,9 +236,22 @@
         <div class="content-grid">
           <section class="panel">
             <div class="panel-heading">
-              <h2>Recent Uploads</h2>
+              <h2>Uploads</h2>
             </div>
-            <div id="importList" class="list empty-target"></div>
+            <div class="table-wrap uploads-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>First</th>
+                    <th>Last</th>
+                    <th>Account</th>
+                    <th>Rows</th>
+                    <th class="uploaded-date-column">Uploaded</th>
+                  </tr>
+                </thead>
+                <tbody id="importTable"></tbody>
+              </table>
+            </div>
           </section>
         </div>
         <button type="button" class="primary fab-button csv-upload-fab" id="csvUploadButton" aria-label="Upload CSV"
@@ -854,6 +867,38 @@
       <div class="modal-actions">
         <button type="button" class="icon-button" id="importCancelButton">Cancel</button>
         <button type="submit" class="primary">Upload</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="uploadedFileDialog" class="modal wide-modal uploaded-file-modal" tabindex="-1">
+    <form id="uploadedFileForm" class="modal-panel">
+      <div class="panel-heading">
+        <h2 id="uploadedFileDialogTitle">Uploaded File</h2>
+        <div class="modal-heading-actions">
+          <div id="uploadedFileSubtitle" class="modal-subtitle-chip"></div>
+          <button class="icon-only" type="button" id="uploadedFileCloseButton" aria-label="Close">
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
+          </button>
+        </div>
+      </div>
+      <div class="transaction-detail-grid raw-row-detail-grid">
+        <section>
+          <h3>File</h3>
+          <dl id="uploadedFileFileValues" class="detail-list readonly-details"></dl>
+        </section>
+        <section>
+          <h3>Upload</h3>
+          <dl id="uploadedFileUploadValues" class="detail-list readonly-details"></dl>
+        </section>
+        <section>
+          <h3>Impact</h3>
+          <dl id="uploadedFileImpactValues" class="detail-list readonly-details"></dl>
+        </section>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="danger-button modal-delete-button" id="uploadedFileDeleteButton">Delete</button>
+        <button type="button" class="icon-button" id="uploadedFileDismissButton">Close</button>
       </div>
     </form>
   </dialog>

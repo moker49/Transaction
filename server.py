@@ -285,6 +285,67 @@ def delete_account(account_id: int):
     return jsonify({"status": "deleted", "account": account, "referenceData": reference_data})
 
 
+@app.delete("/api/imports/<int:imported_source_id>")
+def delete_imported_source(imported_source_id: int):
+    ensure_database()
+    with closing(connect(current_db_path())) as conn:
+        source = conn.execute(
+            """
+            SELECT id, filename
+            FROM imported_source
+            WHERE id = ?
+            """,
+            (imported_source_id,),
+        ).fetchone()
+        if source is None:
+            raise CliError(f"Uploaded file not found: {imported_source_id}")
+
+        raw_row_count = conn.execute(
+            """
+            SELECT COUNT(*) AS count
+            FROM raw_imported_rows
+            WHERE imported_source_id = ?
+            """,
+            (imported_source_id,),
+        ).fetchone()["count"]
+        transaction_count = conn.execute(
+            """
+            SELECT COUNT(*) AS count
+            FROM transactions
+            WHERE raw_imported_row_id IN (
+                SELECT id
+                FROM raw_imported_rows
+                WHERE imported_source_id = ?
+            )
+            """,
+            (imported_source_id,),
+        ).fetchone()["count"]
+        conn.execute(
+            """
+            DELETE FROM transactions
+            WHERE raw_imported_row_id IN (
+                SELECT id
+                FROM raw_imported_rows
+                WHERE imported_source_id = ?
+            )
+            """,
+            (imported_source_id,),
+        )
+        conn.execute("DELETE FROM imported_source WHERE id = ?", (imported_source_id,))
+        state = read_state(conn)
+        conn.commit()
+
+    return jsonify(
+        {
+            "status": "deleted",
+            "imported_source": dict(source),
+            "deleted_raw_row_count": raw_row_count,
+            "deleted_transaction_count": transaction_count,
+            "state": state,
+        }
+    )
+
+
 @app.post("/api/tags")
 def create_tag():
     ensure_database()
@@ -1472,16 +1533,23 @@ def read_reference_data(conn: sqlite3.Connection) -> dict[str, Any]:
         conn.execute(
             """
             SELECT
-                id,
-                account_id,
-                filename,
-                source_type,
-                sha256,
-                imported_at,
-                row_count,
-                metadata_json
-            FROM imported_source
-            ORDER BY imported_at, id
+                src.id,
+                src.account_id,
+                src.filename,
+                src.source_type,
+                src.sha256,
+                src.imported_at,
+                src.row_count,
+                COUNT(rr.id) AS raw_row_count,
+                MIN(rr.raw_date) AS first_date,
+                MAX(rr.raw_date) AS last_date,
+                COUNT(DISTINCT t.id) AS transaction_count,
+                src.metadata_json
+            FROM imported_source src
+            LEFT JOIN raw_imported_rows rr ON rr.imported_source_id = src.id
+            LEFT JOIN transactions t ON t.raw_imported_row_id = rr.id
+            GROUP BY src.id
+            ORDER BY src.imported_at, src.id
             """
         ).fetchall()
     )
