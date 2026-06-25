@@ -2320,6 +2320,8 @@
       selectCell?.classList.add("transaction-select-cell", "raw-select-cell");
       row.children[1]?.classList.add("date-cell", "transaction-date-select-cell");
       row.children[4]?.classList.add("amount");
+      row.children[5]?.classList.add("transaction-account-cell");
+      row.children[6]?.classList.add("transaction-notes-cell");
       row.classList.toggle("is-selected-row", selectedTransactionIds.has(transaction.id));
       row.classList.add("clickable-row");
       row.tabIndex = 0;

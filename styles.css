@@ -1267,7 +1267,7 @@ td {
   height: 72px;
 }
 
-#transactionsView th:nth-child(4),
+#transactionsView th[data-sort-key="amount"],
 th[data-raw-column="amount"],
 td.amount {
   text-align: right;
@@ -2707,10 +2707,10 @@ tr.is-selected-row td {
     border-left: 0;
   }
 
-  #transactionsView th:nth-child(5),
-  #transactionsView th:nth-child(6),
-  #transactionsView td:nth-child(5),
-  #transactionsView td:nth-child(6),
+  #transactionsView th[data-sort-key="account"],
+  #transactionsView th[data-sort-key="notes"],
+  #transactionsView .transaction-account-cell,
+  #transactionsView .transaction-notes-cell,
   #accountsView th:nth-child(2),
   #accountsView th:nth-child(3),
   #accountsView td:nth-child(2),
