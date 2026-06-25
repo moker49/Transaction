@@ -527,8 +527,15 @@
   elements.accountCancelButton.addEventListener("click", closeAccountDialog);
   elements.accountDismissButton.addEventListener("click", closeAccountDialog);
   elements.accountDeleteButton.addEventListener("click", deleteEditingAccount);
-  elements.accountTypeGroup.addEventListener("click", (event) => selectTypeFromGroup(event, elements.accountTypeInput, elements.accountTypeGroup));
-  elements.accountTypeGroup.addEventListener("keydown", (event) => navigateTypeGroup(event, elements.accountTypeInput, elements.accountTypeGroup));
+  elements.accountForm.elements.institution.addEventListener("input", autofillAccountName);
+  elements.accountTypeGroup.addEventListener("click", (event) => {
+    selectTypeFromGroup(event, elements.accountTypeInput, elements.accountTypeGroup);
+    autofillAccountName();
+  });
+  elements.accountTypeGroup.addEventListener("keydown", (event) => {
+    navigateTypeGroup(event, elements.accountTypeInput, elements.accountTypeGroup);
+    autofillAccountName();
+  });
   elements.accountDialog.addEventListener("close", () => {
     editingAccountId = null;
   });
@@ -1235,6 +1242,7 @@
     elements.accountMessage.classList.remove("error");
     elements.accountForm.reset();
     setTypeGroupValue(elements.accountTypeInput, elements.accountTypeGroup, "credit");
+    autofillAccountName();
     openModal(elements.accountDialog);
   }
 
@@ -1340,15 +1348,20 @@
 
   function handleImportFileChange() {
     updateImportFileName();
-    elements.importAccountSelect.disabled = false;
+    setImportAccountLocked(false);
     analyzeImportFileAccount();
   }
 
   function resetImportDialogState() {
     importFileAnalysisToken += 1;
     elements.importForm.reset();
-    elements.importAccountSelect.disabled = false;
+    setImportAccountLocked(false);
     updateImportFileName();
+  }
+
+  function setImportAccountLocked(locked) {
+    elements.importAccountSelect.disabled = locked;
+    elements.importAccountSelect.classList.toggle("is-locked-in", locked);
   }
 
   async function analyzeImportFileAccount() {
@@ -1368,7 +1381,7 @@
       }
       const sourceAccountKey = sourceAccountKeyFromCsvRows(parsed.rows);
       if (!sourceAccountKey) {
-        elements.importAccountSelect.disabled = false;
+        setImportAccountLocked(false);
         showPopup("CSV file does not include an account key.", "error");
         return;
       }
@@ -1377,15 +1390,15 @@
       });
       if (!account) {
         elements.importAccountSelect.value = "";
-        elements.importAccountSelect.disabled = false;
+        setImportAccountLocked(false);
         showPopup(`No account matches CSV account "${sourceAccountKey}".`, "error");
         return;
       }
       elements.importAccountSelect.value = String(account.id);
-      elements.importAccountSelect.disabled = true;
+      setImportAccountLocked(true);
     } catch (error) {
       if (token === importFileAnalysisToken) {
-        elements.importAccountSelect.disabled = false;
+        setImportAccountLocked(false);
         showPopup(error.message || "Could not inspect CSV file.", "error");
       }
     }
@@ -2545,6 +2558,21 @@
 
   function accountTypeValues() {
     return new Set(["credit", "checking", "savings"]);
+  }
+
+  function accountTypeLabel(value) {
+    return {
+      credit: "Credit",
+      checking: "Checking",
+      savings: "Savings",
+    }[clean(value)] || clean(value);
+  }
+
+  function autofillAccountName() {
+    const form = elements.accountForm;
+    const institution = clean(form.elements.institution.value);
+    const accountType = accountTypeLabel(form.elements.accountType.value);
+    form.elements.name.value = [institution, accountType].filter(Boolean).join(" ");
   }
 
   function buildAccountPayload(formElement = elements.accountForm) {
@@ -4605,7 +4633,7 @@
   }
 
   function accountLabel(account) {
-    return account.institution ? `${account.name} - ${account.institution}` : account.name;
+    return account.name;
   }
 
   function dateRangePeriodForRange(range) {

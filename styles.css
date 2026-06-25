@@ -2193,6 +2193,21 @@ select:disabled {
   color: var(--text);
 }
 
+#importAccountSelect.is-locked-in {
+  appearance: none;
+  -webkit-appearance: none;
+  border-color: var(--accent);
+  background: var(--accent);
+  background-image: none;
+  color: var(--accent-contrast);
+  cursor: default;
+  font-weight: 800;
+}
+
+#importAccountSelect.is-locked-in::-ms-expand {
+  display: none;
+}
+
 .readonly-details {
   grid-template-columns: minmax(100px, 0.45fr) minmax(0, 1fr);
   gap: 8px 12px;

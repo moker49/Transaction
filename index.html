@@ -437,12 +437,12 @@
           </div>
         </div>
         <label>
-          <span>Name</span>
-          <input name="name" type="text" required autocomplete="off">
-        </label>
-        <label>
           <span>Institution</span>
           <input name="institution" type="text" autocomplete="off">
+        </label>
+        <label>
+          <span>Name</span>
+          <input name="name" type="text" required autocomplete="off">
         </label>
       </div>
       <div id="accountMessage" class="modal-message" role="status" aria-live="polite"></div>
@@ -852,10 +852,6 @@
         </button>
       </div>
       <div class="import-upload-dialog">
-        <label>
-          <span>Account</span>
-          <select name="accountId" id="importAccountSelect" required></select>
-        </label>
         <label class="file-upload-field" id="importFileDropZone">
           <span class="file-upload-title">CSV file</span>
           <input name="csvFile" id="importCsvFileInput" type="file" accept=".csv,text/csv" required>
@@ -863,6 +859,10 @@
             <span class="material-symbols-outlined" aria-hidden="true">attach_file</span>
             <span id="importFileName">Choose file</span>
           </span>
+        </label>
+        <label>
+          <span>Account</span>
+          <select name="accountId" id="importAccountSelect" required></select>
         </label>
       </div>
       <div id="importMessage" class="modal-message" role="status" aria-live="polite"></div>
