@@ -68,6 +68,7 @@
   let dashboardSplurgePieMode = "splurge";
   let shouldAnimateDashboardCategoryPie = false;
   let shouldAnimateDashboardSplurgePie = false;
+  let importFileAnalysisToken = 0;
   let dashboardFilterCategoryIds = new Set();
   const viewScrollPositions = new Map();
   const sectionViewSelections = new Map();
@@ -353,7 +354,7 @@
   elements.importForm.addEventListener("submit", importCsv);
   elements.importCloseButton.addEventListener("click", closeImportDialog);
   elements.importCancelButton.addEventListener("click", closeImportDialog);
-  elements.importCsvFileInput.addEventListener("change", updateImportFileName);
+  elements.importCsvFileInput.addEventListener("change", handleImportFileChange);
   elements.importFileDropZone.addEventListener("dragover", handleImportFileDrag);
   elements.importFileDropZone.addEventListener("dragleave", handleImportFileDrag);
   elements.importFileDropZone.addEventListener("drop", handleImportFileDrop);
@@ -1292,12 +1293,11 @@
         method: "POST",
         body: upload,
       });
-      formElement.reset();
-      updateImportFileName();
+      resetImportDialogState();
       closeImportDialog();
       applyStateFromPayload(payload);
       if (payload.status === "already_imported") {
-        showPopup("File already imported for this account.", "warning");
+        showPopup("File already imported.", "warning");
       } else {
         setMessage(`Imported ${payload.inserted_raw_row_count} raw transactions from ${file.name}.`);
       }
@@ -1308,7 +1308,7 @@
 
   function openImportDialog() {
     setMessage("");
-    updateImportFileName();
+    resetImportDialogState();
     openModal(elements.importDialog);
   }
 
@@ -1320,6 +1320,59 @@
     const file = elements.importCsvFileInput.files?.[0];
     elements.importFileName.textContent = file?.name || "Choose file";
     elements.importFileDropZone.classList.toggle("has-file", Boolean(file));
+  }
+
+  function handleImportFileChange() {
+    updateImportFileName();
+    elements.importAccountSelect.disabled = false;
+    analyzeImportFileAccount();
+  }
+
+  function resetImportDialogState() {
+    importFileAnalysisToken += 1;
+    elements.importForm.reset();
+    elements.importAccountSelect.disabled = false;
+    updateImportFileName();
+  }
+
+  async function analyzeImportFileAccount() {
+    const file = elements.importCsvFileInput.files?.[0];
+    const token = (importFileAnalysisToken += 1);
+    if (!file) {
+      return;
+    }
+
+    try {
+      const parsed = parseCsv(await file.text());
+      if (token !== importFileAnalysisToken) {
+        return;
+      }
+      if (detectCsvLayout(parsed.headers) !== "normalized_statement_export") {
+        return;
+      }
+      const sourceAccountKey = sourceAccountKeyFromCsvRows(parsed.rows);
+      if (!sourceAccountKey) {
+        elements.importAccountSelect.disabled = false;
+        showPopup("CSV file does not include an account key.", "error");
+        return;
+      }
+      const account = state.accounts.find((candidate) => {
+        return accountImportKeys(candidate).includes(sourceAccountKey);
+      });
+      if (!account) {
+        elements.importAccountSelect.value = "";
+        elements.importAccountSelect.disabled = false;
+        showPopup(`No account matches CSV account "${sourceAccountKey}".`, "error");
+        return;
+      }
+      elements.importAccountSelect.value = String(account.id);
+      elements.importAccountSelect.disabled = true;
+    } catch (error) {
+      if (token === importFileAnalysisToken) {
+        elements.importAccountSelect.disabled = false;
+        showPopup(error.message || "Could not inspect CSV file.", "error");
+      }
+    }
   }
 
   function handleImportFileDrag(event) {
@@ -1340,7 +1393,7 @@
     const files = new DataTransfer();
     files.items.add(file);
     elements.importCsvFileInput.files = files.files;
-    updateImportFileName();
+    handleImportFileChange();
   }
 
   async function addTag() {
@@ -4332,15 +4385,23 @@
   }
 
   function normalizeCsvRow(row) {
-    let rawAmount = firstCsvValue(row, "Amount");
+    let rawAmount = firstCsvValue(row, "Amount", "amount");
     if (!rawAmount && ("Debit" in row || "Credit" in row)) {
       rawAmount = signedAmountFromDebitCredit(row);
     }
 
     return {
-      raw_date: firstCsvValue(row, "Posted Date", "Posting Date", "Date", "Transaction Date"),
-      raw_category: firstCsvValue(row, "Category"),
-      raw_description: firstCsvValue(row, "Description", "Memo", "Name", "Payee"),
+      raw_date: firstCsvValue(
+        row,
+        "Posted Date",
+        "Posting Date",
+        "post_date",
+        "Date",
+        "Transaction Date",
+        "transaction_date",
+      ),
+      raw_category: firstCsvValue(row, "Category", "category"),
+      raw_description: firstCsvValue(row, "Description", "description", "Memo", "Name", "Payee"),
       raw_amount: rawAmount,
     };
   }
@@ -4376,6 +4437,9 @@
 
   function detectCsvLayout(fieldnames) {
     const fields = new Set(fieldnames);
+    if (hasFields(fields, ["account", "transaction_date", "description", "amount"])) {
+      return "normalized_statement_export";
+    }
     if (hasFields(fields, ["Transaction Date", "Posted Date", "Description", "Category", "Debit", "Credit"])) {
       return "capital_one_credit";
     }
@@ -4390,6 +4454,35 @@
 
   function hasFields(fields, required) {
     return required.every((field) => fields.has(field));
+  }
+
+  function sourceAccountKeyFromCsvRows(rows) {
+    const keys = rows.map((row) => normalizeImportAccountKey(firstCsvValue(row, "account"))).filter(Boolean);
+    const uniqueKeys = new Set(keys);
+    if (uniqueKeys.size > 1) {
+      throw new Error("CSV file contains multiple account keys.");
+    }
+    return keys.length ? keys[0] : null;
+  }
+
+  function accountImportKeys(account) {
+    const accountType = normalizeImportAccountKey(account.account_type);
+    if (!accountType) {
+      return [];
+    }
+    return [account.institution, account.name]
+      .map((value) => normalizeImportAccountKey(value))
+      .filter(Boolean)
+      .map((value) => `${accountType}_${value}`);
+  }
+
+  function normalizeImportAccountKey(value) {
+    return clean(value)
+      .toLowerCase()
+      .replace(/\s+/g, "-")
+      .replace(/[^a-z0-9_-]+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^[-_]+|[-_]+$/g, "") || null;
   }
 
   async function sha256(text) {

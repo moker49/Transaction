@@ -113,3 +113,23 @@ test("collapses repeated spaces in raw CSV values", () => {
     },
   ]);
 });
+
+test("detects normalized statement export rows", () => {
+  const csv = [
+    "account,account_number,source_file,statement_period,transaction_date,post_date,description,category,amount,balance,transaction_type,card",
+    'checking_chase,0000,file.pdf,"December 05, 2019 - January 06, 2020",2019-12-05,,Card Purchase,ATM & Debit Card Withdrawals,-3.20,,,',
+  ].join("\n");
+
+  const parsed = moduleUnderTest.exports.parseCsv(csv);
+  const rawRows = parsed.rows.map(moduleUnderTest.exports.normalizeCsvRow);
+
+  assert.equal(moduleUnderTest.exports.detectCsvLayout(parsed.headers), "normalized_statement_export");
+  assert.deepEqual(rawRows, [
+    {
+      raw_date: "2019-12-05",
+      raw_category: "ATM & Debit Card Withdrawals",
+      raw_description: "Card Purchase",
+      raw_amount: "-3.20",
+    },
+  ]);
+});

@@ -28,7 +28,9 @@ from db_cli import (  # noqa: E402
     detect_csv_layout,
     fetch_active_rules,
     fetch_account,
+    fetch_account_by_import_key,
     fetch_imported_source,
+    find_imported_source_by_signature,
     fetch_duplicate_transaction_rule,
     fetch_rule_tag_ids_by_rule,
     fetch_tag_by_id,
@@ -37,6 +39,7 @@ from db_cli import (  # noqa: E402
     format_prefilled_clean_description,
     get_or_create_institution,
     import_raw_rows,
+    imported_source_signature,
     nonempty,
     optional_nonempty,
     read_csv_import_rows,
@@ -951,11 +954,12 @@ def import_csv():
         temp_path = Path(temp_file.name)
 
     try:
-        fieldnames, raw_rows = read_csv_import_rows(temp_path)
+        fieldnames, raw_rows, source_account_key = read_csv_import_rows(temp_path)
     finally:
         temp_path.unlink(missing_ok=True)
 
     file_hash = __import__("hashlib").sha256(csv_bytes).hexdigest()
+    source_signature = imported_source_signature(raw_rows)
     metadata = {
         "columns": fieldnames,
         "layout": detect_csv_layout(fieldnames),
@@ -963,16 +967,16 @@ def import_csv():
 
     with closing(connect(current_db_path())) as conn:
         account = dict(fetch_account(conn, account_id))
-        existing = conn.execute(
-            "SELECT id, account_id FROM imported_source WHERE sha256 = ?",
-            (file_hash,),
-        ).fetchone()
+        if source_account_key is not None:
+            matched_account = fetch_account_by_import_key(conn, source_account_key)
+            if matched_account is None:
+                raise CliError(f'No existing account matches CSV account "{source_account_key}".')
+            if int(matched_account["id"]) != account_id:
+                raise CliError(f'CSV account "{source_account_key}" matches a different account.')
+        existing = find_imported_source_by_signature(conn, source_signature)
         if existing is not None:
             if int(existing["account_id"]) != account_id:
-                raise CliError(
-                    "CSV file has already been imported for a different account "
-                    f"({existing['account_id']})."
-                )
+                raise CliError("CSV file has already been imported.")
             source = dict(fetch_imported_source(conn, int(existing["id"])))
             state = read_state(conn)
             return jsonify(

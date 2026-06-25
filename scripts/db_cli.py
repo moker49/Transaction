@@ -541,6 +541,8 @@ def signed_amount_from_debit_credit(row: dict[str, str | None]) -> str | None:
 
 def detect_csv_layout(fieldnames: list[str]) -> str:
     fields = set(fieldnames)
+    if {"account", "transaction_date", "description", "amount"}.issubset(fields):
+        return "normalized_statement_export"
     if {"Transaction Date", "Posted Date", "Description", "Category", "Debit", "Credit"}.issubset(fields):
         return "capital_one_credit"
     if {"Details", "Posting Date", "Description", "Amount", "Type", "Balance"}.issubset(fields):
@@ -551,19 +553,27 @@ def detect_csv_layout(fieldnames: list[str]) -> str:
 
 
 def normalize_csv_row(row: dict[str, str | None]) -> dict[str, str | None]:
-    raw_amount = first_csv_value(row, "Amount")
+    raw_amount = first_csv_value(row, "Amount", "amount")
     if raw_amount is None and ("Debit" in row or "Credit" in row):
         raw_amount = signed_amount_from_debit_credit(row)
 
     return {
-        "raw_date": first_csv_value(row, "Posted Date", "Posting Date", "Date", "Transaction Date"),
-        "raw_category": first_csv_value(row, "Category"),
-        "raw_description": first_csv_value(row, "Description", "Memo", "Name", "Payee"),
+        "raw_date": first_csv_value(
+            row,
+            "Posted Date",
+            "Posting Date",
+            "post_date",
+            "Date",
+            "Transaction Date",
+            "transaction_date",
+        ),
+        "raw_category": first_csv_value(row, "Category", "category"),
+        "raw_description": first_csv_value(row, "Description", "description", "Memo", "Name", "Payee"),
         "raw_amount": raw_amount,
     }
 
 
-def read_csv_import_rows(csv_path: Path) -> tuple[list[str], list[dict[str, str | None]]]:
+def read_csv_import_rows(csv_path: Path) -> tuple[list[str], list[dict[str, str | None]], str | None]:
     if not csv_path.exists():
         raise CliError(f"CSV file not found: {csv_path}")
     if not csv_path.is_file():
@@ -575,11 +585,18 @@ def read_csv_import_rows(csv_path: Path) -> tuple[list[str], list[dict[str, str 
             if reader.fieldnames is None:
                 raise CliError("CSV file does not contain a header row.")
             fieldnames = [field.strip() for field in reader.fieldnames if field is not None]
+            layout = detect_csv_layout(fieldnames)
+            source_account_key = None
             rows = []
             for source_row in reader:
                 normalized_source_row = {
                     key.strip() if key is not None else "": value for key, value in source_row.items()
                 }
+                row_account_key = csv_source_account_key(layout, normalized_source_row)
+                if row_account_key is not None:
+                    if source_account_key is not None and row_account_key != source_account_key:
+                        raise CliError("CSV file contains multiple account keys.")
+                    source_account_key = row_account_key
                 raw_row = normalize_csv_row(normalized_source_row)
                 if any(value is not None for value in raw_row.values()):
                     rows.append(raw_row)
@@ -588,7 +605,55 @@ def read_csv_import_rows(csv_path: Path) -> tuple[list[str], list[dict[str, str 
     except csv.Error as exc:
         raise CliError(f"Could not parse CSV: {exc}") from exc
 
-    return fieldnames, rows
+    if detect_csv_layout(fieldnames) == "normalized_statement_export" and source_account_key is None:
+        raise CliError("CSV file does not include an account key.")
+
+    return fieldnames, rows, source_account_key
+
+
+def csv_source_account_key(layout: str, row: dict[str, str | None]) -> str | None:
+    if layout != "normalized_statement_export":
+        return None
+    return normalize_import_account_key(first_csv_value(row, "account"))
+
+
+def normalize_import_account_key(value: str | None) -> str | None:
+    normalized = normalize_text(value)
+    if normalized is None:
+        return None
+    normalized = normalized.casefold().replace(" ", "-")
+    normalized = re.sub(r"[^a-z0-9_-]+", "-", normalized)
+    normalized = re.sub(r"-+", "-", normalized).strip("-_")
+    return normalized or None
+
+
+def account_import_keys(account: sqlite3.Row | dict[str, Any]) -> set[str]:
+    account_type = normalize_import_account_key(account["account_type"])
+    keys = set()
+    for value in (account["institution"], account["name"]):
+        institution_key = normalize_import_account_key(value)
+        if account_type is not None and institution_key is not None:
+            keys.add(f"{account_type}_{institution_key}")
+    return keys
+
+
+def fetch_account_by_import_key(conn: sqlite3.Connection, source_account_key: str) -> sqlite3.Row | None:
+    accounts = conn.execute(
+        """
+        SELECT
+            a.id,
+            a.name,
+            i.name AS institution,
+            a.account_type
+        FROM accounts a
+        LEFT JOIN institutions i ON i.id = a.institution_id
+        ORDER BY a.id
+        """
+    ).fetchall()
+    matches = [account for account in accounts if source_account_key in account_import_keys(account)]
+    if len(matches) > 1:
+        raise CliError(f"CSV account key matches multiple accounts: {source_account_key}")
+    return matches[0] if matches else None
 
 
 def normalized_hash(payload: dict[str, Any]) -> str:
@@ -605,6 +670,68 @@ def raw_row_hash(row: dict[str, str | None]) -> str:
             "amount": normalize_text(row.get("raw_amount")),
         }
     )
+
+
+def imported_source_signature(raw_rows: list[dict[str, str | None]]) -> dict[str, int | str]:
+    if not raw_rows:
+        raise CliError("CSV file does not contain importable rows.")
+
+    dates: list[str] = []
+    amount_cents_total = 0
+    for index, row in enumerate(raw_rows, start=1):
+        try:
+            dates.append(parse_transaction_date(row.get("raw_date")))
+            amount_cents_total += parse_amount_cents(row.get("raw_amount"))
+        except CliError as exc:
+            raise CliError(f"CSV row {index} cannot be used for duplicate detection: {exc}") from exc
+
+    return {
+        "start_date": min(dates),
+        "end_date": max(dates),
+        "amount_cents_total": amount_cents_total,
+    }
+
+
+def find_imported_source_by_signature(
+    conn: sqlite3.Connection,
+    signature: dict[str, int | str],
+) -> sqlite3.Row | None:
+    rows = conn.execute(
+        """
+        SELECT
+            src.id,
+            src.account_id,
+            rr.raw_date,
+            rr.raw_amount
+        FROM imported_source src
+        JOIN raw_imported_rows rr ON rr.imported_source_id = src.id
+        ORDER BY src.id, rr.id
+        """
+    ).fetchall()
+
+    source_rows: list[dict[str, str | None]] = []
+    current_source: sqlite3.Row | None = None
+    for row in rows:
+        if current_source is not None and row["id"] != current_source["id"]:
+            if signature_matches_imported_source(source_rows, signature):
+                return current_source
+            source_rows = []
+        current_source = row
+        source_rows.append({"raw_date": row["raw_date"], "raw_amount": row["raw_amount"]})
+
+    if current_source is not None and signature_matches_imported_source(source_rows, signature):
+        return current_source
+    return None
+
+
+def signature_matches_imported_source(
+    raw_rows: list[dict[str, str | None]],
+    signature: dict[str, int | str],
+) -> bool:
+    try:
+        return imported_source_signature(raw_rows) == signature
+    except CliError:
+        return False
 
 
 def normalize_text(value: str | None) -> str | None:
@@ -1412,8 +1539,9 @@ def command_transaction(args: argparse.Namespace) -> None:
 def command_import_csv(args: argparse.Namespace) -> None:
     csv_path = args.csv_path.expanduser()
     source_type = optional_nonempty(args.source_type, "source_type") or "csv"
-    fieldnames, raw_rows = read_csv_import_rows(csv_path)
+    fieldnames, raw_rows, source_account_key = read_csv_import_rows(csv_path)
     file_hash = hashlib.sha256(csv_path.read_bytes()).hexdigest()
+    source_signature = imported_source_signature(raw_rows)
     metadata = {
         "columns": fieldnames,
         "layout": detect_csv_layout(fieldnames),
@@ -1421,20 +1549,16 @@ def command_import_csv(args: argparse.Namespace) -> None:
 
     with connect(args.db) as conn:
         account = fetch_account(conn, args.account_id)
-        existing = conn.execute(
-            """
-            SELECT id, account_id
-            FROM imported_source
-            WHERE sha256 = ?
-            """,
-            (file_hash,),
-        ).fetchone()
+        if source_account_key is not None:
+            matched_account = fetch_account_by_import_key(conn, source_account_key)
+            if matched_account is None:
+                raise CliError(f'No existing account matches CSV account "{source_account_key}".')
+            if int(matched_account["id"]) != args.account_id:
+                raise CliError(f'CSV account "{source_account_key}" matches a different account.')
+        existing = find_imported_source_by_signature(conn, source_signature)
         if existing is not None:
             if int(existing["account_id"]) != args.account_id:
-                raise CliError(
-                    "CSV file has already been imported for a different account "
-                    f"({existing['account_id']})."
-                )
+                raise CliError("CSV file has already been imported.")
             source = fetch_imported_source(conn, int(existing["id"]))
             print_json(
                 {
