@@ -1,4 +1,10 @@
-(function () {
+import { clean } from "./scripts/js/common.mjs";
+import { parseCsv, normalizeCsvRow, detectCsvLayout, sourceAccountKeyFromCsvRows, accountImportKeys, sha256 } from "./scripts/js/csv.mjs";
+import { addDays, addMonths, allTimeDateRangePeriod, customDateRangePeriod, dateRangePeriodForRange, dateRangeYearOptions, daysInMonth, firstOfMonth, formatDateKey, formatDateRangeLabel, isYearRange, monthName, parseDateKey, rangeStartDate, startOfDay, yearRangeValue } from "./scripts/js/date-range.mjs";
+import { compareSortValues, formatCents, formatDateTime, formatDisplayDate, formatMaybeDateTime, formatDollars } from "./scripts/js/format.mjs";
+import { actionButtons, appendEmpty, cell, clear, displayDateCell, el, emptyTableRow, fillSelect, makeEditableRow, manageableChip, materialIcon, renderDefinitionList, setText, tableRow } from "./scripts/js/dom.mjs";
+import { renderPieChart, renderStackedBar } from "./scripts/js/charts.mjs";
+
   const API_BASE = window.location.protocol === "file:" ? "http://127.0.0.1:5050" : "";
   const DUMMY_DATABASE_KEY = "transaction-use-dummy-database";
   const DATE_RANGE_KEY = "transaction-date-range";
@@ -673,7 +679,7 @@
   function dateRangeValues() {
     return new Set([
       ...dateRangePresets.map((preset) => preset.value),
-      ...dateRangeYearOptions().map((option) => option.value),
+      ...dateRangeYearOptions(dateRangeOptions()).map((option) => option.value),
       CUSTOM_DATE_RANGE,
     ]);
   }
@@ -739,20 +745,29 @@
     renderDateRangeDialog();
   }
 
+  function dateRangeOptions() {
+    return {
+      customDateRange: () => customDateRangePeriod(DATE_RANGE_CUSTOM_START_KEY, DATE_RANGE_CUSTOM_END_KEY),
+      customDateRangeValue: CUSTOM_DATE_RANGE,
+      firstYear: FIRST_YEAR_RANGE,
+      yearRangePrefix: YEAR_RANGE_PREFIX,
+    };
+  }
+
   function currentDateRangeState() {
     const savedRange = localStorage.getItem(DATE_RANGE_KEY) || DEFAULT_DATE_RANGE;
-    const normalizedRange = savedRange === "last-year" ? yearRangeValue(lastFullYear()) : savedRange;
+    const normalizedRange = savedRange === "last-year" ? yearRangeValue(lastFullYear(), dateRangeOptions()) : savedRange;
     const range = dateRangeValues().has(normalizedRange) ? normalizedRange : DEFAULT_DATE_RANGE;
     return dateRangeState(range);
   }
 
   function dateRangeState(range) {
-    const period = dateRangePeriodForRange(range);
+    const period = dateRangePeriodForRange(range, dateRangeOptions());
     return {
       range,
       start: period.start,
       end: period.end,
-      viewDate: firstOfMonth(rangeStartDate(range)),
+      viewDate: firstOfMonth(rangeStartDate(range, dateRangeOptions())),
     };
   }
 
@@ -787,14 +802,14 @@
     placeholderOption.value = "";
     placeholderOption.textContent = "Select year";
     yearSelect.appendChild(placeholderOption);
-    dateRangeYearOptions().forEach((option) => {
+    dateRangeYearOptions(dateRangeOptions()).forEach((option) => {
       const yearOption = document.createElement("option");
       yearOption.value = option.value;
       yearOption.textContent = option.label;
       yearSelect.appendChild(yearOption);
     });
-    yearSelect.value = isYearRange(dateRangeDraft?.range) ? dateRangeDraft.range : "";
-    yearSelect.classList.toggle("is-active", isYearRange(dateRangeDraft?.range));
+    yearSelect.value = isYearRange(dateRangeDraft?.range, dateRangeOptions()) ? dateRangeDraft.range : "";
+    yearSelect.classList.toggle("is-active", isYearRange(dateRangeDraft?.range, dateRangeOptions()));
     yearSelect.addEventListener("change", () => {
       if (yearSelect.value) {
         selectDateRangePreset(yearSelect.value);
@@ -805,7 +820,7 @@
 
   function selectDateRangePreset(range) {
     dateRangeDraft.range = range;
-    const period = dateRangePeriodForRange(range);
+    const period = dateRangePeriodForRange(range, dateRangeOptions());
     dateRangeDraft.start = period.start;
     dateRangeDraft.end = period.end;
     dateRangeDraft.viewDate = firstOfMonth(parseDateKey(period.start));
@@ -1975,6 +1990,7 @@
       clearFieldError(target, "rule-field-error");
     });
   }
+
 
   function clearRuleFieldError(field) {
     if (elements.ruleKindInput.value === "template") {
@@ -4465,346 +4481,41 @@
     }[status] || status;
   }
 
-  function parseCsv(text) {
-    const rows = [];
-    let row = [];
-    let value = "";
-    let inQuotes = false;
 
-    for (let i = 0; i < text.length; i += 1) {
-      const char = text[i];
-      const next = text[i + 1];
 
-      if (char === '"' && inQuotes && next === '"') {
-        value += '"';
-        i += 1;
-      } else if (char === '"') {
-        inQuotes = !inQuotes;
-      } else if (char === "," && !inQuotes) {
-        row.push(value);
-        value = "";
-      } else if ((char === "\n" || char === "\r") && !inQuotes) {
-        if (char === "\r" && next === "\n") {
-          i += 1;
-        }
-        row.push(value);
-        if (row.some((field) => field.trim() !== "")) {
-          rows.push(row);
-        }
-        row = [];
-        value = "";
-      } else {
-        value += char;
-      }
-    }
 
-    row.push(value);
-    if (row.some((field) => field.trim() !== "")) {
-      rows.push(row);
-    }
 
-    if (!rows.length) {
-      throw new Error("CSV file does not contain a header row.");
-    }
 
-    const headers = rows[0].map((header) => header.trim());
-    const dataRows = rows.slice(1).map((items) => {
-      return headers.reduce((record, header, index) => {
-        record[header] = items[index] ?? "";
-        return record;
-      }, {});
-    });
 
-    return { headers, rows: dataRows };
-  }
 
-  function normalizeCsvRow(row) {
-    let rawAmount = firstCsvValue(row, "Amount", "amount");
-    if (!rawAmount && ("Debit" in row || "Credit" in row)) {
-      rawAmount = signedAmountFromDebitCredit(row);
-    }
 
-    return {
-      raw_date: firstCsvValue(
-        row,
-        "Posted Date",
-        "Posting Date",
-        "post_date",
-        "Date",
-        "Transaction Date",
-        "transaction_date",
-      ),
-      raw_category: firstCsvValue(row, "Category", "category"),
-      raw_description: firstCsvValue(row, "Description", "description", "Memo", "Name", "Payee"),
-      raw_amount: rawAmount,
-    };
-  }
 
-  function firstCsvValue(row, ...names) {
-    for (const name of names) {
-      if (Object.prototype.hasOwnProperty.call(row, name)) {
-        const value = collapseMultiSpaces(clean(row[name]));
-        if (value) {
-          return value;
-        }
-      }
-    }
-    return null;
-  }
 
-  function collapseMultiSpaces(value) {
-    return String(value || "").replace(/ {2,}/g, " ");
-  }
 
-  function signedAmountFromDebitCredit(row) {
-    const debit = firstCsvValue(row, "Debit");
-    const credit = firstCsvValue(row, "Credit");
-
-    if (debit && credit) {
-      return `debit=${debit}; credit=${credit}`;
-    }
-    if (debit) {
-      return debit.startsWith("-") ? debit : `-${debit}`;
-    }
-    return credit;
-  }
-
-  function detectCsvLayout(fieldnames) {
-    const fields = new Set(fieldnames);
-    if (hasFields(fields, ["account", "transaction_date", "description", "amount"])) {
-      return "normalized_statement_export";
-    }
-    if (hasFields(fields, ["Transaction Date", "Posted Date", "Description", "Category", "Debit", "Credit"])) {
-      return "capital_one_credit";
-    }
-    if (hasFields(fields, ["Details", "Posting Date", "Description", "Amount", "Type", "Balance"])) {
-      return "chase_checking";
-    }
-    if (hasFields(fields, ["Date", "Description", "Type", "Amount", "Current balance", "Status"])) {
-      return "sofi_bank";
-    }
-    return "generic_csv";
-  }
-
-  function hasFields(fields, required) {
-    return required.every((field) => fields.has(field));
-  }
-
-  function sourceAccountKeyFromCsvRows(rows) {
-    const keys = rows.map((row) => normalizeImportAccountKey(firstCsvValue(row, "account"))).filter(Boolean);
-    const uniqueKeys = new Set(keys);
-    if (uniqueKeys.size > 1) {
-      throw new Error("CSV file contains multiple account keys.");
-    }
-    return keys.length ? keys[0] : null;
-  }
-
-  function accountImportKeys(account) {
-    const accountType = normalizeImportAccountKey(account.account_type);
-    if (!accountType) {
-      return [];
-    }
-    return [account.institution, account.name]
-      .map((value) => normalizeImportAccountKey(value))
-      .filter(Boolean)
-      .map((value) => `${accountType}_${value}`);
-  }
-
-  function normalizeImportAccountKey(value) {
-    return clean(value)
-      .toLowerCase()
-      .replace(/\s+/g, "-")
-      .replace(/[^a-z0-9_-]+/g, "-")
-      .replace(/-+/g, "-")
-      .replace(/^[-_]+|[-_]+$/g, "") || null;
-  }
-
-  async function sha256(text) {
-    if (!crypto.subtle) {
-      return String(text.length) + ":" + text.slice(0, 64);
-    }
-
-    const data = new TextEncoder().encode(text);
-    const digest = await crypto.subtle.digest("SHA-256", data);
-    return Array.from(new Uint8Array(digest))
-      .map((byte) => byte.toString(16).padStart(2, "0"))
-      .join("");
-  }
-
-  function clean(value) {
-    return String(value ?? "").trim();
-  }
 
   function accountLabel(account) {
     return account.name;
   }
 
-  function dateRangePeriodForRange(range) {
-    const today = startOfDay(new Date());
-    if (range === "this-month") {
-      return {
-        start: formatDateKey(new Date(today.getFullYear(), today.getMonth(), 1)),
-        end: formatDateKey(new Date(today.getFullYear(), today.getMonth() + 1, 0)),
-      };
-    }
-    if (range === "this-year") {
-      return {
-        start: formatDateKey(new Date(today.getFullYear(), 0, 1)),
-        end: formatDateKey(new Date(today.getFullYear(), 11, 31)),
-      };
-    }
-    if (range === "last-year") {
-      return lastFullYearPeriod();
-    }
-    if (isYearRange(range)) {
-      return fullYearPeriod(Number(range.slice(YEAR_RANGE_PREFIX.length)));
-    }
-    if (range === CUSTOM_DATE_RANGE) {
-      return customDateRangePeriod() || lastFullMonthPeriod();
-    }
-    return lastFullMonthPeriod();
-  }
 
-  function allTimeDateRangePeriod() {
-    const today = startOfDay(new Date());
-    return {
-      start: "2020-01-01",
-      end: formatDateKey(new Date(today.getFullYear(), 11, 31)),
-    };
-  }
 
-  function dateRangeYearOptions() {
-    const years = [];
-    for (let year = lastFullYear(); year >= FIRST_YEAR_RANGE; year -= 1) {
-      years.push({ value: yearRangeValue(year), label: String(year) });
-    }
-    return years;
-  }
 
-  function yearRangeValue(year) {
-    return `${YEAR_RANGE_PREFIX}${year}`;
-  }
 
-  function isYearRange(range) {
-    if (!String(range || "").startsWith(YEAR_RANGE_PREFIX)) {
-      return false;
-    }
-    const year = Number(String(range).slice(YEAR_RANGE_PREFIX.length));
-    return Number.isInteger(year) && year >= FIRST_YEAR_RANGE && year <= lastFullYear();
-  }
 
-  function lastFullYear() {
-    return new Date().getFullYear() - 1;
-  }
 
-  function rangeStartDate(range) {
-    return parseDateKey(dateRangePeriodForRange(range).start);
-  }
 
-  function customDateRangePeriod() {
-    const start = localStorage.getItem(DATE_RANGE_CUSTOM_START_KEY) || "";
-    const end = localStorage.getItem(DATE_RANGE_CUSTOM_END_KEY) || "";
-    if (!start || !end) {
-      return null;
-    }
-    return {
-      start: end < start ? end : start,
-      end: end < start ? start : end,
-    };
-  }
 
-  function lastFullYearPeriod() {
-    return fullYearPeriod(lastFullYear());
-  }
 
-  function fullYearPeriod(year) {
-    const start = new Date(year, 0, 1);
-    const end = new Date(year, 11, 31);
-    return {
-      start: formatDateKey(start),
-      end: formatDateKey(end),
-    };
-  }
 
-  function lastFullMonthPeriod() {
-    const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const end = new Date(now.getFullYear(), now.getMonth(), 0);
-    return {
-      start: formatDateKey(start),
-      end: formatDateKey(end),
-    };
-  }
 
-  function formatDateKey(date) {
-    return [
-      date.getFullYear(),
-      String(date.getMonth() + 1).padStart(2, "0"),
-      String(date.getDate()).padStart(2, "0"),
-    ].join("-");
-  }
 
-  function parseDateKey(value) {
-    const [year, month, day] = value.split("-").map(Number);
-    return new Date(year, month - 1, day);
-  }
 
-  function formatDateRangeLabel(start, end) {
-    const startDate = parseDateKey(start);
-    const endDate = parseDateKey(end);
-    const sameYear = startDate.getFullYear() === endDate.getFullYear();
-    const sameMonth = sameYear && startDate.getMonth() === endDate.getMonth();
-    const startsOnFirst = startDate.getDate() === 1;
-    const endsOnLast = endDate.getDate() === daysInMonth(endDate);
 
-    if (sameYear && startDate.getMonth() === 0 && endDate.getMonth() === 11 && startsOnFirst && endsOnLast) {
-      return String(startDate.getFullYear());
-    }
 
-    if (sameMonth && startsOnFirst && endsOnLast) {
-      return `${monthName(startDate, "long")} ${startDate.getFullYear()}`;
-    }
 
-    if (sameMonth) {
-      if (startDate.getDate() === endDate.getDate()) {
-        return `${monthName(startDate, "long")} ${startDate.getDate()}, ${startDate.getFullYear()}`;
-      }
-      return `${monthName(startDate, "long")} ${startDate.getDate()}-${endDate.getDate()}, ${startDate.getFullYear()}`;
-    }
 
-    if (startsOnFirst && endsOnLast) {
-      return `${monthName(startDate, "short")} ${startDate.getFullYear()} - ${monthName(endDate, "short")} ${endDate.getFullYear()}`;
-    }
 
-    const formatter = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" });
-    return `${formatter.format(startDate)} - ${formatter.format(endDate)}`;
-  }
 
-  function monthName(date, width) {
-    return new Intl.DateTimeFormat("en-US", { month: width }).format(date);
-  }
-
-  function daysInMonth(date) {
-    return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
-  }
-
-  function firstOfMonth(date) {
-    return new Date(date.getFullYear(), date.getMonth(), 1);
-  }
-
-  function startOfDay(date) {
-    return new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  }
-
-  function addMonths(date, months) {
-    return new Date(date.getFullYear(), date.getMonth() + months, 1);
-  }
-
-  function addDays(date, days) {
-    const next = new Date(date);
-    next.setDate(next.getDate() + days);
-    return next;
-  }
 
   function sumTypedTransactions(transactions, transactionType, useAbsoluteValue) {
     return transactions.reduce((total, transaction) => {
@@ -4912,101 +4623,10 @@
     return state.categories.find((candidate) => candidate.id === category.parent_id) || category;
   }
 
-  function renderPieChart(chart, legend, rawSegments, options = {}) {
-    const segments = rawSegments.filter((segment) => segment.value > 0);
-    const total = segments.reduce((sum, segment) => sum + segment.value, 0);
-    clear(legend);
-    if (total <= 0) {
-      chart.style.background = "var(--surface-muted)";
-      legend.appendChild(el("span", "No data", "list-meta"));
-      return;
-    }
-    let cursor = 0;
-    const stops = segments.map((segment) => {
-      const start = cursor;
-      cursor += (segment.value / total) * 100;
-      return `${segment.color} ${start}% ${cursor}%`;
-    });
-    chart.style.background = `conic-gradient(${stops.join(", ")})`;
-    renderChartLegend(legend, segments, total);
-    if (options.animate) {
-      animatePieChartToggle(chart, legend);
-    }
-  }
 
-  function animatePieChartToggle(chart, legend) {
-    const frame = chart.closest(".pie-chart-frame");
-    [frame, legend].forEach((element) => {
-      if (!element) {
-        return;
-      }
-      element.classList.remove("is-pie-toggle-animating");
-      void element.offsetWidth;
-      element.classList.add("is-pie-toggle-animating");
-      element.addEventListener("animationend", () => {
-        element.classList.remove("is-pie-toggle-animating");
-      }, { once: true });
-    });
-  }
 
-  function renderStackedBar(bar, legend, rawSegments) {
-    const segments = rawSegments.filter((segment) => segment.value > 0);
-    const total = segments.reduce((sum, segment) => sum + segment.value, 0);
-    clear(bar);
-    clear(legend);
-    if (total <= 0) {
-      bar.appendChild(el("span", "", "stacked-bar-empty"));
-      legend.appendChild(el("span", "No data", "list-meta"));
-      return;
-    }
-    segments.forEach((segment) => {
-      const piece = document.createElement("span");
-      piece.className = "stacked-bar-segment";
-      piece.style.width = `${(segment.value / total) * 100}%`;
-      piece.style.background = segment.color;
-      piece.title = `${segment.label}: ${formatDollars(segment.value)}`;
-      bar.appendChild(piece);
-    });
-    renderChartLegend(legend, segments, total);
-  }
 
-  function renderChartLegend(legend, segments, total) {
-    segments.forEach((segment) => {
-      const item = document.createElement("div");
-      item.className = "chart-legend-item";
-      const swatch = document.createElement("span");
-      swatch.className = "chart-legend-swatch";
-      swatch.style.background = segment.color;
-      const label = document.createElement("span");
-      label.className = "chart-legend-label";
-      label.append(
-        el("span", segment.label),
-        el("strong", `${Math.round((segment.value / total) * 100)}%`),
-      );
-      item.append(
-        swatch,
-        label,
-      );
-      legend.appendChild(item);
-    });
-  }
 
-  function formatDollars(cents) {
-    const amount = Math.abs(cents) / 100;
-    const formatted = `$${new Intl.NumberFormat(undefined, {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(amount)}`;
-    return cents < 0 ? `-${formatted}` : formatted;
-  }
-
-  function formatCents(value) {
-    const cents = Number(value);
-    if (!Number.isFinite(cents)) {
-      return "-";
-    }
-    return (cents / 100).toFixed(2);
-  }
 
   function ruleActions(rule, category) {
     const list = document.createElement("div");
@@ -5199,53 +4819,6 @@
     elements.mobileDevMessage.classList.toggle("error", isError);
   }
 
-  function setText(selector, value) {
-    document.querySelector(selector).textContent = value;
-  }
-
-  function clear(node) {
-    node.replaceChildren();
-  }
-
-  function appendEmpty(node) {
-    node.appendChild(document.querySelector("#emptyTemplate").content.firstElementChild.cloneNode(true));
-  }
-
-  function fillSelect(select, options, emptyLabel) {
-    const currentValue = select.value;
-    clear(select);
-
-    if (emptyLabel) {
-      const option = document.createElement("option");
-      option.value = "";
-      option.textContent = emptyLabel;
-      option.disabled = true;
-      option.selected = true;
-      select.appendChild(option);
-    }
-
-    options.forEach((item) => {
-      const option = document.createElement("option");
-      option.value = item.value;
-      option.textContent = item.label;
-      select.appendChild(option);
-    });
-
-    if ([...select.options].some((option) => option.value === currentValue)) {
-      select.value = currentValue;
-    }
-  }
-
-  function renderDefinitionList(list, items) {
-    clear(list);
-    items.forEach(([label, value]) => {
-      const term = document.createElement("dt");
-      term.textContent = label;
-      const detail = document.createElement("dd");
-      detail.textContent = value === null || value === undefined || value === "" ? "-" : String(value);
-      list.append(term, detail);
-    });
-  }
 
   function openModal(dialog, { focusSingleTextField } = {}) {
     dialog.showModal();
@@ -5389,139 +4962,17 @@
     document.body.classList.toggle("modal-open", hasOpenModal);
   }
 
-  function tableRow(values) {
-    const tr = document.createElement("tr");
-    values.forEach((value) => tr.appendChild(cell(value)));
-    return tr;
-  }
 
-  function makeEditableRow(row, label, handler) {
-    row.classList.add("clickable-row");
-    row.tabIndex = 0;
-    row.setAttribute("role", "button");
-    row.setAttribute("aria-label", label);
-    row.addEventListener("click", handler);
-    row.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        handler();
-      }
-    });
-  }
 
-  function emptyTableRow(colspan) {
-    const tr = document.createElement("tr");
-    const td = document.createElement("td");
-    td.colSpan = colspan;
-    td.appendChild(document.querySelector("#emptyTemplate").content.firstElementChild.cloneNode(true));
-    tr.appendChild(td);
-    return tr;
-  }
 
-  function cell(content, className) {
-    const td = document.createElement("td");
-    if (className) {
-      td.className = className;
-    }
-    if (content instanceof Node) {
-      td.appendChild(content);
-    } else {
-      td.textContent = content;
-    }
-    return td;
-  }
 
-  function materialIcon(name) {
-    const icon = document.createElement("span");
-    icon.className = "material-symbols-outlined";
-    icon.setAttribute("aria-hidden", "true");
-    icon.textContent = name;
-    return icon;
-  }
 
-  function actionButtons(actions) {
-    const wrapper = document.createElement("div");
-    wrapper.className = "action-row";
-    actions.forEach(([icon, label, handler]) => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = icon === "close" ? "icon-only danger" : "icon-only";
-      button.title = label;
-      button.setAttribute("aria-label", label);
-      const symbol = document.createElement("span");
-      symbol.className = "material-symbols-outlined";
-      symbol.setAttribute("aria-hidden", "true");
-      symbol.textContent = icon;
-      button.appendChild(symbol);
-      button.addEventListener("click", handler);
-      wrapper.appendChild(button);
-    });
-    return wrapper;
-  }
 
-  function manageableChip(label, onEdit, extraClass = "") {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = `chip manageable-chip${extraClass ? ` ${extraClass}` : ""}`;
-    button.setAttribute("aria-label", `Edit ${label}`);
-    button.append(materialIcon("edit"), el("span", label));
-    button.addEventListener("click", onEdit);
-    return button;
-  }
 
-  function el(tag, text, className) {
-    const node = document.createElement(tag);
-    if (className) {
-      node.className = className;
-    }
-    node.textContent = text;
-    return node;
-  }
 
-  function formatDateTime(value) {
-    return new Intl.DateTimeFormat(undefined, {
-      dateStyle: "medium",
-      timeStyle: "short",
-    }).format(new Date(value));
-  }
 
-  function formatDisplayDate(value) {
-    if (!value) {
-      return "-";
-    }
-    const text = String(value);
-    const isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (isoMatch) {
-      return `${isoMatch[2]}-${isoMatch[3]}-${isoMatch[1]}`;
-    }
-    const date = new Date(text);
-    if (Number.isNaN(date.getTime())) {
-      return text;
-    }
-    return [
-      String(date.getMonth() + 1).padStart(2, "0"),
-      String(date.getDate()).padStart(2, "0"),
-      date.getFullYear(),
-    ].join("-");
-  }
 
-  function displayDateCell(value) {
-    const formatted = formatDisplayDate(value);
-    if (formatted === "-" || !/^\d{2}-\d{2}-\d{4}$/.test(formatted)) {
-      return formatted;
-    }
-    const wrapper = document.createElement("span");
-    wrapper.className = "date-stack";
-    wrapper.append(
-      el("span", formatted.slice(0, 5)),
-      el("span", formatted.slice(6)),
-    );
-    return wrapper;
-  }
 
-  function formatMaybeDateTime(value) {
-    return value ? formatDateTime(value) : "-";
-  }
 
   function sortedTableRows(table, rows) {
     const sortState = tableSortState[table];
@@ -5593,71 +5044,5 @@
     return category ? categoryLabel(category) : "";
   }
 
-  function compareSortValues(left, right, type, direction = "asc") {
-    const leftValue = normalizeSortValue(left, type);
-    const rightValue = normalizeSortValue(right, type);
-    const leftMissing = leftValue === null || leftValue === "";
-    const rightMissing = rightValue === null || rightValue === "";
-    if (leftMissing && rightMissing) {
-      return 0;
-    }
-    if (leftMissing) {
-      return 1;
-    }
-    if (rightMissing) {
-      return -1;
-    }
-    if (type === "number" || type === "date") {
-      const comparison = leftValue - rightValue;
-      return direction === "asc" ? comparison : -comparison;
-    }
-    const comparison = String(leftValue).localeCompare(String(rightValue), undefined, { numeric: true, sensitivity: "base" });
-    return direction === "asc" ? comparison : -comparison;
-  }
 
-  function normalizeSortValue(value, type) {
-    if (value === null || value === undefined || value === "-") {
-      return null;
-    }
-    if (type === "number") {
-      const number = parseSortableNumber(value);
-      return Number.isFinite(number) ? number : null;
-    }
-    if (type === "date") {
-      const time = parseSortableDate(value);
-      return Number.isFinite(time) ? time : null;
-    }
-    return clean(value).toLowerCase();
-  }
 
-  function parseSortableNumber(value) {
-    if (typeof value === "number") {
-      return value;
-    }
-    const text = clean(value);
-    if (!text) {
-      return Number.NaN;
-    }
-    const isParenthetical = /^\(.*\)$/.test(text);
-    const number = Number(text.replace(/[,$()]/g, ""));
-    return isParenthetical ? -number : number;
-  }
-
-  function parseSortableDate(value) {
-    const text = clean(value);
-    if (!text) {
-      return Number.NaN;
-    }
-    const isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (isoMatch) {
-      return Date.UTC(Number(isoMatch[1]), Number(isoMatch[2]) - 1, Number(isoMatch[3]));
-    }
-    const slashMatch = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
-    if (slashMatch) {
-      const year = Number(slashMatch[3].length === 2 ? `20${slashMatch[3]}` : slashMatch[3]);
-      return Date.UTC(year, Number(slashMatch[1]) - 1, Number(slashMatch[2]));
-    }
-    const parsed = new Date(text);
-    return parsed.getTime();
-  }
-})();

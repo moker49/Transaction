@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import mimetypes
 import os
 import shutil
 import sqlite3
@@ -64,6 +65,7 @@ from db_cli import (  # noqa: E402
 from init_db import init_db  # noqa: E402
 
 
+mimetypes.add_type("application/javascript", ".mjs")
 app = Flask(__name__, static_folder=str(ROOT), static_url_path="")
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 DUMMY_DB_PATH = DEFAULT_DB_PATH.with_name("transactions.dummy.sqlite")
@@ -142,7 +144,7 @@ def index():
 
 @app.after_request
 def prevent_static_cache(response):
-    if request.path in {"/", "/index.html"} or request.path.endswith((".js", ".css")):
+    if request.path in {"/", "/index.html"} or request.path.endswith((".js", ".mjs", ".css")):
         response.headers["Cache-Control"] = "no-store, max-age=0"
     started_at = getattr(g, "request_started_at", None)
     if started_at is not None:
