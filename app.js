@@ -9,6 +9,8 @@ import { buildAccountPayload, buildBulkEditOverrides, buildBulkImportOverrides, 
 import { randomComfortableColor, normalizeHexColor, hexToHsl, hslToHex } from "./scripts/js/colors.mjs";
 import { dashboardFromTransactions } from "./scripts/js/dashboard-model.mjs";
 import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, matchAmountLabel, statusClass, statusLabel, transactionTypeLabel } from "./scripts/js/labels.mjs";
+import { clearSelectedRawRowsExceptStatus, isBaseSelectableRawRow, isImportableRawRow, isSelectableRawRow, isTemplateRawRow, nextSelectVisibleStatus, parseRawAmount, rawRowMatchesStatusFilter, ruleMatchValues, selectedRawRowStatus, topMatchingRuleForRawRow, visibleSelectableRawRowIds } from "./scripts/js/raw-row-model.mjs";
+import { navigateOptionalTypeGroup, navigateTypeGroup, selectOptionalTypeFromGroup, selectTypeFromGroup, setOptionalTypeGroupValue, setTypeGroupValue } from "./scripts/js/type-groups.mjs";
 
   const API_BASE = window.location.protocol === "file:" ? "http://127.0.0.1:5050" : "";
   const DUMMY_DATABASE_KEY = "transaction-use-dummy-database";
@@ -90,13 +92,14 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
     rawRows: { key: "date", direction: "desc", type: "date" },
     rules: { key: "name", direction: "asc", type: "text" },
   };
-  const transactionTypes = [
-    { value: "income", label: "Income" },
-    { value: "expense", label: "Expense" },
-    { value: "transfer", label: "Transfer" },
-  ];
-
   const elements = getElements();
+  const typeGroupOptions = {
+    onChange: ({ input, value }) => {
+      if (input === elements.ruleKindInput && value === "template") {
+        clearRuleFieldErrors();
+      }
+    },
+  };
 
 
   elements.navItems.forEach((navItem) => {
@@ -164,23 +167,23 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
   elements.ruleDeleteButton.addEventListener("click", deleteEditingRule);
   elements.ruleCategoryButton.addEventListener("click", () => openCategoryPicker("rule"));
   elements.ruleKindGroup.addEventListener("click", (event) => {
-    selectTypeFromGroup(event, elements.ruleKindInput, elements.ruleKindGroup);
+    selectTypeFromGroup(event, elements.ruleKindInput, elements.ruleKindGroup, typeGroupOptions);
     syncRuleDialogModeForSelectedType();
   });
   elements.ruleKindGroup.addEventListener("keydown", (event) => {
-    navigateTypeGroup(event, elements.ruleKindInput, elements.ruleKindGroup);
+    navigateTypeGroup(event, elements.ruleKindInput, elements.ruleKindGroup, typeGroupOptions);
     syncRuleDialogModeForSelectedType();
   });
   elements.ruleTypeGroup.addEventListener("click", (event) => {
-    selectTypeFromGroup(event, elements.ruleTypeInput, elements.ruleTypeGroup);
+    selectTypeFromGroup(event, elements.ruleTypeInput, elements.ruleTypeGroup, typeGroupOptions);
     clearTransferCategoryIfTypeIsNotTransfer("rule");
   });
   elements.ruleTypeGroup.addEventListener("keydown", (event) => {
-    navigateTypeGroup(event, elements.ruleTypeInput, elements.ruleTypeGroup);
+    navigateTypeGroup(event, elements.ruleTypeInput, elements.ruleTypeGroup, typeGroupOptions);
     clearTransferCategoryIfTypeIsNotTransfer("rule");
   });
-  elements.ruleMatchAmountGroup.addEventListener("click", (event) => selectTypeFromGroup(event, elements.ruleMatchAmountInput, elements.ruleMatchAmountGroup));
-  elements.ruleMatchAmountGroup.addEventListener("keydown", (event) => navigateTypeGroup(event, elements.ruleMatchAmountInput, elements.ruleMatchAmountGroup));
+  elements.ruleMatchAmountGroup.addEventListener("click", (event) => selectTypeFromGroup(event, elements.ruleMatchAmountInput, elements.ruleMatchAmountGroup, typeGroupOptions));
+  elements.ruleMatchAmountGroup.addEventListener("keydown", (event) => navigateTypeGroup(event, elements.ruleMatchAmountInput, elements.ruleMatchAmountGroup, typeGroupOptions));
   elements.ruleForm.elements.matchDescription.addEventListener("input", updateRuleFieldErrorState);
   elements.ruleForm.elements.matchCategory.addEventListener("input", updateRuleFieldErrorState);
   elements.ruleForm.elements.setCleanDescription.addEventListener("input", updateRuleFieldErrorState);
@@ -221,11 +224,11 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
     updateBulkImportActionState();
   });
   elements.bulkImportTagsModeGroup.addEventListener("click", (event) => {
-    selectTypeFromGroup(event, elements.bulkImportTagsModeInput, elements.bulkImportTagsModeGroup);
+    selectTypeFromGroup(event, elements.bulkImportTagsModeInput, elements.bulkImportTagsModeGroup, typeGroupOptions);
     updateBulkImportActionState();
   });
   elements.bulkImportTagsModeGroup.addEventListener("keydown", (event) => {
-    navigateTypeGroup(event, elements.bulkImportTagsModeInput, elements.bulkImportTagsModeGroup);
+    navigateTypeGroup(event, elements.bulkImportTagsModeInput, elements.bulkImportTagsModeGroup, typeGroupOptions);
     updateBulkImportActionState();
   });
   elements.bulkImportForm.elements.cleanDescription.addEventListener("input", updateBulkImportActionState);
@@ -246,11 +249,11 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
     updateBulkEditActionState();
   });
   elements.bulkEditTagsModeGroup.addEventListener("click", (event) => {
-    selectTypeFromGroup(event, elements.bulkEditTagsModeInput, elements.bulkEditTagsModeGroup);
+    selectTypeFromGroup(event, elements.bulkEditTagsModeInput, elements.bulkEditTagsModeGroup, typeGroupOptions);
     updateBulkEditActionState();
   });
   elements.bulkEditTagsModeGroup.addEventListener("keydown", (event) => {
-    navigateTypeGroup(event, elements.bulkEditTagsModeInput, elements.bulkEditTagsModeGroup);
+    navigateTypeGroup(event, elements.bulkEditTagsModeInput, elements.bulkEditTagsModeGroup, typeGroupOptions);
     updateBulkEditActionState();
   });
   elements.bulkEditForm.elements.cleanDescription.addEventListener("input", updateBulkEditActionState);
@@ -259,11 +262,11 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
   elements.manualImportCancelButton.addEventListener("click", closeManualImportDialog);
   elements.manualImportCategoryButton.addEventListener("click", () => openCategoryPicker("manual-import"));
   elements.manualImportTypeGroup.addEventListener("click", (event) => {
-    selectTypeFromGroup(event, elements.manualImportTypeInput, elements.manualImportTypeGroup);
+    selectTypeFromGroup(event, elements.manualImportTypeInput, elements.manualImportTypeGroup, typeGroupOptions);
     clearTransferCategoryIfTypeIsNotTransfer("manual-import");
   });
   elements.manualImportTypeGroup.addEventListener("keydown", (event) => {
-    navigateTypeGroup(event, elements.manualImportTypeInput, elements.manualImportTypeGroup);
+    navigateTypeGroup(event, elements.manualImportTypeInput, elements.manualImportTypeGroup, typeGroupOptions);
     clearTransferCategoryIfTypeIsNotTransfer("manual-import");
   });
   elements.manualImportForm.elements.cleanDescription.addEventListener("input", updateManualImportFieldErrorState);
@@ -303,11 +306,11 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
   elements.accountDeleteButton.addEventListener("click", deleteEditingAccount);
   elements.accountForm.elements.institution.addEventListener("input", autofillAccountName);
   elements.accountTypeGroup.addEventListener("click", (event) => {
-    selectTypeFromGroup(event, elements.accountTypeInput, elements.accountTypeGroup);
+    selectTypeFromGroup(event, elements.accountTypeInput, elements.accountTypeGroup, typeGroupOptions);
     autofillAccountName();
   });
   elements.accountTypeGroup.addEventListener("keydown", (event) => {
-    navigateTypeGroup(event, elements.accountTypeInput, elements.accountTypeGroup);
+    navigateTypeGroup(event, elements.accountTypeInput, elements.accountTypeGroup, typeGroupOptions);
     autofillAccountName();
   });
   elements.accountDialog.addEventListener("close", () => {
@@ -343,11 +346,11 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
     openCategoryPicker("transaction");
   });
   elements.transactionTypeGroup.addEventListener("click", (event) => {
-    selectTypeFromGroup(event, elements.transactionTypeInput, elements.transactionTypeGroup);
+    selectTypeFromGroup(event, elements.transactionTypeInput, elements.transactionTypeGroup, typeGroupOptions);
     clearTransferCategoryIfTypeIsNotTransfer("transaction");
   });
   elements.transactionTypeGroup.addEventListener("keydown", (event) => {
-    navigateTypeGroup(event, elements.transactionTypeInput, elements.transactionTypeGroup);
+    navigateTypeGroup(event, elements.transactionTypeInput, elements.transactionTypeGroup, typeGroupOptions);
     clearTransferCategoryIfTypeIsNotTransfer("transaction");
   });
   elements.rawRowCloseButton.addEventListener("click", closeRawRowDialog);
@@ -1024,7 +1027,7 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
     elements.accountMessage.textContent = "";
     elements.accountMessage.classList.remove("error");
     elements.accountForm.reset();
-    setTypeGroupValue(elements.accountTypeInput, elements.accountTypeGroup, "credit");
+    setTypeGroupValue(elements.accountTypeInput, elements.accountTypeGroup, "credit", typeGroupOptions);
     autofillAccountName();
     openModal(elements.accountDialog);
   }
@@ -1040,7 +1043,7 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
     const form = elements.accountForm;
     form.elements.name.value = account.name || "";
     form.elements.institution.value = account.institution || "";
-    setTypeGroupValue(elements.accountTypeInput, elements.accountTypeGroup, accountTypeValues().has(account.account_type) ? account.account_type : "checking");
+    setTypeGroupValue(elements.accountTypeInput, elements.accountTypeGroup, accountTypeValues().has(account.account_type) ? account.account_type : "checking", typeGroupOptions);
     accountEditSnapshot = buildAccountPayload(elements.accountForm);
     openModal(elements.accountDialog);
   }
@@ -1363,105 +1366,13 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
 
 
 
-  function ruleMatchValues(rule) {
-    const description = clean(rule.match_description) ||
-      (rule.match_field === "description" ? clean(rule.match_value) : "");
-    const category = clean(rule.match_category) ||
-      (rule.match_field === "category" ? clean(rule.match_value) : "");
-    const amount = clean(rule.match_amount) || "any";
-    return { description, category, amount };
-  }
 
-  function selectTypeFromGroup(event, input, group) {
-    const button = event.target.closest("[data-type-value]");
-    if (!button || button.disabled || !group.contains(button)) {
-      return;
-    }
-    setTypeGroupValue(input, group, button.dataset.typeValue);
-  }
 
-  function selectOptionalTypeFromGroup(event, input, group) {
-    const button = event.target.closest("[data-type-value]");
-    if (!button || button.disabled || !group.contains(button)) {
-      return;
-    }
-    setOptionalTypeGroupValue(input, group, input.value === button.dataset.typeValue ? "" : button.dataset.typeValue);
-  }
 
-  function setTypeGroupValue(input, group, value) {
-    const normalized = clean(value) || "expense";
-    input.value = normalized;
-    group.querySelectorAll("[data-type-value]").forEach((button) => {
-      const isSelected = button.dataset.typeValue === normalized;
-      button.classList.toggle("is-selected", isSelected);
-      button.setAttribute("aria-checked", isSelected ? "true" : "false");
-      button.tabIndex = isSelected ? 0 : -1;
-    });
-    if (input === elements.ruleKindInput && normalized === "template") {
-      clearRuleFieldErrors();
-    }
-  }
 
-  function setOptionalTypeGroupValue(input, group, value) {
-    const normalized = clean(value);
-    input.value = normalized;
-    const buttons = [...group.querySelectorAll("[data-type-value]")];
-    buttons.forEach((button, index) => {
-      const isSelected = Boolean(normalized) && button.dataset.typeValue === normalized;
-      button.classList.toggle("is-selected", isSelected);
-      button.setAttribute("aria-checked", isSelected ? "true" : "false");
-      button.tabIndex = isSelected || (!normalized && index === 0) ? 0 : -1;
-    });
-  }
 
-  function setTypeGroupDisabled(group, isDisabled) {
-    group.querySelectorAll("[data-type-value]").forEach((button) => {
-      button.disabled = isDisabled;
-    });
-  }
 
-  function navigateTypeGroup(event, input, group) {
-    const buttons = [...group.querySelectorAll("[data-type-value]")].filter((button) => !button.disabled);
-    if (!buttons.length || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
-      return;
-    }
-    event.preventDefault();
-    const currentIndex = Math.max(0, buttons.findIndex((button) => button.dataset.typeValue === input.value));
-    let nextIndex = currentIndex;
-    if (event.key === "ArrowLeft") {
-      nextIndex = (currentIndex - 1 + buttons.length) % buttons.length;
-    } else if (event.key === "ArrowRight") {
-      nextIndex = (currentIndex + 1) % buttons.length;
-    } else if (event.key === "Home") {
-      nextIndex = 0;
-    } else if (event.key === "End") {
-      nextIndex = buttons.length - 1;
-    }
-    setTypeGroupValue(input, group, buttons[nextIndex].dataset.typeValue);
-    buttons[nextIndex].focus();
-  }
 
-  function navigateOptionalTypeGroup(event, input, group) {
-    const buttons = [...group.querySelectorAll("[data-type-value]")].filter((button) => !button.disabled);
-    if (!buttons.length || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
-      return;
-    }
-    event.preventDefault();
-    const foundIndex = buttons.findIndex((button) => button.dataset.typeValue === input.value);
-    const currentIndex = foundIndex >= 0 ? foundIndex : 0;
-    let nextIndex = currentIndex;
-    if (event.key === "ArrowLeft") {
-      nextIndex = (currentIndex - 1 + buttons.length) % buttons.length;
-    } else if (event.key === "ArrowRight") {
-      nextIndex = (currentIndex + 1) % buttons.length;
-    } else if (event.key === "Home") {
-      nextIndex = 0;
-    } else if (event.key === "End") {
-      nextIndex = buttons.length - 1;
-    }
-    setOptionalTypeGroupValue(input, group, buttons[nextIndex].dataset.typeValue);
-    buttons[nextIndex].focus();
-  }
 
   function openRuleAddDialog(prefill = {}) {
     ruleRawRowContext = prefill.rawRowContext || null;
@@ -1474,9 +1385,9 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
     elements.ruleForm.elements.matchDescription.value = matchDescription;
     elements.ruleForm.elements.matchCategory.value = matchCategory;
     elements.ruleForm.elements.setCleanDescription.value = clean(prefill.setCleanDescription) || ruleContextCleanDescription();
-    setTypeGroupValue(elements.ruleKindInput, elements.ruleKindGroup, prefill.ruleType || "auto-import");
-    setTypeGroupValue(elements.ruleMatchAmountInput, elements.ruleMatchAmountGroup, prefill.matchAmount || "any");
-    setTypeGroupValue(elements.ruleTypeInput, elements.ruleTypeGroup, prefill.setTransactionType || "expense");
+    setTypeGroupValue(elements.ruleKindInput, elements.ruleKindGroup, prefill.ruleType || "auto-import", typeGroupOptions);
+    setTypeGroupValue(elements.ruleMatchAmountInput, elements.ruleMatchAmountGroup, prefill.matchAmount || "any", typeGroupOptions);
+    setTypeGroupValue(elements.ruleTypeInput, elements.ruleTypeGroup, prefill.setTransactionType || "expense", typeGroupOptions);
     setRuleCategoryValue(prefill.setCategoryId || null);
     renderRuleTags(prefill.addTagIds || []);
     if (!elements.ruleDialog.open) {
@@ -1547,12 +1458,12 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
     elements.ruleDeleteButton.hidden = false;
     const form = elements.ruleForm;
     const matches = ruleMatchValues(rule);
-    setTypeGroupValue(elements.ruleKindInput, elements.ruleKindGroup, rule.rule_type || "auto-import");
+    setTypeGroupValue(elements.ruleKindInput, elements.ruleKindGroup, rule.rule_type || "auto-import", typeGroupOptions);
     form.elements.matchDescription.value = matches.description;
     form.elements.matchCategory.value = matches.category;
-    setTypeGroupValue(elements.ruleMatchAmountInput, elements.ruleMatchAmountGroup, matches.amount);
+    setTypeGroupValue(elements.ruleMatchAmountInput, elements.ruleMatchAmountGroup, matches.amount, typeGroupOptions);
     form.elements.setCleanDescription.value = ruleContextCleanDescription(rule);
-    setTypeGroupValue(elements.ruleTypeInput, elements.ruleTypeGroup, rule.set_transaction_type || "expense");
+    setTypeGroupValue(elements.ruleTypeInput, elements.ruleTypeGroup, rule.set_transaction_type || "expense", typeGroupOptions);
     setRuleCategoryValue(rule.set_category_id);
     renderRuleTags(rule.tag_ids || (rule.add_tag_id === null ? [] : [rule.add_tag_id]));
     ruleEditSnapshot = buildRulePayload(elements.ruleForm, elements.ruleTags);
@@ -2190,7 +2101,7 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
     elements.transactionMessage.textContent = "";
     elements.transactionMessage.classList.remove("error");
     form.elements.postedDate.value = transaction.posted_date || "";
-    setTypeGroupValue(elements.transactionTypeInput, elements.transactionTypeGroup, transaction.transaction_type || "expense");
+    setTypeGroupValue(elements.transactionTypeInput, elements.transactionTypeGroup, transaction.transaction_type || "expense", typeGroupOptions);
     setTransactionCategoryValue(transaction.category_id);
     form.elements.amount.value = transaction.amount || formatCents(transaction.amount_cents);
     form.elements.cleanDescription.value = transaction.clean_description || "";
@@ -2368,7 +2279,7 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
     elements.manualImportMessage.classList.remove("error");
     elements.manualImportForm.reset();
     clearManualImportFieldErrors();
-    setTypeGroupValue(elements.manualImportTypeInput, elements.manualImportTypeGroup, rawRow.preview_type || "expense");
+    setTypeGroupValue(elements.manualImportTypeInput, elements.manualImportTypeGroup, rawRow.preview_type || "expense", typeGroupOptions);
     setManualImportCategoryValue(rawRow.preview_category_id || null);
     const previewDescription = clean(rawRow.preview_clean_description);
     elements.manualImportForm.elements.cleanDescription.value = isTemplateRawRow(rawRow)
@@ -2432,8 +2343,8 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
       return;
     }
     const canOpenRule = rawRow.import_status !== "imported";
-    const canEditRule = canOpenRule && Boolean(topMatchingRuleForRawRow(rawRow, "auto-import"));
-    const canUseTemplate = canOpenRule && Boolean(topMatchingRuleForRawRow(rawRow, "template"));
+    const canEditRule = canOpenRule && Boolean(topMatchingRuleForRawRow(state.rules, rawRow, "auto-import"));
+    const canUseTemplate = canOpenRule && Boolean(topMatchingRuleForRawRow(state.rules, rawRow, "template"));
     const canCreateRule = shouldOfferRuleCreation(rawRow);
     elements.rawRowRuleButton.hidden = !canEditRule && !canUseTemplate && !canCreateRule;
     elements.rawRowRuleButton.textContent = "Rule";
@@ -2449,8 +2360,8 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
       updateRawRowModalActions();
       return;
     }
-    const autoImportRule = topMatchingRuleForRawRow(rawRow, "auto-import");
-    const template = topMatchingRuleForRawRow(rawRow, "template");
+    const autoImportRule = topMatchingRuleForRawRow(state.rules, rawRow, "auto-import");
+    const template = topMatchingRuleForRawRow(state.rules, rawRow, "template");
     const rule = autoImportRule || template;
     const rawRowContext = {
       rawRow,
@@ -2721,7 +2632,7 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
     renderSelectableTags(elements.bulkImportTags, selectedTagIds, "tagIds");
     elements.bulkImportTags.querySelectorAll("input[type='checkbox']").forEach((checkbox) => {
       checkbox.addEventListener("change", () => {
-        setTypeGroupValue(elements.bulkImportTagsModeInput, elements.bulkImportTagsModeGroup, "overwrite");
+        setTypeGroupValue(elements.bulkImportTagsModeInput, elements.bulkImportTagsModeGroup, "overwrite", typeGroupOptions);
         updateBulkImportActionState();
       });
     });
@@ -2731,7 +2642,7 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
     renderSelectableTags(elements.bulkEditTags, selectedTagIds, "tagIds");
     elements.bulkEditTags.querySelectorAll("input[type='checkbox']").forEach((checkbox) => {
       checkbox.addEventListener("change", () => {
-        setTypeGroupValue(elements.bulkEditTagsModeInput, elements.bulkEditTagsModeGroup, "overwrite");
+        setTypeGroupValue(elements.bulkEditTagsModeInput, elements.bulkEditTagsModeGroup, "overwrite", typeGroupOptions);
         updateBulkEditActionState();
       });
     });
@@ -3464,7 +3375,7 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
         selectedRawRowIds.delete(rowId);
       }
     });
-    const lockedStatus = selectedRawRowStatus();
+    const lockedStatus = selectedRawRowStatus(selectedRawRowIds, state.rawRows);
     [...selectedRawRowIds].forEach((rowId) => {
       const rawRow = state.rawRows.find((candidate) => candidate.id === rowId);
       if (lockedStatus && rawRow?.import_status !== lockedStatus) {
@@ -3499,13 +3410,13 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
       checkbox.className = "row-checkbox";
       checkbox.type = "checkbox";
       checkbox.checked = selectedRawRowIds.has(rawRow.id);
-      checkbox.disabled = !isSelectableRawRow(rawRow);
+      checkbox.disabled = !isSelectableRawRow(rawRow, selectedRawRowStatus(selectedRawRowIds, state.rawRows));
       checkbox.setAttribute("aria-label", `Select row ${rawRow.id}`);
       checkbox.addEventListener("click", (event) => event.stopPropagation());
       checkbox.addEventListener("keydown", (event) => event.stopPropagation());
       checkbox.addEventListener("change", () => {
         if (checkbox.checked) {
-          clearSelectedRawRowsExceptStatus(rawRow.import_status);
+          clearSelectedRawRowsExceptStatus(selectedRawRowIds, state.rawRows, rawRow.import_status);
           selectedRawRowIds.add(rawRow.id);
         } else {
           selectedRawRowIds.delete(rawRow.id);
@@ -3516,8 +3427,8 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
       noteInput.type = "text";
       noteInput.className = "raw-note-input";
       noteInput.value = rawRowNotes.get(rawRow.id) || "";
-      noteInput.disabled = !isSelectableRawRow(rawRow);
-      noteInput.placeholder = isSelectableRawRow(rawRow) ? "Transaction note" : "";
+      noteInput.disabled = !isSelectableRawRow(rawRow, selectedRawRowStatus(selectedRawRowIds, state.rawRows));
+      noteInput.placeholder = isSelectableRawRow(rawRow, selectedRawRowStatus(selectedRawRowIds, state.rawRows)) ? "Transaction note" : "";
       noteInput.setAttribute("aria-label", `Note for row ${rawRow.id}`);
       noteInput.addEventListener("click", (event) => event.stopPropagation());
       noteInput.addEventListener("keydown", (event) => event.stopPropagation());
@@ -3567,7 +3478,7 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
   function selectedImportableRawRowIds() {
     return [...selectedRawRowIds].filter((rowId) => {
       const rawRow = state.rawRows.find((candidate) => candidate.id === rowId);
-      return rawRow && isSelectableRawRow(rawRow);
+      return rawRow && isSelectableRawRow(rawRow, selectedRawRowStatus(selectedRawRowIds, state.rawRows));
     });
   }
 
@@ -3591,7 +3502,7 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
     elements.bulkImportForm.reset();
     setOptionalTypeGroupValue(elements.bulkImportTypeInput, elements.bulkImportTypeGroup, "");
     setBulkImportCategoryValue(null);
-    setTypeGroupValue(elements.bulkImportTagsModeInput, elements.bulkImportTagsModeGroup, "keep");
+    setTypeGroupValue(elements.bulkImportTagsModeInput, elements.bulkImportTagsModeGroup, "keep", typeGroupOptions);
     renderBulkImportTags([]);
     updateBulkImportActionState();
   }
@@ -3622,7 +3533,7 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
     elements.bulkEditForm.reset();
     setOptionalTypeGroupValue(elements.bulkEditTypeInput, elements.bulkEditTypeGroup, "");
     setBulkEditCategoryValue(null);
-    setTypeGroupValue(elements.bulkEditTagsModeInput, elements.bulkEditTagsModeGroup, "keep");
+    setTypeGroupValue(elements.bulkEditTagsModeInput, elements.bulkEditTagsModeGroup, "keep", typeGroupOptions);
     renderBulkEditTags([]);
     updateBulkEditActionState();
   }
@@ -3667,7 +3578,7 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
     const overrides = buildBulkImportOverrides(elements.bulkImportForm, elements.bulkImportTags);
     const rowIds = [...selectedRawRowIds].filter((rowId) => {
       const rawRow = state.rawRows.find((candidate) => candidate.id === rowId);
-      return rawRow && isSelectableRawRow(rawRow);
+      return rawRow && isSelectableRawRow(rawRow, selectedRawRowStatus(selectedRawRowIds, state.rawRows));
     });
     if (!rowIds.length) {
       closeBulkImportDialog();
@@ -3767,10 +3678,10 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
   }
 
   function selectVisibleRawRows() {
-    const selectedStatus = selectedRawRowStatus();
-    const autoImportIds = visibleSelectableRawRowIds("auto-importable");
-    const prefillIds = visibleSelectableRawRowIds("pre-fill");
-    const targetStatus = nextSelectVisibleStatus(selectedStatus, autoImportIds, prefillIds);
+    const selectedStatus = selectedRawRowStatus(selectedRawRowIds, state.rawRows);
+    const autoImportIds = visibleSelectableRawRowIds(visibleRawRows, "auto-importable");
+    const prefillIds = visibleSelectableRawRowIds(visibleRawRows, "pre-fill");
+    const targetStatus = nextSelectVisibleStatus(selectedStatus, autoImportIds, prefillIds, selectedRawRowIds);
     selectedRawRowIds.clear();
     if (targetStatus === "auto-importable") {
       autoImportIds.forEach((rowId) => selectedRawRowIds.add(rowId));
@@ -3783,7 +3694,7 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
   function updateImportSelectedButton() {
     const importableCount = [...selectedRawRowIds].filter((rowId) => {
       const rawRow = state.rawRows.find((candidate) => candidate.id === rowId);
-      return rawRow && isSelectableRawRow(rawRow);
+      return rawRow && isSelectableRawRow(rawRow, selectedRawRowStatus(selectedRawRowIds, state.rawRows));
     }).length;
     elements.importSelectedRowsButton.disabled = importableCount === 0;
     elements.importSelectedRowsButton.hidden = importableCount === 0;
@@ -3795,10 +3706,10 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
   }
 
   function updateSelectVisibleButton() {
-    const autoImportIds = visibleSelectableRawRowIds("auto-importable");
-    const prefillIds = visibleSelectableRawRowIds("pre-fill");
-    const selectedStatus = selectedRawRowStatus();
-    const nextStatus = nextSelectVisibleStatus(selectedStatus, autoImportIds, prefillIds);
+    const autoImportIds = visibleSelectableRawRowIds(visibleRawRows, "auto-importable");
+    const prefillIds = visibleSelectableRawRowIds(visibleRawRows, "pre-fill");
+    const selectedStatus = selectedRawRowStatus(selectedRawRowIds, state.rawRows);
+    const nextStatus = nextSelectVisibleStatus(selectedStatus, autoImportIds, prefillIds, selectedRawRowIds);
     const selectableCount = autoImportIds.length + prefillIds.length;
     const title = nextStatus === "auto-importable"
       ? "Select all auto-importable"
@@ -3863,161 +3774,20 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
     return wrapper;
   }
 
-  function isImportableRawRow(rawRow) {
-    return rawRow.import_status === "auto-importable";
-  }
 
-  function isTemplateRawRow(rawRow) {
-    return rawRow.import_status === "pre-fill";
-  }
 
-  function isSelectableRawRow(rawRow) {
-    if (!isBaseSelectableRawRow(rawRow)) {
-      return false;
-    }
-    const selectedStatus = selectedRawRowStatus();
-    return !selectedStatus || rawRow.import_status === selectedStatus;
-  }
 
-  function isBaseSelectableRawRow(rawRow) {
-    return isImportableRawRow(rawRow) || isTemplateRawRow(rawRow);
-  }
 
-  function selectedRawRowStatus() {
-    for (const rowId of selectedRawRowIds) {
-      const rawRow = state.rawRows.find((candidate) => candidate.id === rowId);
-      if (rawRow && isBaseSelectableRawRow(rawRow)) {
-        return rawRow.import_status;
-      }
-    }
-    return null;
-  }
 
-  function clearSelectedRawRowsExceptStatus(status) {
-    [...selectedRawRowIds].forEach((rowId) => {
-      const rawRow = state.rawRows.find((candidate) => candidate.id === rowId);
-      if (!rawRow || rawRow.import_status !== status) {
-        selectedRawRowIds.delete(rowId);
-      }
-    });
-  }
 
-  function visibleSelectableRawRowIds(status) {
-    return visibleRawRows
-      .filter((row) => row.import_status === status && isBaseSelectableRawRow(row))
-      .map((row) => row.id);
-  }
 
-  function nextSelectVisibleStatus(selectedStatus, autoImportIds, prefillIds) {
-    if (selectedStatus === "auto-importable") {
-      const allAutoImportSelected = autoImportIds.length > 0 && autoImportIds.every((rowId) => selectedRawRowIds.has(rowId));
-      if (!allAutoImportSelected) {
-        return "auto-importable";
-      }
-      return prefillIds.length ? "pre-fill" : null;
-    }
-    if (selectedStatus === "pre-fill") {
-      const allPrefillSelected = prefillIds.length > 0 && prefillIds.every((rowId) => selectedRawRowIds.has(rowId));
-      return allPrefillSelected ? null : "pre-fill";
-    }
-    return autoImportIds.length ? "auto-importable" : prefillIds.length ? "pre-fill" : null;
-  }
 
-  function topMatchingRuleForRawRow(rawRow, ruleType = null) {
-    return state.rules
-      .filter((rule) => rule.is_active !== false && (ruleType === null || (rule.rule_type || "auto-import") === ruleType) && ruleMatchesRawRow(rule, rawRow))
-      .sort((a, b) => ruleSpecificityRank(a) - ruleSpecificityRank(b) || a.id - b.id)[0] || null;
-  }
 
-  function ruleSpecificityRank(rule) {
-    const matches = ruleMatchValues(rule);
-    if (matches.description && matches.category) {
-      return 0;
-    }
-    if (matches.description) {
-      return 1;
-    }
-    if (matches.category) {
-      return 2;
-    }
-    return 3;
-  }
 
-  function ruleMatchesRawRow(rule, rawRow) {
-    if (!ruleAmountMatches(rule, rawRow)) {
-      return false;
-    }
-    const matches = ruleMatchValues(rule);
-    const matchDescription = normalizeMatchText(matches.description);
-    const matchCategory = normalizeMatchText(matches.category);
-    if (matchDescription || matchCategory) {
-      if (matchDescription && !normalizeMatchText(rawRow.raw_description).includes(matchDescription)) {
-        return false;
-      }
-      if (matchCategory && !normalizeMatchText(rawRow.raw_category).includes(matchCategory)) {
-        return false;
-      }
-      return true;
-    }
-    const fieldValue = rule.match_field === "category" ? rawRow.raw_category : rawRow.raw_description;
-    const needle = normalizeMatchText(rule.match_value);
-    return Boolean(needle) && normalizeMatchText(fieldValue).includes(needle);
-  }
 
-  function ruleAmountMatches(rule, rawRow) {
-    const matchAmount = ruleMatchValues(rule).amount;
-    if (matchAmount === "any") {
-      return true;
-    }
-    const amount = parseRawAmount(rawRow.raw_amount);
-    if (!Number.isFinite(amount)) {
-      return false;
-    }
-    return matchAmount === "positive" ? amount > 0 : amount < 0;
-  }
 
-  function parseRawAmount(value) {
-    const rawValue = clean(value);
-    if (!rawValue) {
-      return NaN;
-    }
-    let normalized = rawValue;
-    if (normalized.startsWith("debit=")) {
-      const parts = Object.fromEntries(normalized.split("; ").map((part) => part.split("=", 2)).filter((part) => part.length === 2));
-      const debit = clean(parts.debit);
-      const credit = clean(parts.credit);
-      normalized = debit ? `-${debit.replace(/^-/, "")}` : credit;
-    }
-    const isNegative = normalized.startsWith("(") && normalized.endsWith(")");
-    const numeric = Number(normalized.replace(/[$,()]/g, ""));
-    if (!Number.isFinite(numeric)) {
-      return NaN;
-    }
-    return isNegative ? -numeric : numeric;
-  }
 
-  function normalizeMatchText(value) {
-    return clean(value).toLowerCase().replace(/[^a-z0-9]+/g, "");
-  }
 
-  function rawRowMatchesStatusFilter(rawRow, filter) {
-    if (filter === "all") {
-      return true;
-    }
-    if (filter === "new") {
-      return ["auto-importable", "manual", "pre-fill"].includes(rawRow.import_status || "manual");
-    }
-    if (filter === "auto-importable") {
-      return isImportableRawRow(rawRow);
-    }
-    if (filter === "manual") {
-      return rawRow.import_status === "manual";
-    }
-    if (filter === "pre-fill") {
-      return isTemplateRawRow(rawRow);
-    }
-    return rawRow.import_status === filter;
-  }
 
 
 

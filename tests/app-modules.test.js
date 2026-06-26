@@ -94,3 +94,53 @@ test("builds payloads from form data", async () => {
   });
   assert.equal(payloads.payloadMatchesSnapshot({ tag_ids: [5, 2] }, { tag_ids: [2, 5] }), true);
 });
+
+test("matches raw rows against rules and selection state", async () => {
+  const rawRows = await import("../scripts/js/raw-row-model.mjs");
+  const row = {
+    id: 10,
+    import_status: "auto-importable",
+    raw_amount: "debit=12.50; credit=",
+    raw_category: "Food & Drink",
+    raw_description: "Coffee Shop",
+  };
+  const rules = [
+    { id: 2, is_active: true, match_description: "Coffee", match_category: "", match_amount: "negative" },
+    { id: 1, is_active: true, match_description: "Coffee", match_category: "Food", match_amount: "negative" },
+  ];
+
+  assert.equal(rawRows.parseRawAmount(row.raw_amount), -12.5);
+  assert.equal(rawRows.rawRowMatchesStatusFilter(row, "new"), true);
+  assert.equal(rawRows.selectedRawRowStatus(new Set([10]), [row]), "auto-importable");
+  assert.equal(rawRows.isSelectableRawRow(row, "auto-importable"), true);
+  assert.equal(rawRows.nextSelectVisibleStatus(null, [10], [], new Set()), "auto-importable");
+  assert.equal(rawRows.topMatchingRuleForRawRow(rules, row)?.id, 1);
+});
+
+test("updates segmented type groups", async () => {
+  const typeGroups = await import("../scripts/js/type-groups.mjs");
+  const buttons = [
+    { dataset: { typeValue: "expense" }, classList: { toggle() {} }, setAttribute(name, value) { this[name] = value; } },
+    { dataset: { typeValue: "income" }, classList: { toggle() {} }, setAttribute(name, value) { this[name] = value; } },
+  ];
+  const input = { value: "" };
+  const group = {
+    querySelectorAll() {
+      return buttons;
+    },
+  };
+  const changes = [];
+
+  typeGroups.setTypeGroupValue(input, group, "income", {
+    onChange: ({ value }) => changes.push(value),
+  });
+
+  assert.equal(input.value, "income");
+  assert.equal(buttons[1]["aria-checked"], "true");
+  assert.equal(buttons[1].tabIndex, 0);
+  assert.deepEqual(changes, ["income"]);
+
+  typeGroups.setOptionalTypeGroupValue(input, group, "");
+  assert.equal(input.value, "");
+  assert.equal(buttons[0].tabIndex, 0);
+});
