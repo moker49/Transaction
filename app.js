@@ -4,6 +4,9 @@ import { addDays, addMonths, allTimeDateRangePeriod, customDateRangePeriod, date
 import { compareSortValues, formatCents, formatDateTime, formatDisplayDate, formatMaybeDateTime, formatDollars } from "./scripts/js/format.mjs";
 import { actionButtons, appendEmpty, cell, clear, displayDateCell, el, emptyTableRow, fillSelect, makeEditableRow, manageableChip, materialIcon, renderDefinitionList, setText, tableRow } from "./scripts/js/dom.mjs";
 import { renderPieChart, renderStackedBar } from "./scripts/js/charts.mjs";
+import { randomComfortableColor, normalizeHexColor, hexToHsl, hslToHex } from "./scripts/js/colors.mjs";
+import { dashboardFromTransactions } from "./scripts/js/dashboard-model.mjs";
+import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, matchAmountLabel, statusClass, statusLabel, transactionTypeLabel } from "./scripts/js/labels.mjs";
 
   const API_BASE = window.location.protocol === "file:" ? "http://127.0.0.1:5050" : "";
   const DUMMY_DATABASE_KEY = "transaction-use-dummy-database";
@@ -1590,89 +1593,10 @@ import { renderPieChart, renderStackedBar } from "./scripts/js/charts.mjs";
     elements.categoryColorHex.value = normalizedColor;
   }
 
-  function randomComfortableColor() {
-    const hue = Math.floor(Math.random() * 360);
-    const saturation = 38 + Math.floor(Math.random() * 23);
-    const lightness = 40 + Math.floor(Math.random() * 17);
-    return hslToHex(hue, saturation, lightness);
-  }
 
-  function normalizeHexColor(value) {
-    const raw = clean(value).replace(/^#/, "");
-    if (/^[0-9a-fA-F]{3}$/.test(raw)) {
-      return `#${raw.split("").map((char) => `${char}${char}`).join("").toLowerCase()}`;
-    }
-    if (/^[0-9a-fA-F]{6}$/.test(raw)) {
-      return `#${raw.toLowerCase()}`;
-    }
-    return null;
-  }
 
-  function hexToHsl(hex) {
-    const normalized = normalizeHexColor(hex);
-    const r = parseInt(normalized.slice(1, 3), 16) / 255;
-    const g = parseInt(normalized.slice(3, 5), 16) / 255;
-    const b = parseInt(normalized.slice(5, 7), 16) / 255;
-    const max = Math.max(r, g, b);
-    const min = Math.min(r, g, b);
-    const lightness = (max + min) / 2;
-    if (max === min) {
-      return { h: 0, s: 0, l: lightness * 100 };
-    }
-    const delta = max - min;
-    const saturation = delta / (1 - Math.abs((2 * lightness) - 1));
-    let hue;
-    if (max === r) {
-      hue = 60 * (((g - b) / delta) % 6);
-    } else if (max === g) {
-      hue = 60 * (((b - r) / delta) + 2);
-    } else {
-      hue = 60 * (((r - g) / delta) + 4);
-    }
-    return {
-      h: (hue + 360) % 360,
-      s: saturation * 100,
-      l: lightness * 100,
-    };
-  }
 
-  function hslToHex(hue, saturation, lightness) {
-    const h = (((Number(hue) || 0) % 360) + 360) % 360;
-    const s = clamp(Number(saturation) || 0, 0, 100) / 100;
-    const l = clamp(Number(lightness) || 0, 0, 100) / 100;
-    const chroma = (1 - Math.abs((2 * l) - 1)) * s;
-    const x = chroma * (1 - Math.abs(((h / 60) % 2) - 1));
-    const match = l - (chroma / 2);
-    let r = 0;
-    let g = 0;
-    let b = 0;
-    if (h < 60) {
-      r = chroma;
-      g = x;
-    } else if (h < 120) {
-      r = x;
-      g = chroma;
-    } else if (h < 180) {
-      g = chroma;
-      b = x;
-    } else if (h < 240) {
-      g = x;
-      b = chroma;
-    } else if (h < 300) {
-      r = x;
-      b = chroma;
-    } else {
-      r = chroma;
-      b = x;
-    }
-    return `#${[r, g, b].map((channel) => {
-      return Math.round((channel + match) * 255).toString(16).padStart(2, "0");
-    }).join("")}`;
-  }
 
-  function clamp(value, min, max) {
-    return Math.min(max, Math.max(min, value));
-  }
 
   function ruleMatchValues(rule) {
     const description = clean(rule.match_description) ||
@@ -2269,7 +2193,11 @@ import { renderPieChart, renderStackedBar } from "./scripts/js/charts.mjs";
   }
 
   function renderDashboard() {
-    const dashboard = dashboardFromTransactions(state.transactions);
+    const dashboard = dashboardFromTransactions(state.transactions, {
+      categories: state.categories,
+      filterTransactions: dashboardFilterTransactions,
+      segmentLimit: DASHBOARD_CATEGORY_SEGMENT_LIMIT,
+    });
     setText("#dashboardIncome", formatDollars(dashboard.income || 0));
     setText("#dashboardBills", formatDollars(dashboard.bills || 0));
     setText("#dashboardSplurge", formatDollars(dashboard.splurge || 0));
@@ -2572,17 +2500,7 @@ import { renderPieChart, renderStackedBar } from "./scripts/js/charts.mjs";
       .filter((tagId) => Number.isInteger(tagId) && tagId > 0);
   }
 
-  function accountTypeValues() {
-    return new Set(["credit", "checking", "savings"]);
-  }
 
-  function accountTypeLabel(value) {
-    return {
-      credit: "Credit",
-      checking: "Checking",
-      savings: "Savings",
-    }[clean(value)] || clean(value);
-  }
 
   function autofillAccountName() {
     const form = elements.accountForm;
@@ -2690,13 +2608,6 @@ import { renderPieChart, renderStackedBar } from "./scripts/js/charts.mjs";
     return Object.keys(buildBulkEditOverrides()).length > 0;
   }
 
-  function matchAmountLabel(matchAmount) {
-    return {
-      positive: "Positive",
-      negative: "Negative",
-      any: "Any",
-    }[matchAmount || "any"] || "Any";
-  }
 
   function buildTransactionPayload() {
     const form = new FormData(elements.transactionForm);
@@ -4463,39 +4374,6 @@ import { renderPieChart, renderStackedBar } from "./scripts/js/charts.mjs";
     return rawRow.import_status === filter;
   }
 
-  function statusClass(status) {
-    if (status === "auto-importable" || status === "manual" || status === "pre-fill") {
-      return "status-new";
-    }
-    return `status-${status}`;
-  }
-
-  function statusLabel(status) {
-    return {
-      "auto-importable": "Auto-importable",
-      manual: "Manual Import",
-      "pre-fill": "Pre-fill",
-      imported: "Imported",
-      duplicate: "Duplicate",
-      error: "Error",
-    }[status] || status;
-  }
-
-
-
-
-
-
-
-
-
-
-
-
-
-  function accountLabel(account) {
-    return account.name;
-  }
 
 
 
@@ -4517,111 +4395,27 @@ import { renderPieChart, renderStackedBar } from "./scripts/js/charts.mjs";
 
 
 
-  function sumTypedTransactions(transactions, transactionType, useAbsoluteValue) {
-    return transactions.reduce((total, transaction) => {
-      if (transaction.transaction_type !== transactionType) {
-        return total;
-      }
-      const amount = Number(transaction.amount_cents) || 0;
-      return total + (useAbsoluteValue ? Math.abs(amount) : amount);
-    }, 0);
-  }
 
-  function sumExpenseTransactions(transactions, billTagged) {
-    return transactions.reduce((total, transaction) => {
-      if (transaction.transaction_type !== "expense" || hasBillTag(transaction) !== billTagged) {
-        return total;
-      }
-      return total + Math.abs(Number(transaction.amount_cents) || 0);
-    }, 0);
-  }
 
-  function hasBillTag(transaction) {
-    return (transaction.tags || []).some((tag) => clean(tag.name).toLowerCase() === "bill");
-  }
 
-  function dashboardFromTransactions(transactions) {
-    const dashboardTransactions = dashboardFilterTransactions(transactions);
-    const income = sumTypedTransactions(dashboardTransactions, "income", false);
-    const bills = sumExpenseTransactions(dashboardTransactions, true);
-    const splurge = sumExpenseTransactions(dashboardTransactions, false);
-    const saved = income - bills - splurge;
-    return {
-      income,
-      bills,
-      splurge,
-      saved,
-      typeSegments: [
-        { label: "Bills", value: bills, color: "#c85d5d" },
-        { label: "Splurge", value: splurge, color: "#7c6bc2" },
-        { label: "Saved", value: Math.max(saved, 0), color: "#2f8f2f" },
-      ],
-      incomeSegments: categoryTransactionSegments(dashboardTransactions, "income"),
-      categorySegments: categorySpendingSegments(dashboardTransactions, "all-expenses"),
-      billSegments: categorySpendingSegments(dashboardTransactions, "bills"),
-      splurgeSegments: categorySpendingSegments(dashboardTransactions, "splurge"),
-    };
-  }
 
-  function isDashboardExpense(transaction, mode) {
-    if (transaction.transaction_type !== "expense") {
-      return false;
-    }
-    if (mode === "splurge") {
-      return !hasBillTag(transaction);
-    }
-    if (mode === "bills") {
-      return hasBillTag(transaction);
-    }
-    return true;
-  }
 
-  function categorySpendingSegments(transactions, expenseMode) {
-    return categoryTransactionSegments(
-      transactions.filter((transaction) => isDashboardExpense(transaction, expenseMode)),
-      "expense",
-    );
-  }
 
-  function categoryTransactionSegments(transactions, transactionType) {
-    const totals = new Map();
-    transactions
-      .filter((transaction) => transaction.transaction_type === transactionType)
-      .forEach((transaction) => {
-        const parent = parentCategoryForTransaction(transaction);
-        if (!parent) {
-          return;
-        }
-        const amount = Math.abs(Number(transaction.amount_cents) || 0);
-        totals.set(parent.id, {
-          label: parent.name,
-          value: (totals.get(parent.id)?.value || 0) + amount,
-          color: parent.color || "#000000",
-        });
-      });
-    const segments = [...totals.values()].sort((a, b) => b.value - a.value);
-    if (segments.length <= DASHBOARD_CATEGORY_SEGMENT_LIMIT) {
-      return segments;
-    }
-    const visibleLimit = DASHBOARD_CATEGORY_SEGMENT_LIMIT - 1;
-    const visible = segments.slice(0, visibleLimit);
-    const otherValue = segments.slice(visibleLimit).reduce((sum, segment) => sum + segment.value, 0);
-    if (otherValue > 0) {
-      visible.push({ label: "All others", value: otherValue, color: "#000000" });
-    }
-    return visible;
-  }
 
-  function parentCategoryForTransaction(transaction) {
-    const category = state.categories.find((candidate) => candidate.id === transaction.category_id);
-    if (!category) {
-      return null;
-    }
-    if (category.parent_id === null) {
-      return category;
-    }
-    return state.categories.find((candidate) => candidate.id === category.parent_id) || category;
-  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -4654,13 +4448,7 @@ import { renderPieChart, renderStackedBar } from "./scripts/js/charts.mjs";
     return list.childElementCount ? list : "-";
   }
 
-  function transactionTypeLabel(value) {
-    return transactionTypes.find((type) => type.value === value)?.label || value;
-  }
 
-  function destructiveMessage(message) {
-    return `${message}\nThis cannot be undone.`;
-  }
 
   function promptForText({ title, label, value, deleteLabel, onDelete }) {
     if (textInputResolver) {
