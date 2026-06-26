@@ -13,6 +13,7 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
 import { clearSelectedRawRowsExceptStatus, isBaseSelectableRawRow, isImportableRawRow, isSelectableRawRow, isTemplateRawRow, nextSelectVisibleStatus, parseRawAmount, rawRowMatchesStatusFilter, ruleMatchValues, selectedRawRowStatus, topMatchingRuleForRawRow, visibleSelectableRawRowIds } from "./scripts/js/raw-row-model.mjs";
 import { navigateOptionalTypeGroup, navigateTypeGroup, selectOptionalTypeFromGroup, selectTypeFromGroup, setOptionalTypeGroupValue, setTypeGroupValue } from "./scripts/js/type-groups.mjs";
 import { sortedTableRows } from "./scripts/js/table-sort.mjs";
+import { DEFAULT_STATE, normalizeState, pruneMissingIds, pruneMissingMapKeys, transactionSliceForRange } from "./scripts/js/state-model.mjs";
 
   const API_BASE = window.location.protocol === "file:" ? "http://127.0.0.1:5050" : "";
   const DUMMY_DATABASE_KEY = "transaction-use-dummy-database";
@@ -36,19 +37,8 @@ import { sortedTableRows } from "./scripts/js/table-sort.mjs";
   const YEAR_RANGE_PREFIX = "year-";
   const FIRST_YEAR_RANGE = 2020;
 
-  const defaultState = {
-    accounts: [],
-    categories: [],
-    tags: [],
-    rules: [],
-    imports: [],
-    transactions: [],
-    rawRows: [],
-    dashboard: null,
-    activeDateRange: null,
-  };
 
-  let state = structuredClone(defaultState);
+  let state = structuredClone(DEFAULT_STATE);
   const selectedRawRowIds = new Set();
   const selectedTransactionIds = new Set();
   const rawRowNotes = new Map();
@@ -809,21 +799,6 @@ import { sortedTableRows } from "./scripts/js/table-sort.mjs";
     return payload;
   }
 
-  function normalizeState(payload) {
-    const normalizedPayload = {
-      ...(payload || {}),
-    };
-    if (normalizedPayload.realTransactions && !normalizedPayload.transactions) {
-      normalizedPayload.transactions = normalizedPayload.realTransactions;
-    }
-    if (normalizedPayload.rawTransactions && !normalizedPayload.rawRows) {
-      normalizedPayload.rawRows = normalizedPayload.rawTransactions;
-    }
-    return {
-      ...structuredClone(defaultState),
-      ...normalizedPayload,
-    };
-  }
 
   function applyStateFromPayload(payload) {
     const nextPayload = payload.state || payload;
@@ -838,7 +813,7 @@ import { sortedTableRows } from "./scripts/js/table-sort.mjs";
       state = normalizeState({
         ...state,
         ...nextPayload,
-        ...transactionSliceForCurrentDateRange(nextPayload),
+        ...transactionSliceForRange(nextPayload, state, currentDateRangeState()),
       });
     }
     hidePopup();
@@ -872,51 +847,14 @@ import { sortedTableRows } from "./scripts/js/table-sort.mjs";
     }
   }
 
-  function transactionSliceForCurrentDateRange(payload) {
-    if (!payload?.transactions && !payload?.rawRows) {
-      return {};
-    }
-    const range = currentDateRangeState();
-    const transactions = (payload.transactions || state.transactions).filter((transaction) => (
-      transaction.posted_date >= range.start && transaction.posted_date <= range.end
-    ));
-    const rawRows = (payload.rawRows || state.rawRows).filter((row) => (
-      row.import_status === "auto-importable"
-      || row.import_status === "manual"
-      || row.import_status === "pre-fill"
-      || isRawRowInCurrentDateRange(row, range)
-    ));
-    return {
-      transactions,
-      rawRows,
-      dashboard: null,
-      activeDateRange: { startDate: range.start, endDate: range.end },
-    };
-  }
 
-  function isRawRowInCurrentDateRange(row, range) {
-    const rawDate = clean(row.raw_date);
-    return rawDate >= range.start && rawDate <= range.end;
-  }
 
   function pruneRawRowUiState() {
     const visibleTransactionIds = new Set(state.transactions.map((transaction) => transaction.id));
-    [...selectedTransactionIds].forEach((transactionId) => {
-      if (!visibleTransactionIds.has(transactionId)) {
-        selectedTransactionIds.delete(transactionId);
-      }
-    });
+    pruneMissingIds(selectedTransactionIds, visibleTransactionIds);
     const visibleIds = new Set(state.rawRows.map((row) => row.id));
-    [...selectedRawRowIds].forEach((rowId) => {
-      if (!visibleIds.has(rowId)) {
-        selectedRawRowIds.delete(rowId);
-      }
-    });
-    [...rawRowNotes.keys()].forEach((rowId) => {
-      if (!visibleIds.has(rowId)) {
-        rawRowNotes.delete(rowId);
-      }
-    });
+    pruneMissingIds(selectedRawRowIds, visibleIds);
+    pruneMissingMapKeys(rawRowNotes, visibleIds);
   }
 
   function activateView(viewName) {

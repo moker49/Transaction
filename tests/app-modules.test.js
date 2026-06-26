@@ -175,3 +175,25 @@ test("sorts table rows with app context", async () => {
     [1, 2],
   );
 });
+
+test("normalizes and slices app state", async () => {
+  const stateModel = await import("../scripts/js/state-model.mjs");
+  const normalized = stateModel.normalizeState({
+    realTransactions: [{ id: 1, posted_date: "2026-01-02" }],
+    rawTransactions: [{ id: 2, raw_date: "2026-01-02", import_status: "imported" }],
+  });
+
+  assert.equal(normalized.transactions.length, 1);
+  assert.equal(normalized.rawRows.length, 1);
+
+  const sliced = stateModel.transactionSliceForRange(normalized, normalized, {
+    start: "2026-01-01",
+    end: "2026-01-31",
+  });
+  assert.deepEqual(sliced.transactions.map((row) => row.id), [1]);
+  assert.deepEqual(sliced.rawRows.map((row) => row.id), [2]);
+
+  const ids = new Set([1, 3]);
+  stateModel.pruneMissingIds(ids, new Set([1]));
+  assert.deepEqual([...ids], [1]);
+});
