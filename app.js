@@ -12,13 +12,14 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
 import { isImportableRawRow, isTemplateRawRow, parseRawAmount, ruleMatchValues, topMatchingRuleForRawRow } from "./scripts/js/raw-row-model.mjs";
 import { navigateOptionalTypeGroup, navigateTypeGroup, selectOptionalTypeFromGroup, selectTypeFromGroup, setOptionalTypeGroupValue, setTypeGroupValue } from "./scripts/js/type-groups.mjs";
 import { sortedTableRows } from "./scripts/js/table-sort.mjs";
-import { DEFAULT_STATE, normalizeState, pruneMissingIds, pruneMissingMapKeys, transactionSliceForRange } from "./scripts/js/state-model.mjs";
+import { DEFAULT_STATE } from "./scripts/js/state-model.mjs";
 import { createDateRangeController } from "./scripts/js/date-range-controller.mjs";
 import { createUiController } from "./scripts/js/ui-controller.mjs";
 import { createCategoryUi } from "./scripts/js/category-ui.mjs";
 import { createDashboardFilterController } from "./scripts/js/dashboard-filter-controller.mjs";
 import { createCategoryPickerController } from "./scripts/js/category-picker-controller.mjs";
 import { createRawRowsController } from "./scripts/js/raw-rows-controller.mjs";
+import { createAppDataController } from "./scripts/js/app-data-controller.mjs";
 
 const API_BASE = window.location.protocol === "file:" ? "http://127.0.0.1:5050" : "";
 const DUMMY_DATABASE_KEY = "transaction-use-dummy-database";
@@ -81,6 +82,7 @@ const tableSortState = {
   rawRows: { key: "date", direction: "desc", type: "date" },
   rules: { key: "name", direction: "asc", type: "text" },
 };
+let dataController = null;
 const elements = getElements();
 const ui = createUiController({
   elements,
@@ -123,8 +125,23 @@ const dateRange = createDateRangeController({
     yearRangePrefix: YEAR_RANGE_PREFIX,
   },
   openModal,
-  loadTransactionData,
+  loadTransactionData: (options) => dataController.loadTransactionData(options),
   isMobileLayout: () => window.matchMedia(MOBILE_LAYOUT_QUERY).matches,
+});
+dataController = createAppDataController({
+  apiBase: API_BASE,
+  dateRange,
+  getState: () => state,
+  setState: (nextState) => {
+    state = nextState;
+  },
+  selectedTransactionIds,
+  selectedRawRowIds,
+  rawRowNotes,
+  isUsingDummyDatabase,
+  render,
+  showPopup,
+  hidePopup,
 });
 const categoryUi = createCategoryUi({
   getCategories: () => state.categories,
@@ -560,7 +577,7 @@ dateRange.initialize();
 initializeDatabaseMode();
 dashboardFilter.initialize();
 activateView("overview");
-loadInitialState();
+dataController.loadInitialState();
 
 
 
@@ -602,7 +619,7 @@ function updateDatabaseMode(event) {
   rawRowNotes.clear();
   rawRowsController.resetVisibleRows();
   setMessage("");
-  loadInitialState();
+  dataController.loadInitialState();
 }
 
 function isUsingDummyDatabase() {
@@ -649,110 +666,6 @@ function closeMobileDrawer({ skipHistory = false } = {}) {
   if (skipHistory || !history.state?.mobileDrawerOpen) {
     mobileDrawerHistoryActive = false;
   }
-}
-
-async function loadInitialState() {
-  try {
-    const [referencePayload, transactionPayload] = await Promise.all([
-      apiRequest("/api/reference-data"),
-      apiRequest(`/api/transactions?${dateRange.query()}`),
-    ]);
-    applyReferenceData(referencePayload.referenceData, { shouldRender: false });
-    applyTransactionData(transactionPayload.transactionData, { shouldRender: false });
-    render();
-  } catch (error) {
-    showPopup(error.message || "Could not load server data.", "error");
-    render();
-  }
-}
-
-async function loadTransactionData({ shouldRender = true } = {}) {
-  const payload = await apiRequest(`/api/transactions?${dateRange.query()}`);
-  applyTransactionData(payload.transactionData, { shouldRender });
-}
-
-async function loadReferenceData({ shouldRender = true } = {}) {
-  const payload = await apiRequest("/api/reference-data");
-  applyReferenceData(payload.referenceData, { shouldRender });
-}
-
-function mutationPath(path) {
-  return `${path}?${dateRange.query()}`;
-}
-
-async function apiRequest(path, options = {}) {
-  const headers = {
-    ...(options.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
-    "X-Use-Dummy-Database": isUsingDummyDatabase() ? "1" : "0",
-    ...(options.headers || {}),
-  };
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers,
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(payload.error || `Request failed with ${response.status}`);
-  }
-  return payload;
-}
-
-
-function applyStateFromPayload(payload) {
-  const nextPayload = payload.state || payload;
-  if (payload.referenceData || payload.transactionData) {
-    if (payload.referenceData) {
-      applyReferenceData(payload.referenceData, { shouldRender: false });
-    }
-    if (payload.transactionData) {
-      applyTransactionData(payload.transactionData, { shouldRender: false });
-    }
-  } else {
-    state = normalizeState({
-      ...state,
-      ...nextPayload,
-      ...transactionSliceForRange(nextPayload, state, dateRange.currentState()),
-    });
-  }
-  hidePopup();
-  pruneRawRowUiState();
-  render();
-}
-
-function applyReferenceData(referenceData, { shouldRender = true } = {}) {
-  state = normalizeState({
-    ...state,
-    ...(referenceData || {}),
-  });
-  if (shouldRender) {
-    render();
-  }
-}
-
-function applyTransactionData(transactionData, { shouldRender = true } = {}) {
-  state = normalizeState({
-    ...state,
-    dashboard: transactionData?.dashboard || null,
-    activeDateRange: transactionData
-      ? { startDate: transactionData.startDate, endDate: transactionData.endDate }
-      : state.activeDateRange,
-    transactions: transactionData?.realTransactions || [],
-    rawRows: transactionData?.rawTransactions || [],
-  });
-  pruneRawRowUiState();
-  if (shouldRender) {
-    render();
-  }
-}
-
-
-
-function pruneRawRowUiState() {
-  const visibleTransactionIds = new Set(state.transactions.map((transaction) => transaction.id));
-  pruneMissingIds(selectedTransactionIds, visibleTransactionIds);
-  const visibleIds = new Set(state.rawRows.map((row) => row.id));
-  pruneMissingIds(selectedRawRowIds, visibleIds);
-  pruneMissingMapKeys(rawRowNotes, visibleIds);
 }
 
 function activateView(viewName) {
@@ -902,12 +815,12 @@ async function saveAccount(event) {
   }
 
   try {
-    const response = await apiRequest(isEdit ? mutationPath(`/api/accounts/${editingAccountId}`) : "/api/accounts", {
+    const response = await dataController.apiRequest(isEdit ? dataController.mutationPath(`/api/accounts/${editingAccountId}`) : "/api/accounts", {
       method: isEdit ? "PATCH" : "POST",
       body: JSON.stringify(payload),
     });
     closeAccountDialog();
-    applyStateFromPayload(response);
+    dataController.applyStateFromPayload(response);
   } catch (error) {
     setModalMessage(
       elements.accountMessage,
@@ -937,13 +850,13 @@ async function importCsv(event) {
     upload.append("accountId", String(accountId));
     upload.append("sourceType", sourceType);
     upload.append("csvFile", file);
-    const payload = await apiRequest("/api/imports/csv", {
+    const payload = await dataController.apiRequest("/api/imports/csv", {
       method: "POST",
       body: upload,
     });
     resetImportDialogState();
     closeImportDialog();
-    applyStateFromPayload(payload);
+    dataController.applyStateFromPayload(payload);
     if (payload.status === "already_imported") {
       showPopup("File already imported.", "warning");
     } else {
@@ -1059,11 +972,11 @@ async function addTag() {
     return;
   }
   try {
-    const payload = await apiRequest("/api/tags", {
+    const payload = await dataController.apiRequest("/api/tags", {
       method: "POST",
       body: JSON.stringify({ name }),
     });
-    applyStateFromPayload(payload);
+    dataController.applyStateFromPayload(payload);
   } catch (error) {
     showPopup(error.message || "Could not add tag.", "error");
   }
@@ -1113,12 +1026,12 @@ async function saveCategory(event) {
     return;
   }
   try {
-    const response = await apiRequest(editingCategoryId ? `/api/categories/${editingCategoryId}` : "/api/categories", {
+    const response = await dataController.apiRequest(editingCategoryId ? `/api/categories/${editingCategoryId}` : "/api/categories", {
       method: editingCategoryId ? "PATCH" : "POST",
       body: JSON.stringify(payload),
     });
     closeCategoryDialog();
-    applyStateFromPayload(response);
+    dataController.applyStateFromPayload(response);
   } catch (error) {
     setModalMessage(elements.categoryMessage, error.message || "Could not save category.", true);
   }
@@ -1392,12 +1305,12 @@ async function saveRuleFromForm({ forceCreate = false } = {}) {
       closeRuleDialog();
       return;
     }
-    const response = await apiRequest(mutationPath(isEdit ? `/api/rules/${editingRuleId}` : "/api/rules"), {
+    const response = await dataController.apiRequest(dataController.mutationPath(isEdit ? `/api/rules/${editingRuleId}` : "/api/rules"), {
       method: isEdit ? "PATCH" : "POST",
       body: JSON.stringify(payload),
     });
     closeRuleDialog();
-    applyStateFromPayload(response);
+    dataController.applyStateFromPayload(response);
   } catch (error) {
     setModalMessage(
       elements.ruleMessage,
@@ -1566,8 +1479,8 @@ async function deleteAccount(account) {
     return false;
   }
   try {
-    const payload = await apiRequest(`/api/accounts/${account.id}`, { method: "DELETE" });
-    applyStateFromPayload(payload);
+    const payload = await dataController.apiRequest(`/api/accounts/${account.id}`, { method: "DELETE" });
+    dataController.applyStateFromPayload(payload);
     return true;
   } catch (error) {
     showPopup(error.message || "Could not delete account.", "error");
@@ -1599,8 +1512,8 @@ async function deleteCategory(category) {
     return;
   }
   try {
-    const payload = await apiRequest(`/api/categories/${category.id}`, { method: "DELETE" });
-    applyStateFromPayload(payload);
+    const payload = await dataController.apiRequest(`/api/categories/${category.id}`, { method: "DELETE" });
+    dataController.applyStateFromPayload(payload);
   } catch (error) {
     showPopup(error.message || "Could not delete category.", "error");
   }
@@ -1636,11 +1549,11 @@ async function editTag(tag) {
     return;
   }
   try {
-    const payload = await apiRequest(`/api/tags/${tag.id}`, {
+    const payload = await dataController.apiRequest(`/api/tags/${tag.id}`, {
       method: "PATCH",
       body: JSON.stringify({ name: clean(name) }),
     });
-    applyStateFromPayload(payload);
+    dataController.applyStateFromPayload(payload);
   } catch (error) {
     showPopup(error.message || "Could not update tag.", "error");
   }
@@ -1656,8 +1569,8 @@ async function deleteTag(tag) {
     return false;
   }
   try {
-    const payload = await apiRequest(`/api/tags/${tag.id}`, { method: "DELETE" });
-    applyStateFromPayload(payload);
+    const payload = await dataController.apiRequest(`/api/tags/${tag.id}`, { method: "DELETE" });
+    dataController.applyStateFromPayload(payload);
     return true;
   } catch (error) {
     showPopup(error.message || "Could not delete tag.", "error");
@@ -1675,8 +1588,8 @@ async function deleteRule(rule) {
     return false;
   }
   try {
-    const payload = await apiRequest(mutationPath(`/api/rules/${rule.id}`), { method: "DELETE" });
-    applyStateFromPayload(payload);
+    const payload = await dataController.apiRequest(dataController.mutationPath(`/api/rules/${rule.id}`), { method: "DELETE" });
+    dataController.applyStateFromPayload(payload);
     return true;
   } catch (error) {
     showPopup(error.message || "Could not delete rule.", "error");
@@ -2039,11 +1952,11 @@ async function saveTransaction(event) {
     return;
   }
   try {
-    const response = await apiRequest(`/api/transactions/${transaction.id}`, {
+    const response = await dataController.apiRequest(`/api/transactions/${transaction.id}`, {
       method: "PATCH",
       body: JSON.stringify(payload),
     });
-    applyStateFromPayload(response);
+    dataController.applyStateFromPayload(response);
     activeTransactionId = response.transaction.id;
     closeTransactionDialog();
   } catch (error) {
@@ -2066,12 +1979,12 @@ async function deleteActiveTransaction() {
     return;
   }
   try {
-    const payload = await apiRequest(`/api/transactions/${transaction.id}`, {
+    const payload = await dataController.apiRequest(`/api/transactions/${transaction.id}`, {
       method: "DELETE",
       body: JSON.stringify({ delete_raw_row: Boolean(confirmed.optionChecked) }),
     });
     closeTransactionDialog();
-    applyStateFromPayload(payload);
+    dataController.applyStateFromPayload(payload);
   } catch (error) {
     setModalMessage(elements.transactionMessage, error.message || "Could not delete transaction.", true);
   }
@@ -2223,14 +2136,14 @@ async function deleteActiveRawRow() {
     return;
   }
   try {
-    const payload = await apiRequest(`/api/raw-rows/${rawRow.id}`, {
+    const payload = await dataController.apiRequest(`/api/raw-rows/${rawRow.id}`, {
       method: "DELETE",
       body: JSON.stringify({ delete_transaction: Boolean(confirmed.optionChecked) }),
     });
     selectedRawRowIds.delete(rawRow.id);
     rawRowNotes.delete(rawRow.id);
     closeRawRowDialog();
-    applyStateFromPayload(payload);
+    dataController.applyStateFromPayload(payload);
   } catch (error) {
     showPopup(error.message || "Could not delete raw transaction.", "error");
   }
@@ -2275,14 +2188,14 @@ async function importManualRawRow(event) {
 
   elements.manualImportSubmitButton.disabled = true;
   try {
-    const response = await apiRequest(mutationPath(`/api/raw-rows/${rawRow.id}/manual-import`), {
+    const response = await dataController.apiRequest(dataController.mutationPath(`/api/raw-rows/${rawRow.id}/manual-import`), {
       method: "POST",
       body: JSON.stringify(payload),
     });
     rawRowNotes.delete(rawRow.id);
     selectedRawRowIds.delete(rawRow.id);
     closeManualImportDialog();
-    applyStateFromPayload(response);
+    dataController.applyStateFromPayload(response);
     const result = response.import_result;
     setMessage(
       result.status === "duplicate" ? "Raw row matched an existing transaction." : "Raw row imported.",
@@ -2380,9 +2293,9 @@ async function deleteActiveUploadedFile() {
     return;
   }
   try {
-    const payload = await apiRequest(mutationPath(`/api/imports/${item.id}`), { method: "DELETE" });
+    const payload = await dataController.apiRequest(dataController.mutationPath(`/api/imports/${item.id}`), { method: "DELETE" });
     closeUploadedFileDialog();
-    applyStateFromPayload(payload);
+    dataController.applyStateFromPayload(payload);
     showPopup("Uploaded file deleted.", "success");
   } catch (error) {
     showPopup(error.message || "Could not delete uploaded file.", "error");
@@ -2728,13 +2641,13 @@ async function bulkEditTransactions(event) {
   }
   elements.bulkEditSubmitButton.disabled = true;
   try {
-    const payload = await apiRequest(mutationPath("/api/transactions/bulk-edit"), {
+    const payload = await dataController.apiRequest(dataController.mutationPath("/api/transactions/bulk-edit"), {
       method: "POST",
       body: JSON.stringify({ transaction_ids: transactionIds, overrides }),
     });
     selectedTransactionIds.clear();
     closeBulkEditDialog();
-    applyStateFromPayload(payload);
+    dataController.applyStateFromPayload(payload);
     setMessage(`Updated ${payload.updated_count || transactionIds.length} transactions.`);
   } catch (error) {
     setModalMessage(elements.bulkEditMessage, error.message || "Could not update selected transactions.", true);
@@ -2779,7 +2692,7 @@ async function importRawRows(rowIds, options = {}) {
     button.title = "Importing";
   }
   try {
-    const payload = await apiRequest(mutationPath("/api/raw-rows/import"), {
+    const payload = await dataController.apiRequest(dataController.mutationPath("/api/raw-rows/import"), {
       method: "POST",
       body: JSON.stringify({ raw_row_ids: rowIds, raw_row_notes: notes, raw_row_overrides: options.overrides || {} }),
     });
@@ -2787,7 +2700,7 @@ async function importRawRows(rowIds, options = {}) {
     if (options.onSuccess) {
       options.onSuccess(payload);
     }
-    applyStateFromPayload(payload);
+    dataController.applyStateFromPayload(payload);
     const counts = payload.import_result.counts;
     setMessage(
       options.successMessage ? options.successMessage(payload.import_result) : `Imported ${counts.imported}; duplicates ${counts.duplicate}; errors ${counts.error}.`,
@@ -2823,7 +2736,7 @@ async function regenerateDatabase() {
   elements.regenerateDatabaseButton.disabled = true;
   elements.mobileRegenerateDatabaseButton.disabled = true;
   try {
-    const payload = await apiRequest("/api/dev/regenerate-database", {
+    const payload = await dataController.apiRequest("/api/dev/regenerate-database", {
       method: "POST",
       body: JSON.stringify({ confirm: "RESTORE DUMMY DATABASE" }),
     });
@@ -2834,7 +2747,7 @@ async function regenerateDatabase() {
     elements.mobileDummyDatabaseToggle.checked = true;
     localStorage.setItem(DUMMY_DATABASE_KEY, "true");
     renderDatabaseModeLabel();
-    applyStateFromPayload(payload);
+    dataController.applyStateFromPayload(payload);
     setDevMessage("Dummy database restored.");
   } catch (error) {
     showPopup(error.message || "Could not regenerate database.", "error");
@@ -2975,5 +2888,6 @@ function ruleRawRowFillValueForField(field) {
   }
   return "";
 }
+
 
 
