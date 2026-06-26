@@ -1,15 +1,15 @@
 import { clean } from "./scripts/js/common.mjs";
 import { parseCsv, normalizeCsvRow, detectCsvLayout, sourceAccountKeyFromCsvRows, accountImportKeys, sha256 } from "./scripts/js/csv.mjs";
 import { formatCents, formatDateTime, formatDisplayDate, formatMaybeDateTime, formatDollars } from "./scripts/js/format.mjs";
-import { appendEmpty, cell, clear, displayDateCell, el, emptyTableRow, fillSelect, makeEditableRow, materialIcon, renderDefinitionList, setText, tableRow } from "./scripts/js/dom.mjs";
+import { appendEmpty, clear, displayDateCell, el, emptyTableRow, fillSelect, makeEditableRow, materialIcon, renderDefinitionList, setText, tableRow } from "./scripts/js/dom.mjs";
 import { renderPieChart, renderStackedBar } from "./scripts/js/charts.mjs";
 import { getElements } from "./scripts/js/dom-elements.mjs";
 import { buildAccountPayload, buildBulkEditOverrides, buildBulkImportOverrides, buildCategoryPayload, buildManualImportPayload, buildRulePayload, buildTransactionPayload, payloadMatchesSnapshot, selectedTagIdsFrom } from "./scripts/js/form-payloads.mjs";
 import { randomComfortableColor, normalizeHexColor, hexToHsl, hslToHex } from "./scripts/js/colors.mjs";
 import { dashboardFromTransactions } from "./scripts/js/dashboard-model.mjs";
 import { categoryDescendantIds, categoryLabel, categoryOptions, rootCategoryId, selectedCategory } from "./scripts/js/category-model.mjs";
-import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, matchAmountLabel, statusClass, statusLabel, transactionTypeLabel } from "./scripts/js/labels.mjs";
-import { clearSelectedRawRowsExceptStatus, isBaseSelectableRawRow, isImportableRawRow, isSelectableRawRow, isTemplateRawRow, nextSelectVisibleStatus, parseRawAmount, rawRowMatchesStatusFilter, ruleMatchValues, selectedRawRowStatus, topMatchingRuleForRawRow, visibleSelectableRawRowIds } from "./scripts/js/raw-row-model.mjs";
+import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, matchAmountLabel, transactionTypeLabel } from "./scripts/js/labels.mjs";
+import { isImportableRawRow, isTemplateRawRow, parseRawAmount, ruleMatchValues, topMatchingRuleForRawRow } from "./scripts/js/raw-row-model.mjs";
 import { navigateOptionalTypeGroup, navigateTypeGroup, selectOptionalTypeFromGroup, selectTypeFromGroup, setOptionalTypeGroupValue, setTypeGroupValue } from "./scripts/js/type-groups.mjs";
 import { sortedTableRows } from "./scripts/js/table-sort.mjs";
 import { DEFAULT_STATE, normalizeState, pruneMissingIds, pruneMissingMapKeys, transactionSliceForRange } from "./scripts/js/state-model.mjs";
@@ -18,6 +18,7 @@ import { createUiController } from "./scripts/js/ui-controller.mjs";
 import { createCategoryUi } from "./scripts/js/category-ui.mjs";
 import { createDashboardFilterController } from "./scripts/js/dashboard-filter-controller.mjs";
 import { createCategoryPickerController } from "./scripts/js/category-picker-controller.mjs";
+import { createRawRowsController } from "./scripts/js/raw-rows-controller.mjs";
 
 const API_BASE = window.location.protocol === "file:" ? "http://127.0.0.1:5050" : "";
 const DUMMY_DATABASE_KEY = "transaction-use-dummy-database";
@@ -46,7 +47,6 @@ let state = structuredClone(DEFAULT_STATE);
 const selectedRawRowIds = new Set();
 const selectedTransactionIds = new Set();
 const rawRowNotes = new Map();
-let visibleRawRows = [];
 let editingAccountId = null;
 let editingRuleId = null;
 let editingCategoryId = null;
@@ -217,6 +217,16 @@ const dashboardFilter = createDashboardFilterController({
   openModal,
   renderDashboard,
 });
+const rawRowsController = createRawRowsController({
+  elements,
+  getState: () => state,
+  selectedRawRowIds,
+  rawRowNotes,
+  tableSortState,
+  tableSortContext,
+  openRawRowDialog,
+  plainCategoryChip,
+});
 const typeGroupOptions = {
   onChange: ({ input, value }) => {
     if (input === elements.ruleKindInput && value === "template") {
@@ -278,10 +288,10 @@ elements.uploadedFileDialog.addEventListener("close", () => {
 elements.categoryAddButton.addEventListener("click", openCategoryAddDialog);
 elements.tagAddButton.addEventListener("click", addTag);
 elements.ruleForm.addEventListener("submit", saveRule);
-elements.rawAccountFilter.addEventListener("change", renderRawRows);
-elements.rawStatusFilter.addEventListener("change", renderRawRows);
-elements.selectVisibleRowsButton.addEventListener("click", selectVisibleRawRows);
-elements.selectVisibleRowsMobileButton.addEventListener("click", selectVisibleRawRows);
+elements.rawAccountFilter.addEventListener("change", rawRowsController.render);
+elements.rawStatusFilter.addEventListener("change", rawRowsController.render);
+elements.selectVisibleRowsButton.addEventListener("click", rawRowsController.selectVisibleRows);
+elements.selectVisibleRowsMobileButton.addEventListener("click", rawRowsController.selectVisibleRows);
 elements.importSelectedRowsButton.addEventListener("click", openBulkImportDialog);
 elements.regenerateDatabaseButton.addEventListener("click", regenerateDatabase);
 elements.dummyDatabaseToggle.addEventListener("change", updateDatabaseMode);
@@ -590,7 +600,7 @@ function updateDatabaseMode(event) {
   renderDatabaseModeLabel();
   selectedRawRowIds.clear();
   rawRowNotes.clear();
-  visibleRawRows = [];
+  rawRowsController.resetVisibleRows();
   setMessage("");
   loadInitialState();
 }
@@ -1702,7 +1712,7 @@ function render() {
   renderCategories();
   renderTags();
   renderRules();
-  renderRawRows();
+  rawRowsController.render();
 }
 
 function renderDashboard() {
@@ -2111,7 +2121,7 @@ function activeManualImportRawRow() {
 function populateRawRowDialog(rawRow) {
   const account = state.accounts.find((candidate) => candidate.id === rawRow.account_id);
   elements.rawRowDialogTitle.textContent = `Raw Transaction ${rawRow.id}`;
-  elements.rawRowStatusSubtitle.replaceChildren(statusBadge(rawRow));
+  elements.rawRowStatusSubtitle.replaceChildren(rawRowsController.statusBadge(rawRow));
   renderDefinitionList(elements.rawRowRawValues, [
     ["Date", formatDisplayDate(rawRow.raw_date)],
     ["Category", rawRow.raw_category],
@@ -2122,7 +2132,7 @@ function populateRawRowDialog(rawRow) {
   renderDefinitionList(elements.rawRowCleanValues, [
     ["Type", transactionTypeLabel(rawRow.preview_type)],
     ["Category", rawRow.preview_category],
-    ["Description", rawRowPreviewCleanDescription(rawRow)],
+    ["Description", rawRowsController.rawRowPreviewCleanDescription(rawRow)],
   ]);
   renderDefinitionList(elements.rawRowImportValues, [
     ["Account", account ? accountLabel(account) : "Unknown"],
@@ -2642,137 +2652,8 @@ function ruleMatchSummary(rule) {
   return list.childElementCount ? list : "-";
 }
 
-function renderRawRows() {
-  const tbody = document.querySelector("#rawRowsTable");
-  clear(tbody);
-
-  const accountFilter = elements.rawAccountFilter.value;
-  const statusFilter = elements.rawStatusFilter.value;
-  const hiddenColumns = new Set();
-  if (accountFilter !== "all") {
-    hiddenColumns.add("account");
-  }
-  if (statusFilter !== "all") {
-    hiddenColumns.add("status");
-  }
-  updateRawColumnHeaders(hiddenColumns);
-  const rawColumnCount = 8 - hiddenColumns.size;
-
-  [...selectedRawRowIds].forEach((rowId) => {
-    const rawRow = state.rawRows.find((candidate) => candidate.id === rowId);
-    if (!rawRow || !isBaseSelectableRawRow(rawRow)) {
-      selectedRawRowIds.delete(rowId);
-    }
-  });
-  const lockedStatus = selectedRawRowStatus(selectedRawRowIds, state.rawRows);
-  [...selectedRawRowIds].forEach((rowId) => {
-    const rawRow = state.rawRows.find((candidate) => candidate.id === rowId);
-    if (lockedStatus && rawRow?.import_status !== lockedStatus) {
-      selectedRawRowIds.delete(rowId);
-    }
-  });
-
-  const rows = state.rawRows.filter((row) => {
-    if (accountFilter !== "all" && String(row.account_id) !== accountFilter) {
-      return false;
-    }
-    if (!rawRowMatchesStatusFilter(row, statusFilter)) {
-      return false;
-    }
-    return true;
-  });
-  const sortedRows = sortedTableRows("rawRows", rows, tableSortState, tableSortContext());
-  visibleRawRows = sortedRows;
-  if (!rows.length) {
-    tbody.appendChild(emptyTableRow(rawColumnCount));
-    updateImportSelectedButton();
-    updateSelectVisibleButton();
-    return;
-  }
-
-  sortedRows.forEach((rawRow) => {
-    const account = state.accounts.find((candidate) => candidate.id === rawRow.account_id);
-    const tr = document.createElement("tr");
-    tr.classList.toggle("is-selected-row", selectedRawRowIds.has(rawRow.id));
-    makeEditableRow(tr, `View raw transaction ${rawRow.id}`, () => openRawRowDialog(rawRow));
-    const checkbox = document.createElement("input");
-    checkbox.className = "row-checkbox";
-    checkbox.type = "checkbox";
-    checkbox.checked = selectedRawRowIds.has(rawRow.id);
-    checkbox.disabled = !isSelectableRawRow(rawRow, selectedRawRowStatus(selectedRawRowIds, state.rawRows));
-    checkbox.setAttribute("aria-label", `Select row ${rawRow.id}`);
-    checkbox.addEventListener("click", (event) => event.stopPropagation());
-    checkbox.addEventListener("keydown", (event) => event.stopPropagation());
-    checkbox.addEventListener("change", () => {
-      if (checkbox.checked) {
-        clearSelectedRawRowsExceptStatus(selectedRawRowIds, state.rawRows, rawRow.import_status);
-        selectedRawRowIds.add(rawRow.id);
-      } else {
-        selectedRawRowIds.delete(rawRow.id);
-      }
-      renderRawRows();
-    });
-    const noteInput = document.createElement("input");
-    noteInput.type = "text";
-    noteInput.className = "raw-note-input";
-    noteInput.value = rawRowNotes.get(rawRow.id) || "";
-    noteInput.disabled = !isSelectableRawRow(rawRow, selectedRawRowStatus(selectedRawRowIds, state.rawRows));
-    noteInput.placeholder = isSelectableRawRow(rawRow, selectedRawRowStatus(selectedRawRowIds, state.rawRows)) ? "Transaction note" : "";
-    noteInput.setAttribute("aria-label", `Note for row ${rawRow.id}`);
-    noteInput.addEventListener("click", (event) => event.stopPropagation());
-    noteInput.addEventListener("keydown", (event) => event.stopPropagation());
-    noteInput.addEventListener("input", () => {
-      const note = clean(noteInput.value);
-      if (note) {
-        rawRowNotes.set(rawRow.id, note);
-      } else {
-        rawRowNotes.delete(rawRow.id);
-      }
-    });
-    const selectCell = cell(checkbox, "transaction-select-cell raw-select-cell");
-    selectCell.addEventListener("click", (event) => {
-      event.stopPropagation();
-      checkbox.click();
-    });
-    const dateCell = cell(displayDateCell(rawRow.raw_date), "date-cell transaction-date-select-cell raw-date-select-cell");
-    dateCell.addEventListener("click", (event) => {
-      event.stopPropagation();
-      if (!checkbox.disabled) {
-        checkbox.click();
-      }
-    });
-
-    const cells = [
-      ["select", selectCell],
-      ["date", dateCell],
-      ["category", cell(rawCategoryValueWithPreview(rawRow))],
-      ["description", cell(rawValueWithPreview(rawRow.raw_description, rawRowPreviewCleanDescription(rawRow)))],
-      ["amount", cell(rawRow.raw_amount || "-", "amount")],
-      ["account", cell(account ? account.name : "Unknown", "transaction-account-cell muted-cell")],
-      ["status", cell(statusBadge(rawRow), "status-cell")],
-      ["notes", cell(noteInput, "transaction-notes-cell")],
-    ];
-    tr.append(...cells
-      .filter(([column]) => !hiddenColumns.has(column))
-      .map(([column, node]) => {
-        node.dataset.rawColumn = column;
-        return node;
-      }));
-    tbody.appendChild(tr);
-  });
-  updateImportSelectedButton();
-  updateSelectVisibleButton();
-}
-
-function selectedImportableRawRowIds() {
-  return [...selectedRawRowIds].filter((rowId) => {
-    const rawRow = state.rawRows.find((candidate) => candidate.id === rowId);
-    return rawRow && isSelectableRawRow(rawRow, selectedRawRowStatus(selectedRawRowIds, state.rawRows));
-  });
-}
-
 function openBulkImportDialog() {
-  const rowIds = selectedImportableRawRowIds();
+  const rowIds = rawRowsController.selectedImportableRowIds();
   if (!rowIds.length) {
     return;
   }
@@ -2865,10 +2746,7 @@ async function bulkEditTransactions(event) {
 async function importSelectedRawRows(event) {
   event?.preventDefault();
   const overrides = buildBulkImportOverrides(elements.bulkImportForm, elements.bulkImportTags);
-  const rowIds = [...selectedRawRowIds].filter((rowId) => {
-    const rawRow = state.rawRows.find((candidate) => candidate.id === rowId);
-    return rawRow && isSelectableRawRow(rawRow, selectedRawRowStatus(selectedRawRowIds, state.rawRows));
-  });
+  const rowIds = rawRowsController.selectedImportableRowIds();
   if (!rowIds.length) {
     closeBulkImportDialog();
     return;
@@ -2927,7 +2805,7 @@ async function importRawRows(rowIds, options = {}) {
       button.disabled = false;
       button.title = "";
     }
-    updateImportSelectedButton();
+    rawRowsController.updateImportSelectedButton();
   }
 }
 
@@ -2951,7 +2829,7 @@ async function regenerateDatabase() {
     });
     selectedRawRowIds.clear();
     rawRowNotes.clear();
-    visibleRawRows = [];
+    rawRowsController.resetVisibleRows();
     elements.dummyDatabaseToggle.checked = true;
     elements.mobileDummyDatabaseToggle.checked = true;
     localStorage.setItem(DUMMY_DATABASE_KEY, "true");
@@ -2965,105 +2843,6 @@ async function regenerateDatabase() {
     elements.mobileRegenerateDatabaseButton.disabled = false;
   }
 }
-
-function selectVisibleRawRows() {
-  const selectedStatus = selectedRawRowStatus(selectedRawRowIds, state.rawRows);
-  const autoImportIds = visibleSelectableRawRowIds(visibleRawRows, "auto-importable");
-  const prefillIds = visibleSelectableRawRowIds(visibleRawRows, "pre-fill");
-  const targetStatus = nextSelectVisibleStatus(selectedStatus, autoImportIds, prefillIds, selectedRawRowIds);
-  selectedRawRowIds.clear();
-  if (targetStatus === "auto-importable") {
-    autoImportIds.forEach((rowId) => selectedRawRowIds.add(rowId));
-  } else if (targetStatus === "pre-fill") {
-    prefillIds.forEach((rowId) => selectedRawRowIds.add(rowId));
-  }
-  renderRawRows();
-}
-
-function updateImportSelectedButton() {
-  const importableCount = [...selectedRawRowIds].filter((rowId) => {
-    const rawRow = state.rawRows.find((candidate) => candidate.id === rowId);
-    return rawRow && isSelectableRawRow(rawRow, selectedRawRowStatus(selectedRawRowIds, state.rawRows));
-  }).length;
-  elements.importSelectedRowsButton.disabled = importableCount === 0;
-  elements.importSelectedRowsButton.hidden = importableCount === 0;
-  elements.importSelectedRowsButton.title =
-    importableCount === 0 ? "Import selected" : `Import selected (${importableCount})`;
-  elements.importSelectedRowsButton.setAttribute("aria-label", elements.importSelectedRowsButton.title);
-  elements.rawSelectedCount.textContent = `${importableCount} selected`;
-  elements.rawSelectedCountMobile.textContent = `${importableCount} selected`;
-}
-
-function updateSelectVisibleButton() {
-  const autoImportIds = visibleSelectableRawRowIds(visibleRawRows, "auto-importable");
-  const prefillIds = visibleSelectableRawRowIds(visibleRawRows, "pre-fill");
-  const selectedStatus = selectedRawRowStatus(selectedRawRowIds, state.rawRows);
-  const nextStatus = nextSelectVisibleStatus(selectedStatus, autoImportIds, prefillIds, selectedRawRowIds);
-  const selectableCount = autoImportIds.length + prefillIds.length;
-  const title = nextStatus === "auto-importable"
-    ? "Select all auto-importable"
-    : nextStatus === "pre-fill"
-      ? "Select all pre-fill"
-      : "Clear selection";
-  elements.selectVisibleRowsButton.disabled = selectableCount === 0 && selectedRawRowIds.size === 0;
-  elements.selectVisibleRowsButton.title = title;
-  elements.selectVisibleRowsButton.setAttribute("aria-label", elements.selectVisibleRowsButton.title);
-  elements.selectVisibleRowsButton.textContent = title;
-  elements.selectVisibleRowsMobileButton.disabled = elements.selectVisibleRowsButton.disabled;
-  elements.selectVisibleRowsMobileButton.title = elements.selectVisibleRowsButton.title;
-  elements.selectVisibleRowsMobileButton.setAttribute("aria-label", elements.selectVisibleRowsButton.title);
-  elements.selectVisibleRowsMobileButton.textContent = title;
-}
-
-function updateRawColumnHeaders(hiddenColumns) {
-  elements.rawRowsTableElement.querySelectorAll("th[data-raw-column]").forEach((header) => {
-    header.hidden = hiddenColumns.has(header.dataset.rawColumn);
-  });
-}
-
-function statusBadge(rawRow) {
-  const status = rawRow.import_status || "manual";
-  const badge = document.createElement("span");
-  badge.className = `status-badge ${statusClass(status)}`;
-  badge.textContent = statusLabel(status);
-  if (rawRow.import_error) {
-    badge.title = rawRow.import_error;
-  }
-  return badge;
-}
-
-function rawValueWithPreview(rawValue, previewValue) {
-  const wrapper = document.createElement("div");
-  wrapper.className = "raw-value";
-  wrapper.appendChild(el("span", rawValue || "-"));
-  if (previewValue) {
-    wrapper.appendChild(el("span", previewValue, "rule-preview"));
-  }
-  return wrapper;
-}
-
-function rawRowPreviewCleanDescription(rawRow) {
-  return clean(rawRow.preview_clean_description)
-    || (isTemplateRawRow(rawRow) ? clean(rawRow.default_clean_description) : "");
-}
-
-function rawCategoryValueWithPreview(rawRow) {
-  const wrapper = document.createElement("div");
-  wrapper.className = "raw-value raw-category-value";
-  wrapper.appendChild(el("span", rawRow.raw_category || "-"));
-  const category = state.categories.find((candidate) => candidate.id === rawRow.preview_category_id);
-  if (category) {
-    const preview = document.createElement("span");
-    preview.className = "rule-preview raw-category-preview";
-    preview.appendChild(plainCategoryChip(category));
-    wrapper.appendChild(preview);
-  } else if (rawRow.preview_category) {
-    wrapper.appendChild(el("span", rawRow.preview_category, "rule-preview"));
-  }
-  return wrapper;
-}
-
-
 
 
 
@@ -3196,4 +2975,5 @@ function ruleRawRowFillValueForField(field) {
   }
   return "";
 }
+
 
