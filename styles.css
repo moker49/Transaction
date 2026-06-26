@@ -1,22 +1,26 @@
 :root {
   color-scheme: dark;
-  --primary: rgb(0 190 165);
-  --secondary: hsl(150, 15%, 55%);
+  --primary: rgb(225, 0, 255);
   --tertiary: hsl(200, 45%, 55%);
   --error: hsl(5, 100%, 65%);
   --warning: hsl(35, 90%, 65%);
   --white: rgb(240 245 240);
   --black: rgb(5 10 5);
-  --neutral-bg: hsl(150, 13%, 9%);
-  --neutral-surface: hsl(144, 9%, 13%);
-  --neutral-surface-muted: hsl(140, 7%, 16%);
-  --neutral-input: hsl(140, 11%, 5%);
-  --neutral-item: hsl(144, 8%, 12%);
-  --neutral-border: hsl(142, 6%, 22%);
+
+  --neutral-bg: hsl(0, 0%, 9%);
+  --neutral-surface: hsl(0, 0%, 13%);
+  --neutral-surface-muted: hsl(0, 0%, 16%);
+  --neutral-input: hsl(0, 0%, 5%);
+  --neutral-item: hsl(0, 0%, 12%);
+  --neutral-border: hsl(0, 0%, 22%);
+
+  --gray: hsl(0, 0%, 55%);
+  --gray-dark: hsl(0, 0%, 8%);
+  --gray-border: hsl(0, 0%, 28%);
 
   /* Tune how much primary color is mixed into neutral UI structure. */
-  --background-saturation: 1%;
-  --surface-saturation: 1%;
+  --background-saturation: 3%;
+  --surface-saturation: 5%;
   --border-saturation: 20%;
 
   --bg: color-mix(in srgb, var(--primary) var(--background-saturation), var(--neutral-bg));
@@ -25,10 +29,9 @@
   --input-bg: color-mix(in srgb, var(--primary) max(0%, calc(var(--surface-saturation) - 6%)), var(--neutral-input));
   --item-bg: color-mix(in srgb, var(--primary) var(--surface-saturation), var(--neutral-item));
   --text: color-mix(in srgb, var(--white) 92%, var(--primary));
-  --muted: color-mix(in srgb, var(--white) 64%, var(--secondary));
+  --muted: color-mix(in srgb, var(--gray) 86%, var(--primary));
   --border: color-mix(in srgb, var(--primary) var(--border-saturation), var(--neutral-border));
   --control-border: color-mix(in srgb, var(--primary) var(--border-saturation), var(--neutral-border));
-  /* --control-border: color-mix(in srgb, var(--primary) 50%, var(--black)); */
 
   --accent: color-mix(in srgb, var(--primary) 42%, var(--black));
   --accent-dark: color-mix(in srgb, var(--primary) 80%, var(--white));
@@ -44,12 +47,13 @@
   --success-bg: color-mix(in srgb, var(--primary) 42%, var(--black));
   --success-border: color-mix(in srgb, var(--primary) 50%, var(--border));
 
-  --connected-bg: color-mix(in srgb, var(--secondary) 40%, var(--black));
+  --connected-bg: color-mix(in srgb, var(--gray) 40%, var(--primary) 8%, var(--black));
   --connected-selected-bg: var(--accent);
   --connected-selected-text: var(--accent-contrast);
-  --tag-chip-selected-bg: color-mix(in srgb, var(--secondary) 48%, var(--black));
-  --tag-chip-selected-text: color-mix(in srgb, var(--white) 82%, var(--secondary));
-  --tag-chip-outline: color-mix(in srgb, var(--white) 34%, var(--secondary));
+
+  --tag-chip-selected-bg: color-mix(in srgb, var(--gray) 42%, var(--primary) 10%, var(--black));
+  --tag-chip-selected-text: color-mix(in srgb, var(--white) 78%, var(--gray) 14%, var(--primary) 8%);
+  --tag-chip-outline: color-mix(in srgb, var(--gray-border) 80%, var(--primary));
 
   --income: color-mix(in srgb, var(--tertiary) 72%, var(--black));
   --outflow: color-mix(in srgb, var(--error) 72%, var(--black));
