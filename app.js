@@ -4,6 +4,8 @@ import { addDays, addMonths, allTimeDateRangePeriod, customDateRangePeriod, date
 import { compareSortValues, formatCents, formatDateTime, formatDisplayDate, formatMaybeDateTime, formatDollars } from "./scripts/js/format.mjs";
 import { actionButtons, appendEmpty, cell, clear, displayDateCell, el, emptyTableRow, fillSelect, makeEditableRow, manageableChip, materialIcon, renderDefinitionList, setText, tableRow } from "./scripts/js/dom.mjs";
 import { renderPieChart, renderStackedBar } from "./scripts/js/charts.mjs";
+import { getElements } from "./scripts/js/dom-elements.mjs";
+import { buildAccountPayload, buildBulkEditOverrides, buildBulkImportOverrides, buildCategoryPayload, buildManualImportPayload, buildRulePayload, buildTransactionPayload, payloadMatchesSnapshot, selectedTagIdsFrom } from "./scripts/js/form-payloads.mjs";
 import { randomComfortableColor, normalizeHexColor, hexToHsl, hslToHex } from "./scripts/js/colors.mjs";
 import { dashboardFromTransactions } from "./scripts/js/dashboard-model.mjs";
 import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, matchAmountLabel, statusClass, statusLabel, transactionTypeLabel } from "./scripts/js/labels.mjs";
@@ -94,245 +96,8 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
     { value: "transfer", label: "Transfer" },
   ];
 
-  const elements = {
-    navItems: document.querySelectorAll(".nav-item"),
-    tabNav: document.querySelector(".tabs"),
-    tabs: document.querySelectorAll(".tab"),
-    views: document.querySelectorAll(".view"),
-    scrollTopButton: document.querySelector("#scrollTopButton"),
-    appMessage: document.querySelector("#appMessage"),
-    appMessageIcon: document.querySelector("#appMessageIcon"),
-    appMessageText: document.querySelector("#appMessageText"),
-    mobileMenuButton: document.querySelector("#mobileMenuButton"),
-    mobileDateRangeButton: document.querySelector("#mobileDateRangeButton"),
-    mobileDateRangeLabel: document.querySelector("#mobileDateRangeLabel"),
-    mobileDrawerBackdrop: document.querySelector("#mobileDrawerBackdrop"),
-    mobileNavDrawer: document.querySelector("#mobileNavDrawer"),
-    mobileDummyDatabaseToggle: document.querySelector("#mobileDummyDatabaseToggle"),
-    mobileDummyDatabaseLabel: document.querySelector("#mobileDummyDatabaseLabel"),
-    mobileDummyDatabaseDescription: document.querySelector("#mobileDummyDatabaseDescription"),
-    mobileDashboardFilterButton: document.querySelector("#mobileDashboardFilterButton"),
-    mobileDashboardFilterToggle: document.querySelector("#mobileDashboardFilterToggle"),
-    mobileRegenerateDatabaseButton: document.querySelector("#mobileRegenerateDatabaseButton"),
-    mobileDevMessage: document.querySelector("#mobileDevMessage"),
-    dashboardTypeBar: document.querySelector("#dashboardTypeBar"),
-    dashboardTypeBarLegend: document.querySelector("#dashboardTypeBarLegend"),
-    dashboardCategoryPieFrame: document.querySelector("#dashboardCategoryPieFrame"),
-    dashboardCategoryPieTitle: document.querySelector("#dashboardCategoryPieTitle"),
-    dashboardCategoryPie: document.querySelector("#dashboardCategoryPie"),
-    dashboardCategoryLegend: document.querySelector("#dashboardCategoryLegend"),
-    dashboardSplurgePieFrame: document.querySelector("#dashboardSplurgePieFrame"),
-    dashboardSplurgePieTitle: document.querySelector("#dashboardSplurgePieTitle"),
-    dashboardSplurgePie: document.querySelector("#dashboardSplurgePie"),
-    dashboardSplurgeLegend: document.querySelector("#dashboardSplurgeLegend"),
-    accountAddButton: document.querySelector("#accountAddButton"),
-    accountForm: document.querySelector("#accountForm"),
-    csvUploadButton: document.querySelector("#csvUploadButton"),
-    importDialog: document.querySelector("#importDialog"),
-    importForm: document.querySelector("#importForm"),
-    importCloseButton: document.querySelector("#importCloseButton"),
-    importCancelButton: document.querySelector("#importCancelButton"),
-    importCsvFileInput: document.querySelector("#importCsvFileInput"),
-    importFileDropZone: document.querySelector("#importFileDropZone"),
-    importFileName: document.querySelector("#importFileName"),
-    categoryAddButton: document.querySelector("#categoryAddButton"),
-    tagAddButton: document.querySelector("#tagAddButton"),
-    ruleForm: document.querySelector("#ruleForm"),
-    ruleKindInput: document.querySelector("#ruleKindInput"),
-    ruleKindGroup: document.querySelector("#ruleKindGroup"),
-    importMessage: document.querySelector("#importMessage"),
-    importTable: document.querySelector("#importTable"),
-    uploadedFileDialog: document.querySelector("#uploadedFileDialog"),
-    uploadedFileDialogTitle: document.querySelector("#uploadedFileDialogTitle"),
-    uploadedFileCloseButton: document.querySelector("#uploadedFileCloseButton"),
-    uploadedFileDismissButton: document.querySelector("#uploadedFileDismissButton"),
-    uploadedFileDeleteButton: document.querySelector("#uploadedFileDeleteButton"),
-    uploadedFileFileValues: document.querySelector("#uploadedFileFileValues"),
-    uploadedFileUploadValues: document.querySelector("#uploadedFileUploadValues"),
-    uploadedFileImpactValues: document.querySelector("#uploadedFileImpactValues"),
-    devMessage: document.querySelector("#devMessage"),
-    importAccountSelect: document.querySelector("#importAccountSelect"),
-    dashboardFilterButton: document.querySelector("#dashboardFilterButton"),
-    dashboardFilterToggle: document.querySelector("#dashboardFilterToggle"),
-    dashboardFilterDialog: document.querySelector("#dashboardFilterDialog"),
-    dashboardFilterCloseButton: document.querySelector("#dashboardFilterCloseButton"),
-    dashboardFilterDoneButton: document.querySelector("#dashboardFilterDoneButton"),
-    dashboardFilterResetButton: document.querySelector("#dashboardFilterResetButton"),
-    dashboardFilterList: document.querySelector("#dashboardFilterList"),
-    dummyDatabaseToggle: document.querySelector("#dummyDatabaseToggle"),
-    dummyDatabaseLabel: document.querySelector("#dummyDatabaseLabel"),
-    dummyDatabaseDescription: document.querySelector("#dummyDatabaseDescription"),
-    rawAccountFilter: document.querySelector("#rawAccountFilter"),
-    rawStatusFilter: document.querySelector("#rawStatusFilter"),
-    rawSelectedCount: document.querySelector("#rawSelectedCount"),
-    rawSelectedCountMobile: document.querySelector("#rawSelectedCountMobile"),
-    rawRowsTableElement: document.querySelector("#rawRowsTableElement"),
-    selectVisibleRowsButton: document.querySelector("#selectVisibleRowsButton"),
-    selectVisibleRowsMobileButton: document.querySelector("#selectVisibleRowsMobileButton"),
-    importSelectedRowsButton: document.querySelector("#importSelectedRowsButton"),
-    regenerateDatabaseButton: document.querySelector("#regenerateDatabaseButton"),
-    ruleAddButton: document.querySelector("#ruleAddButton"),
-    ruleDialog: document.querySelector("#ruleDialog"),
-    ruleCategoryInput: document.querySelector("#ruleCategoryInput"),
-    ruleCategoryButton: document.querySelector("#ruleCategoryButton"),
-    ruleMatchAmountInput: document.querySelector("#ruleMatchAmountInput"),
-    ruleMatchAmountGroup: document.querySelector("#ruleMatchAmountGroup"),
-    ruleTypeInput: document.querySelector("#ruleTypeInput"),
-    ruleTypeGroup: document.querySelector("#ruleTypeGroup"),
-    ruleTags: document.querySelector("#ruleTags"),
-    ruleCancelButton: document.querySelector("#ruleCancelButton"),
-    ruleDismissButton: document.querySelector("#ruleDismissButton"),
-    ruleDialogTitle: document.querySelector("#ruleDialogTitle"),
-    ruleMessage: document.querySelector("#ruleMessage"),
-    ruleSubmitButton: document.querySelector("#ruleSubmitButton"),
-    ruleDeleteButton: document.querySelector("#ruleDeleteButton"),
-    duplicateRuleDialog: document.querySelector("#duplicateRuleDialog"),
-    duplicateRuleMessage: document.querySelector("#duplicateRuleMessage"),
-    duplicateRuleCloseButton: document.querySelector("#duplicateRuleCloseButton"),
-    duplicateRuleCancelButton: document.querySelector("#duplicateRuleCancelButton"),
-    duplicateRuleGoButton: document.querySelector("#duplicateRuleGoButton"),
-    bulkImportDialog: document.querySelector("#bulkImportDialog"),
-    bulkImportForm: document.querySelector("#bulkImportForm"),
-    bulkImportDialogTitle: document.querySelector("#bulkImportDialogTitle"),
-    bulkImportCloseButton: document.querySelector("#bulkImportCloseButton"),
-    bulkImportCancelButton: document.querySelector("#bulkImportCancelButton"),
-    bulkImportResetButton: document.querySelector("#bulkImportResetButton"),
-    bulkImportSubmitButton: document.querySelector("#bulkImportSubmitButton"),
-    bulkImportMessage: document.querySelector("#bulkImportMessage"),
-    bulkImportTypeInput: document.querySelector("#bulkImportTypeInput"),
-    bulkImportTypeGroup: document.querySelector("#bulkImportTypeGroup"),
-    bulkImportCategoryInput: document.querySelector("#bulkImportCategoryInput"),
-    bulkImportCategoryButton: document.querySelector("#bulkImportCategoryButton"),
-    bulkImportTagsModeInput: document.querySelector("#bulkImportTagsModeInput"),
-    bulkImportTagsModeGroup: document.querySelector("#bulkImportTagsModeGroup"),
-    bulkImportTags: document.querySelector("#bulkImportTags"),
-    manualImportDialog: document.querySelector("#manualImportDialog"),
-    manualImportForm: document.querySelector("#manualImportForm"),
-    manualImportDialogTitle: document.querySelector("#manualImportDialogTitle"),
-    manualImportCloseButton: document.querySelector("#manualImportCloseButton"),
-    manualImportCancelButton: document.querySelector("#manualImportCancelButton"),
-    manualImportSubmitButton: document.querySelector("#manualImportSubmitButton"),
-    manualImportMessage: document.querySelector("#manualImportMessage"),
-    manualImportCategoryInput: document.querySelector("#manualImportCategoryInput"),
-    manualImportCategoryButton: document.querySelector("#manualImportCategoryButton"),
-    manualImportTypeInput: document.querySelector("#manualImportTypeInput"),
-    manualImportTypeGroup: document.querySelector("#manualImportTypeGroup"),
-    manualImportTags: document.querySelector("#manualImportTags"),
-    dateRangeButton: document.querySelector("#dateRangeButton"),
-    dateRangeLabel: document.querySelector("#dateRangeLabel"),
-    dateRangeDialog: document.querySelector("#dateRangeDialog"),
-    dateRangeForm: document.querySelector("#dateRangeForm"),
-    dateRangeCloseButton: document.querySelector("#dateRangeCloseButton"),
-    dateRangePresetList: document.querySelector("#dateRangePresetList"),
-    dateRangeCalendarGrid: document.querySelector("#dateRangeCalendarGrid"),
-    dateRangeAllTimeButton: document.querySelector("#dateRangeAllTimeButton"),
-    dateRangeCancelButton: document.querySelector("#dateRangeCancelButton"),
-    dateRangeApplyButton: document.querySelector("#dateRangeApplyButton"),
-    dateRangeCustomStart: document.querySelector("#dateRangeCustomStart"),
-    dateRangeCustomEnd: document.querySelector("#dateRangeCustomEnd"),
-    accountDialog: document.querySelector("#accountDialog"),
-    accountDialogTitle: document.querySelector("#accountDialogTitle"),
-    accountTypeInput: document.querySelector("#accountTypeInput"),
-    accountTypeGroup: document.querySelector("#accountTypeGroup"),
-    accountCancelButton: document.querySelector("#accountCancelButton"),
-    accountDismissButton: document.querySelector("#accountDismissButton"),
-    accountSubmitButton: document.querySelector("#accountSubmitButton"),
-    accountDeleteButton: document.querySelector("#accountDeleteButton"),
-    accountMessage: document.querySelector("#accountMessage"),
-    textInputDialog: document.querySelector("#textInputDialog"),
-    textInputForm: document.querySelector("#textInputForm"),
-    textInputTitle: document.querySelector("#textInputTitle"),
-    textInputLabel: document.querySelector("#textInputLabel"),
-    textInputCancelButton: document.querySelector("#textInputCancelButton"),
-    textInputDismissButton: document.querySelector("#textInputDismissButton"),
-    textInputDeleteButton: document.querySelector("#textInputDeleteButton"),
-    confirmDialog: document.querySelector("#confirmDialog"),
-    confirmForm: document.querySelector("#confirmForm"),
-    confirmTitle: document.querySelector("#confirmTitle"),
-    confirmMessage: document.querySelector("#confirmMessage"),
-    confirmCancelButton: document.querySelector("#confirmCancelButton"),
-    confirmDismissButton: document.querySelector("#confirmDismissButton"),
-    confirmSubmitButton: document.querySelector("#confirmSubmitButton"),
-    confirmOption: document.querySelector("#confirmOption"),
-    confirmOptionInput: document.querySelector("#confirmOptionInput"),
-    confirmOptionLabel: document.querySelector("#confirmOptionLabel"),
-    transactionDialog: document.querySelector("#transactionDialog"),
-    transactionForm: document.querySelector("#transactionForm"),
-    transactionDialogTitle: document.querySelector("#transactionDialogTitle"),
-    transactionCloseButton: document.querySelector("#transactionCloseButton"),
-    transactionCategoryInput: document.querySelector("#transactionCategoryInput"),
-    transactionCategoryButton: document.querySelector("#transactionCategoryButton"),
-    transactionCategoryFilterButton: document.querySelector("#transactionCategoryFilterButton"),
-    bulkEditTransactionsButton: document.querySelector("#bulkEditTransactionsButton"),
-    bulkEditDialog: document.querySelector("#bulkEditDialog"),
-    bulkEditForm: document.querySelector("#bulkEditForm"),
-    bulkEditDialogTitle: document.querySelector("#bulkEditDialogTitle"),
-    bulkEditCloseButton: document.querySelector("#bulkEditCloseButton"),
-    bulkEditCancelButton: document.querySelector("#bulkEditCancelButton"),
-    bulkEditResetButton: document.querySelector("#bulkEditResetButton"),
-    bulkEditSubmitButton: document.querySelector("#bulkEditSubmitButton"),
-    bulkEditMessage: document.querySelector("#bulkEditMessage"),
-    bulkEditTypeInput: document.querySelector("#bulkEditTypeInput"),
-    bulkEditTypeGroup: document.querySelector("#bulkEditTypeGroup"),
-    bulkEditCategoryInput: document.querySelector("#bulkEditCategoryInput"),
-    bulkEditCategoryButton: document.querySelector("#bulkEditCategoryButton"),
-    bulkEditTagsModeInput: document.querySelector("#bulkEditTagsModeInput"),
-    bulkEditTagsModeGroup: document.querySelector("#bulkEditTagsModeGroup"),
-    bulkEditTags: document.querySelector("#bulkEditTags"),
-    ruleCategoryFilterButton: document.querySelector("#ruleCategoryFilterButton"),
-    transactionTypeInput: document.querySelector("#transactionTypeInput"),
-    transactionTypeGroup: document.querySelector("#transactionTypeGroup"),
-    transactionCategoryFilter: document.querySelector("#transactionCategoryFilter"),
-    transactionSearch: document.querySelector("#transactionSearch"),
-    ruleCategoryFilter: document.querySelector("#ruleCategoryFilter"),
-    ruleSearch: document.querySelector("#ruleSearch"),
-    transactionTags: document.querySelector("#transactionTags"),
-    transactionTagsEditButton: document.querySelector("#transactionTagsEditButton"),
-    transactionRawValues: document.querySelector("#transactionRawValues"),
-    transactionMetadata: document.querySelector("#transactionMetadata"),
-    transactionMessage: document.querySelector("#transactionMessage"),
-    transactionCancelButton: document.querySelector("#transactionCancelButton"),
-    transactionSaveButton: document.querySelector("#transactionSaveButton"),
-    transactionDeleteButton: document.querySelector("#transactionDeleteButton"),
-    rawRowDialog: document.querySelector("#rawRowDialog"),
-    rawRowDialogTitle: document.querySelector("#rawRowDialogTitle"),
-    rawRowStatusSubtitle: document.querySelector("#rawRowStatusSubtitle"),
-    rawRowCloseButton: document.querySelector("#rawRowCloseButton"),
-    rawRowImportButton: document.querySelector("#rawRowImportButton"),
-    rawRowDeleteButton: document.querySelector("#rawRowDeleteButton"),
-    rawRowRuleButton: document.querySelector("#rawRowRuleButton"),
-    rawRowRawValues: document.querySelector("#rawRowRawValues"),
-    rawRowCleanValues: document.querySelector("#rawRowCleanValues"),
-    rawRowImportValues: document.querySelector("#rawRowImportValues"),
-    categoryDialog: document.querySelector("#categoryDialog"),
-    categoryDialogForm: document.querySelector("#categoryDialogForm"),
-    categoryDialogTitle: document.querySelector("#categoryDialogTitle"),
-    categoryCloseButton: document.querySelector("#categoryCloseButton"),
-    categoryCancelButton: document.querySelector("#categoryCancelButton"),
-    categoryDeleteButton: document.querySelector("#categoryDeleteButton"),
-    categorySubmitButton: document.querySelector("#categorySubmitButton"),
-    categoryParentInput: document.querySelector("#categoryParentInput"),
-    categoryParentButton: document.querySelector("#categoryParentButton"),
-    categoryColorInput: document.querySelector("#categoryColorInput"),
-    categoryColorPickButton: document.querySelector("#categoryColorPickButton"),
-    categoryColorRandomizeButton: document.querySelector("#categoryColorRandomizeButton"),
-    categoryColorDialog: document.querySelector("#categoryColorDialog"),
-    categoryColorForm: document.querySelector("#categoryColorForm"),
-    categoryColorCloseButton: document.querySelector("#categoryColorCloseButton"),
-    categoryColorCancelButton: document.querySelector("#categoryColorCancelButton"),
-    categoryColorPreview: document.querySelector("#categoryColorPreview"),
-    categoryColorHue: document.querySelector("#categoryColorHue"),
-    categoryColorSaturation: document.querySelector("#categoryColorSaturation"),
-    categoryColorLightness: document.querySelector("#categoryColorLightness"),
-    categoryColorHex: document.querySelector("#categoryColorHex"),
-    categoryMessage: document.querySelector("#categoryMessage"),
-    categoryPickerDialog: document.querySelector("#categoryPickerDialog"),
-    categoryPickerTitle: document.querySelector("#categoryPickerTitle"),
-    categoryPickerCloseButton: document.querySelector("#categoryPickerCloseButton"),
-    categoryPickerCancelButton: document.querySelector("#categoryPickerCancelButton"),
-    categoryPickerClearButton: document.querySelector("#categoryPickerClearButton"),
-    categoryPickerList: document.querySelector("#categoryPickerList"),
-  };
+  const elements = getElements();
+
 
   elements.navItems.forEach((navItem) => {
     navItem.addEventListener("click", () => {
@@ -1276,7 +1041,7 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
     form.elements.name.value = account.name || "";
     form.elements.institution.value = account.institution || "";
     setTypeGroupValue(elements.accountTypeInput, elements.accountTypeGroup, accountTypeValues().has(account.account_type) ? account.account_type : "checking");
-    accountEditSnapshot = buildAccountPayload();
+    accountEditSnapshot = buildAccountPayload(elements.accountForm);
     openModal(elements.accountDialog);
   }
 
@@ -1491,7 +1256,7 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
     elements.categoryParentButton.disabled = categoryDescendantIds(category.id).size > 0;
     setCategoryDialogColor(category.color || randomComfortableColor());
     updateCategoryColorControl();
-    categoryEditSnapshot = buildCategoryPayload();
+    categoryEditSnapshot = buildCategoryPayload(elements.categoryDialogForm);
     openModal(elements.categoryDialog);
   }
 
@@ -1501,7 +1266,7 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
 
   async function saveCategory(event) {
     event.preventDefault();
-    const payload = buildCategoryPayload();
+    const payload = buildCategoryPayload(elements.categoryDialogForm);
     if (editingCategoryId && payloadMatchesSnapshot(payload, categoryEditSnapshot)) {
       closeCategoryDialog();
       return;
@@ -1790,7 +1555,7 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
     setTypeGroupValue(elements.ruleTypeInput, elements.ruleTypeGroup, rule.set_transaction_type || "expense");
     setRuleCategoryValue(rule.set_category_id);
     renderRuleTags(rule.tag_ids || (rule.add_tag_id === null ? [] : [rule.add_tag_id]));
-    ruleEditSnapshot = buildRulePayload();
+    ruleEditSnapshot = buildRulePayload(elements.ruleForm, elements.ruleTags);
     updateRuleFillButtons();
   }
 
@@ -1806,7 +1571,7 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
     if (!elements.ruleDialog.open) {
       return;
     }
-    const existingRule = findDuplicateRule(buildRulePayload());
+    const existingRule = findDuplicateRule(buildRulePayload(elements.ruleForm, elements.ruleTags));
     if (existingRule) {
       if (existingRule.id !== editingRuleId) {
         populateRuleEditDialog(existingRule);
@@ -1828,7 +1593,7 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
   }
 
   async function saveRuleFromForm({ forceCreate = false } = {}) {
-    const payload = buildRulePayload(elements.ruleForm);
+    const payload = buildRulePayload(elements.ruleForm, elements.ruleTags);
     clearRuleFieldErrors();
 
     if (!payload.match_description && !payload.match_category) {
@@ -2407,7 +2172,7 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
     transactionTagsEditMode = false;
     transactionEditSnapshot = null;
     populateTransactionDialog(transaction);
-    transactionEditSnapshot = buildTransactionPayload();
+    transactionEditSnapshot = buildTransactionPayload(elements.transactionForm, transactionTagsEditMode ? selectedTagIdsFrom(elements.transactionTags) : (transactionTagDraftIds || []));
     openModal(elements.transactionDialog);
   }
 
@@ -2509,144 +2274,24 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
     form.elements.name.value = [institution, accountType].filter(Boolean).join(" ");
   }
 
-  function buildAccountPayload(formElement = elements.accountForm) {
-    const form = new FormData(formElement);
-    return {
-      name: clean(form.get("name")),
-      institution: clean(form.get("institution")) || null,
-      account_type: clean(form.get("accountType")) || null,
-    };
-  }
 
-  function buildCategoryPayload() {
-    const form = new FormData(elements.categoryDialogForm);
-    return {
-      name: clean(form.get("name")),
-      parent_id: Number(form.get("parentId")) || null,
-      color: clean(form.get("parentId")) ? null : clean(form.get("color")),
-    };
-  }
 
-  function buildRulePayload(formElement = elements.ruleForm) {
-    const form = new FormData(formElement);
-    const setCleanDescription = clean(form.get("setCleanDescription")) || null;
-    const matchDescription = clean(form.get("matchDescription")) || null;
-    const matchCategory = clean(form.get("matchCategory")) || null;
-    const addTagIds = selectedTagIdsFrom(elements.ruleTags);
-    const ruleType = clean(form.get("ruleKind")) || "auto-import";
-    return {
-      name: setCleanDescription || matchDescription || matchCategory || (ruleType === "template" ? "Template" : "Rule"),
-      rule_type: ruleType,
-      match_description: matchDescription,
-      match_category: matchCategory,
-      match_amount: clean(form.get("matchAmount")) || "any",
-      set_category_id: Number(form.get("setCategoryId")) || null,
-      set_clean_description: setCleanDescription,
-      set_transaction_type: clean(form.get("setTransactionType")) || null,
-      add_tag_ids: addTagIds,
-    };
-  }
 
-  function buildManualImportPayload() {
-    const form = new FormData(elements.manualImportForm);
-    return {
-      category_id: Number(form.get("categoryId")) || null,
-      clean_description: clean(form.get("cleanDescription")) || null,
-      transaction_type: clean(form.get("transactionType")) || null,
-      tag_ids: selectedTagIdsFrom(elements.manualImportTags),
-      note: clean(form.get("note")),
-    };
-  }
 
-  function buildBulkImportOverrides() {
-    const form = new FormData(elements.bulkImportForm);
-    const overrides = {};
-    const transactionType = clean(form.get("transactionType"));
-    const categoryId = Number(form.get("categoryId")) || null;
-    const cleanDescription = clean(form.get("cleanDescription")) || null;
-    if (transactionType && transactionType !== "keep") {
-      overrides.transaction_type = transactionType;
-    }
-    if (categoryId) {
-      overrides.category_id = categoryId;
-    }
-    if (cleanDescription) {
-      overrides.clean_description = cleanDescription;
-    }
-    if (clean(form.get("tagsMode")) === "overwrite") {
-      overrides.tag_ids = selectedTagIdsFrom(elements.bulkImportTags);
-    }
-    return overrides;
-  }
 
-  function buildBulkEditOverrides() {
-    const form = new FormData(elements.bulkEditForm);
-    const overrides = {};
-    const transactionType = clean(form.get("transactionType"));
-    const categoryId = Number(form.get("categoryId")) || null;
-    const cleanDescription = clean(form.get("cleanDescription")) || null;
-    if (transactionType && transactionType !== "keep") {
-      overrides.transaction_type = transactionType;
-    }
-    if (categoryId) {
-      overrides.category_id = categoryId;
-    }
-    if (cleanDescription) {
-      overrides.clean_description = cleanDescription;
-    }
-    if (clean(form.get("tagsMode")) === "overwrite") {
-      overrides.tag_ids = selectedTagIdsFrom(elements.bulkEditTags);
-    }
-    return overrides;
-  }
 
   function bulkImportHasOverrides() {
-    return Object.keys(buildBulkImportOverrides()).length > 0;
+    return Object.keys(buildBulkImportOverrides(elements.bulkImportForm, elements.bulkImportTags)).length > 0;
   }
 
   function bulkEditHasOverrides() {
-    return Object.keys(buildBulkEditOverrides()).length > 0;
+    return Object.keys(buildBulkEditOverrides(elements.bulkEditForm, elements.bulkEditTags)).length > 0;
   }
 
 
-  function buildTransactionPayload() {
-    const form = new FormData(elements.transactionForm);
-    const tagIds = transactionTagsEditMode
-      ? selectedTagIdsFrom(elements.transactionTags)
-      : (transactionTagDraftIds || []);
-    return {
-      posted_date: clean(form.get("postedDate")),
-      category_id: Number(form.get("categoryId")),
-      transaction_type: clean(form.get("transactionType")) || null,
-      amount: clean(form.get("amount")),
-      clean_description: clean(form.get("cleanDescription")) || null,
-      notes: clean(form.get("notes")),
-      tag_ids: tagIds,
-    };
-  }
 
-  function selectedTagIdsFrom(container) {
-    return [...container.querySelectorAll("input[type='checkbox']:checked")]
-      .map((checkbox) => Number(checkbox.value))
-      .filter((tagId) => Number.isInteger(tagId) && tagId > 0);
-  }
 
-  function payloadMatchesSnapshot(payload, snapshot) {
-    return Boolean(snapshot) && JSON.stringify(normalizePayloadForComparison(payload)) === JSON.stringify(normalizePayloadForComparison(snapshot));
-  }
 
-  function normalizePayloadForComparison(value) {
-    if (Array.isArray(value)) {
-      return value.map((item) => Number(item)).filter((item) => Number.isInteger(item)).sort((a, b) => a - b);
-    }
-    if (value && typeof value === "object") {
-      return Object.keys(value).sort().reduce((record, key) => {
-        record[key] = normalizePayloadForComparison(value[key]);
-        return record;
-      }, {});
-    }
-    return value ?? null;
-  }
 
   function suppressButtonState(button) {
     button.blur();
@@ -2662,7 +2307,7 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
     if (!transaction) {
       return;
     }
-    const payload = buildTransactionPayload();
+    const payload = buildTransactionPayload(elements.transactionForm, transactionTagsEditMode ? selectedTagIdsFrom(elements.transactionTags) : (transactionTagDraftIds || []));
     if (payloadMatchesSnapshot(payload, transactionEditSnapshot)) {
       closeTransactionDialog();
       return;
@@ -2882,7 +2527,7 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
       closeManualImportDialog();
       return;
     }
-    const payload = buildManualImportPayload();
+    const payload = buildManualImportPayload(elements.manualImportForm, elements.manualImportTags);
     clearManualImportFieldErrors();
     if (!payload.transaction_type) {
       setModalMessage(elements.manualImportMessage, "Type is required.", true);
@@ -3995,7 +3640,7 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
       closeBulkEditDialog();
       return;
     }
-    const overrides = buildBulkEditOverrides();
+    const overrides = buildBulkEditOverrides(elements.bulkEditForm, elements.bulkEditTags);
     if (!Object.keys(overrides).length) {
       closeBulkEditDialog();
       return;
@@ -4019,7 +3664,7 @@ import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, 
 
   async function importSelectedRawRows(event) {
     event?.preventDefault();
-    const overrides = buildBulkImportOverrides();
+    const overrides = buildBulkImportOverrides(elements.bulkImportForm, elements.bulkImportTags);
     const rowIds = [...selectedRawRowIds].filter((rowId) => {
       const rawRow = state.rawRows.find((candidate) => candidate.id === rowId);
       return rawRow && isSelectableRawRow(rawRow);

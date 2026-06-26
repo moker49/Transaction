@@ -44,3 +44,53 @@ test("formats app labels", async () => {
   assert.equal(labels.transactionTypeLabel("transfer"), "Transfer");
   assert.equal(labels.destructiveMessage("Delete it?"), "Delete it?\nThis cannot be undone.");
 });
+
+test("builds payloads from form data", async () => {
+  const payloads = await import("../scripts/js/form-payloads.mjs");
+
+  globalThis.FormData = class FormData {
+    constructor(form) {
+      this.form = form;
+    }
+
+    get(name) {
+      return this.form[name] ?? "";
+    }
+  };
+
+  const tagContainer = {
+    querySelectorAll() {
+      return [{ value: "2" }, { value: "bad" }, { value: "5" }];
+    },
+  };
+
+  assert.deepEqual(payloads.buildAccountPayload({
+    name: " Main ",
+    institution: "",
+    accountType: " checking ",
+  }), {
+    name: "Main",
+    institution: null,
+    account_type: "checking",
+  });
+  assert.deepEqual(payloads.buildRulePayload({
+    ruleKind: "template",
+    matchDescription: " Store ",
+    matchCategory: "",
+    matchAmount: "",
+    setCategoryId: "7",
+    setCleanDescription: "",
+    setTransactionType: "expense",
+  }, tagContainer), {
+    name: "Store",
+    rule_type: "template",
+    match_description: "Store",
+    match_category: null,
+    match_amount: "any",
+    set_category_id: 7,
+    set_clean_description: null,
+    set_transaction_type: "expense",
+    add_tag_ids: [2, 5],
+  });
+  assert.equal(payloads.payloadMatchesSnapshot({ tag_ids: [5, 2] }, { tag_ids: [2, 5] }), true);
+});
