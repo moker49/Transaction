@@ -14,7 +14,7 @@
   --neutral-item: hsl(0, 0%, 12%);
   --neutral-border: hsl(0, 0%, 22%);
 
-  --gray: hsl(0, 0%, 55%);
+  --gray: hsl(0, 0%, 70%);
   --gray-dark: hsl(0, 0%, 8%);
   --gray-border: hsl(0, 0%, 28%);
 
@@ -28,8 +28,9 @@
   --surface-muted: color-mix(in srgb, var(--primary) var(--surface-saturation), var(--neutral-surface-muted));
   --input-bg: color-mix(in srgb, var(--primary) max(0%, calc(var(--surface-saturation) - 6%)), var(--neutral-input));
   --item-bg: color-mix(in srgb, var(--primary) var(--surface-saturation), var(--neutral-item));
-  --text: color-mix(in srgb, var(--white) 92%, var(--primary));
-  --muted: color-mix(in srgb, var(--gray) 86%, var(--primary));
+  --text: color-mix(in srgb, var(--white) 90%, var(--primary));
+  --muted: color-mix(in srgb, var(--gray) 90%, var(--primary));
+  --text-muted: color-mix(in srgb, var(--text) 50%, var(--muted));
   --border: color-mix(in srgb, var(--primary) var(--border-saturation), var(--neutral-border));
   --control-border: color-mix(in srgb, var(--primary) var(--border-saturation), var(--neutral-border));
 
@@ -47,13 +48,32 @@
   --success-bg: color-mix(in srgb, var(--primary) 42%, var(--black));
   --success-border: color-mix(in srgb, var(--primary) 50%, var(--border));
 
-  --connected-bg: color-mix(in srgb, var(--gray) 40%, var(--primary) 8%, var(--black));
+  --connected-bg: color-mix(
+    in srgb,
+    color-mix(in srgb, var(--gray-dark) 80%, var(--gray)) 85%,
+    var(--primary)
+  );
+
   --connected-selected-bg: var(--accent);
   --connected-selected-text: var(--accent-contrast);
 
-  --tag-chip-selected-bg: color-mix(in srgb, var(--gray) 42%, var(--primary) 10%, var(--black));
-  --tag-chip-selected-text: color-mix(in srgb, var(--white) 78%, var(--gray) 14%, var(--primary) 8%);
-  --tag-chip-outline: color-mix(in srgb, var(--gray-border) 80%, var(--primary));
+  --tag-chip-selected-bg: color-mix(
+    in srgb,
+    color-mix(in srgb, var(--gray-dark) 70%, var(--gray)) 90%,
+    var(--primary)
+  );
+
+  --tag-chip-selected-text: color-mix(
+    in srgb,
+    color-mix(in srgb, var(--white) 82%, var(--gray)) 92%,
+    var(--primary)
+  );
+
+  --tag-chip-outline: color-mix(
+    in srgb,
+    var(--gray-border) 88%,
+    var(--primary)
+  );
 
   --income: color-mix(in srgb, var(--tertiary) 72%, var(--black));
   --outflow: color-mix(in srgb, var(--error) 72%, var(--black));
@@ -887,7 +907,7 @@ h2 {
 label {
   display: grid;
   gap: 6px;
-  color: var(--muted);
+  color: var(--text-muted);
   font-size: 0.86rem;
   font-weight: 700;
 }
@@ -1317,7 +1337,7 @@ td.amount {
 
 .category-section-heading h3 {
   margin: 0;
-  color: var(--muted);
+  color: var(--text-muted);
   font-size: 0.82rem;
   text-transform: uppercase;
 }
@@ -1397,13 +1417,13 @@ td.amount {
 }
 
 .category-picker-chip.is-selected {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
 .category-picker-chip:focus-visible,
 .category-picker-button:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus);
   outline-offset: 3px;
 }
 
