@@ -1,5 +1,5 @@
 import { clean } from "./scripts/js/common.mjs";
-import { parseCsv, normalizeCsvRow, detectCsvLayout, sourceAccountKeyFromCsvRows, accountImportKeys, sha256 } from "./scripts/js/csv.mjs";
+import { normalizeCsvRow, sha256 } from "./scripts/js/csv.mjs";
 import { formatCents, formatDateTime, formatDisplayDate, formatMaybeDateTime, formatDollars } from "./scripts/js/format.mjs";
 import { appendEmpty, clear, displayDateCell, el, emptyTableRow, fillSelect, makeEditableRow, materialIcon, renderDefinitionList, setText, tableRow } from "./scripts/js/dom.mjs";
 import { renderPieChart, renderStackedBar } from "./scripts/js/charts.mjs";
@@ -20,6 +20,8 @@ import { createDashboardFilterController } from "./scripts/js/dashboard-filter-c
 import { createCategoryPickerController } from "./scripts/js/category-picker-controller.mjs";
 import { createRawRowsController } from "./scripts/js/raw-rows-controller.mjs";
 import { createAppDataController } from "./scripts/js/app-data-controller.mjs";
+import { createCsvImportController } from "./scripts/js/csv-import-controller.mjs";
+import { createDatabaseModeController } from "./scripts/js/database-mode-controller.mjs";
 
 const API_BASE = window.location.protocol === "file:" ? "http://127.0.0.1:5050" : "";
 const DUMMY_DATABASE_KEY = "transaction-use-dummy-database";
@@ -42,7 +44,6 @@ const dateRangePresets = [
 ];
 const YEAR_RANGE_PREFIX = "year-";
 const FIRST_YEAR_RANGE = 2020;
-
 
 let state = structuredClone(DEFAULT_STATE);
 const selectedRawRowIds = new Set();
@@ -73,7 +74,6 @@ let dashboardCategoryPieMode = "spending";
 let dashboardSplurgePieMode = "splurge";
 let shouldAnimateDashboardCategoryPie = false;
 let shouldAnimateDashboardSplurgePie = false;
-let importFileAnalysisToken = 0;
 const viewScrollPositions = new Map();
 const sectionViewSelections = new Map();
 const tableSortState = {
@@ -83,6 +83,7 @@ const tableSortState = {
   rules: { key: "name", direction: "asc", type: "text" },
 };
 let dataController = null;
+let databaseMode = null;
 const elements = getElements();
 const ui = createUiController({
   elements,
@@ -138,10 +139,18 @@ dataController = createAppDataController({
   selectedTransactionIds,
   selectedRawRowIds,
   rawRowNotes,
-  isUsingDummyDatabase,
+  isUsingDummyDatabase: () => databaseMode.isUsingDummyDatabase(),
   render,
   showPopup,
   hidePopup,
+});
+const csvImport = createCsvImportController({
+  elements,
+  getAccounts: () => state.accounts,
+  dataController,
+  openModal,
+  setMessage,
+  showPopup,
 });
 const categoryUi = createCategoryUi({
   getCategories: () => state.categories,
@@ -244,6 +253,15 @@ const rawRowsController = createRawRowsController({
   openRawRowDialog,
   plainCategoryChip,
 });
+databaseMode = createDatabaseModeController({
+  elements,
+  storageKey: DUMMY_DATABASE_KEY,
+  selectedRawRowIds,
+  rawRowNotes,
+  rawRowsController,
+  setMessage,
+  reload: () => dataController.loadInitialState(),
+});
 const typeGroupOptions = {
   onChange: ({ input, value }) => {
     if (input === elements.ruleKindInput && value === "template") {
@@ -251,7 +269,6 @@ const typeGroupOptions = {
     }
   },
 };
-
 
 elements.navItems.forEach((navItem) => {
   navItem.addEventListener("click", () => {
@@ -288,14 +305,14 @@ initializeClearableTextFields();
 
 elements.accountAddButton.addEventListener("click", openAccountAddDialog);
 elements.accountForm.addEventListener("submit", saveAccount);
-elements.csvUploadButton.addEventListener("click", openImportDialog);
-elements.importForm.addEventListener("submit", importCsv);
-elements.importCloseButton.addEventListener("click", closeImportDialog);
-elements.importCancelButton.addEventListener("click", closeImportDialog);
-elements.importCsvFileInput.addEventListener("change", handleImportFileChange);
-elements.importFileDropZone.addEventListener("dragover", handleImportFileDrag);
-elements.importFileDropZone.addEventListener("dragleave", handleImportFileDrag);
-elements.importFileDropZone.addEventListener("drop", handleImportFileDrop);
+elements.csvUploadButton.addEventListener("click", csvImport.openDialog);
+elements.importForm.addEventListener("submit", csvImport.importCsv);
+elements.importCloseButton.addEventListener("click", csvImport.closeDialog);
+elements.importCancelButton.addEventListener("click", csvImport.closeDialog);
+elements.importCsvFileInput.addEventListener("change", csvImport.handleFileChange);
+elements.importFileDropZone.addEventListener("dragover", csvImport.handleFileDrag);
+elements.importFileDropZone.addEventListener("dragleave", csvImport.handleFileDrag);
+elements.importFileDropZone.addEventListener("drop", csvImport.handleFileDrop);
 elements.uploadedFileCloseButton.addEventListener("click", closeUploadedFileDialog);
 elements.uploadedFileDismissButton.addEventListener("click", closeUploadedFileDialog);
 elements.uploadedFileDeleteButton.addEventListener("click", deleteActiveUploadedFile);
@@ -311,7 +328,7 @@ elements.selectVisibleRowsButton.addEventListener("click", rawRowsController.sel
 elements.selectVisibleRowsMobileButton.addEventListener("click", rawRowsController.selectVisibleRows);
 elements.importSelectedRowsButton.addEventListener("click", openBulkImportDialog);
 elements.regenerateDatabaseButton.addEventListener("click", regenerateDatabase);
-elements.dummyDatabaseToggle.addEventListener("change", updateDatabaseMode);
+elements.dummyDatabaseToggle.addEventListener("change", databaseMode.update);
 elements.ruleAddButton.addEventListener("click", () => openRuleAddDialog());
 elements.ruleCancelButton.addEventListener("click", closeRuleDialog);
 elements.ruleDismissButton.addEventListener("click", handleRuleDismissButton);
@@ -439,7 +456,7 @@ elements.appMessage.addEventListener("cancel", (event) => {
   hidePopup();
 });
 elements.mobileDateRangeButton.addEventListener("click", dateRange.openDialog);
-elements.mobileDummyDatabaseToggle.addEventListener("change", updateDatabaseMode);
+elements.mobileDummyDatabaseToggle.addEventListener("change", databaseMode.update);
 elements.mobileRegenerateDatabaseButton.addEventListener("click", regenerateDatabase);
 elements.dateRangeButton.addEventListener("click", dateRange.openDialog);
 elements.dateRangeForm.addEventListener("submit", dateRange.applyDateRange);
@@ -574,69 +591,10 @@ window.matchMedia(MOBILE_LAYOUT_QUERY).addEventListener("change", () => {
 });
 
 dateRange.initialize();
-initializeDatabaseMode();
+databaseMode.initialize();
 dashboardFilter.initialize();
 activateView("overview");
 dataController.loadInitialState();
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-function initializeDatabaseMode() {
-  const isDummy = localStorage.getItem(DUMMY_DATABASE_KEY) === "true";
-  elements.dummyDatabaseToggle.checked = isDummy;
-  elements.mobileDummyDatabaseToggle.checked = isDummy;
-  renderDatabaseModeLabel();
-}
-
-function updateDatabaseMode(event) {
-  const isDummy = event.currentTarget.checked;
-  localStorage.setItem(DUMMY_DATABASE_KEY, isDummy ? "true" : "false");
-  elements.dummyDatabaseToggle.checked = isDummy;
-  elements.mobileDummyDatabaseToggle.checked = isDummy;
-  renderDatabaseModeLabel();
-  selectedRawRowIds.clear();
-  rawRowNotes.clear();
-  rawRowsController.resetVisibleRows();
-  setMessage("");
-  dataController.loadInitialState();
-}
-
-function isUsingDummyDatabase() {
-  return elements.dummyDatabaseToggle.checked;
-}
-
-function renderDatabaseModeLabel() {
-  elements.dummyDatabaseLabel.textContent = "Database";
-  elements.mobileDummyDatabaseLabel.textContent = "Database";
-  if (isUsingDummyDatabase()) {
-    elements.dummyDatabaseDescription.textContent = "Using dummy database";
-    elements.mobileDummyDatabaseDescription.textContent = "Using dummy database";
-    return;
-  }
-  elements.dummyDatabaseDescription.textContent = "Using primary database";
-  elements.mobileDummyDatabaseDescription.textContent = "Using primary database";
-}
 
 function openMobileDrawer({ skipHistory = false } = {}) {
   if (elements.mobileNavDrawer.classList.contains("is-open")) {
@@ -830,138 +788,6 @@ async function saveAccount(event) {
   }
 }
 
-async function importCsv(event) {
-  event.preventDefault();
-  setMessage("");
-
-  const formElement = event.currentTarget;
-  const form = new FormData(formElement);
-  const accountId = Number(elements.importAccountSelect.value);
-  const file = form.get("csvFile");
-  const sourceType = "csv";
-
-  if (!accountId || !(file instanceof File) || !file.name) {
-    showPopup("Choose an account and CSV file.", "warning");
-    return;
-  }
-
-  try {
-    const upload = new FormData();
-    upload.append("accountId", String(accountId));
-    upload.append("sourceType", sourceType);
-    upload.append("csvFile", file);
-    const payload = await dataController.apiRequest("/api/imports/csv", {
-      method: "POST",
-      body: upload,
-    });
-    resetImportDialogState();
-    closeImportDialog();
-    dataController.applyStateFromPayload(payload);
-    if (payload.status === "already_imported") {
-      showPopup("File already imported.", "warning");
-    } else {
-      setMessage(`Imported ${payload.inserted_raw_row_count} raw transactions from ${file.name}.`);
-    }
-  } catch (error) {
-    showPopup(error.message || "CSV import failed.", "error");
-  }
-}
-
-function openImportDialog() {
-  setMessage("");
-  resetImportDialogState();
-  openModal(elements.importDialog);
-}
-
-function closeImportDialog() {
-  elements.importDialog.close();
-}
-
-function updateImportFileName() {
-  const file = elements.importCsvFileInput.files?.[0];
-  elements.importFileName.textContent = file?.name || "Choose file";
-  elements.importFileDropZone.classList.toggle("has-file", Boolean(file));
-}
-
-function handleImportFileChange() {
-  updateImportFileName();
-  setImportAccountLocked(false);
-  analyzeImportFileAccount();
-}
-
-function resetImportDialogState() {
-  importFileAnalysisToken += 1;
-  elements.importForm.reset();
-  setImportAccountLocked(false);
-  updateImportFileName();
-}
-
-function setImportAccountLocked(locked) {
-  elements.importAccountSelect.disabled = locked;
-  elements.importAccountSelect.classList.toggle("is-locked-in", locked);
-}
-
-async function analyzeImportFileAccount() {
-  const file = elements.importCsvFileInput.files?.[0];
-  const token = (importFileAnalysisToken += 1);
-  if (!file) {
-    return;
-  }
-
-  try {
-    const parsed = parseCsv(await file.text());
-    if (token !== importFileAnalysisToken) {
-      return;
-    }
-    if (detectCsvLayout(parsed.headers) !== "normalized_statement_export") {
-      return;
-    }
-    const sourceAccountKey = sourceAccountKeyFromCsvRows(parsed.rows);
-    if (!sourceAccountKey) {
-      setImportAccountLocked(false);
-      showPopup("CSV file does not include an account key.", "error");
-      return;
-    }
-    const account = state.accounts.find((candidate) => {
-      return accountImportKeys(candidate).includes(sourceAccountKey);
-    });
-    if (!account) {
-      elements.importAccountSelect.value = "";
-      setImportAccountLocked(false);
-      showPopup(`No account matches CSV account "${sourceAccountKey}".`, "error");
-      return;
-    }
-    elements.importAccountSelect.value = String(account.id);
-    setImportAccountLocked(true);
-  } catch (error) {
-    if (token === importFileAnalysisToken) {
-      setImportAccountLocked(false);
-      showPopup(error.message || "Could not inspect CSV file.", "error");
-    }
-  }
-}
-
-function handleImportFileDrag(event) {
-  event.preventDefault();
-  elements.importFileDropZone.classList.toggle("is-dragging", event.type === "dragover");
-}
-
-function handleImportFileDrop(event) {
-  event.preventDefault();
-  elements.importFileDropZone.classList.remove("is-dragging");
-  const file = [...event.dataTransfer.files].find((candidate) => {
-    return candidate.type === "text/csv" || candidate.name.toLowerCase().endsWith(".csv");
-  });
-  if (!file) {
-    showPopup("Choose a CSV file.", "warning");
-    return;
-  }
-  const files = new DataTransfer();
-  files.items.add(file);
-  elements.importCsvFileInput.files = files.files;
-  handleImportFileChange();
-}
-
 async function addTag() {
   const name = await promptForText({
     title: "Create Tag",
@@ -1111,19 +937,6 @@ function syncCategoryColorPickerPreview(color) {
   elements.categoryColorPreview.style.setProperty("--category-color", normalizedColor);
   elements.categoryColorHex.value = normalizedColor;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 function openRuleAddDialog(prefill = {}) {
   ruleRawRowContext = prefill.rawRowContext || null;
@@ -1341,7 +1154,6 @@ function clearRuleFieldErrors() {
     clearFieldError(target, "rule-field-error");
   });
 }
-
 
 function clearRuleFieldError(field) {
   if (elements.ruleKindInput.value === "template") {
@@ -1904,20 +1716,12 @@ function transactionTagIds(transaction) {
     .filter((tagId) => Number.isInteger(tagId) && tagId > 0);
 }
 
-
-
 function autofillAccountName() {
   const form = elements.accountForm;
   const institution = clean(form.elements.institution.value);
   const accountType = accountTypeLabel(form.elements.accountType.value);
   form.elements.name.value = [institution, accountType].filter(Boolean).join(" ");
 }
-
-
-
-
-
-
 
 function bulkImportHasOverrides() {
   return Object.keys(buildBulkImportOverrides(elements.bulkImportForm, elements.bulkImportTags)).length > 0;
@@ -1926,11 +1730,6 @@ function bulkImportHasOverrides() {
 function bulkEditHasOverrides() {
   return Object.keys(buildBulkEditOverrides(elements.bulkEditForm, elements.bulkEditTags)).length > 0;
 }
-
-
-
-
-
 
 function suppressButtonState(button) {
   button.blur();
@@ -2388,7 +2187,6 @@ function renderSelectableTags(container, selectedTagIds, inputName) {
   });
 }
 
-
 function renderCategoryButton(button, categoryId, fallbackLabel = "No category") {
   clear(button);
   const category = selectedCategory(state.categories, categoryId);
@@ -2469,7 +2267,6 @@ function setCategoryParentValue(categoryId) {
   updateCategoryColorControl();
 }
 
-
 function isTransferCategory(categoryOrId) {
   const category = typeof categoryOrId === "object"
     ? categoryOrId
@@ -2511,11 +2308,6 @@ function selectableTagChip(tag, isSelected, inputName) {
   });
   return label;
 }
-
-
-
-
-
 
 function renderRules() {
   const tbody = document.querySelector("#rulesTable");
@@ -2743,10 +2535,7 @@ async function regenerateDatabase() {
     selectedRawRowIds.clear();
     rawRowNotes.clear();
     rawRowsController.resetVisibleRows();
-    elements.dummyDatabaseToggle.checked = true;
-    elements.mobileDummyDatabaseToggle.checked = true;
-    localStorage.setItem(DUMMY_DATABASE_KEY, "true");
-    renderDatabaseModeLabel();
+    databaseMode.setDummyMode(true);
     dataController.applyStateFromPayload(payload);
     setDevMessage("Dummy database restored.");
   } catch (error) {
@@ -2756,67 +2545,6 @@ async function regenerateDatabase() {
     elements.mobileRegenerateDatabaseButton.disabled = false;
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 function ruleActions(rule, category) {
   const list = document.createElement("div");
@@ -2843,8 +2571,6 @@ function ruleActions(rule, category) {
 
   return list.childElementCount ? list : "-";
 }
-
-
 
 function updateRuleFillButtons() {
   if (!elements.ruleForm) {
@@ -2888,6 +2614,4 @@ function ruleRawRowFillValueForField(field) {
   }
   return "";
 }
-
-
 
