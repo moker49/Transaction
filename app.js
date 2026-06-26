@@ -22,6 +22,8 @@ import { createRawRowsController } from "./scripts/js/raw-rows-controller.mjs";
 import { createAppDataController } from "./scripts/js/app-data-controller.mjs";
 import { createCsvImportController } from "./scripts/js/csv-import-controller.mjs";
 import { createDatabaseModeController } from "./scripts/js/database-mode-controller.mjs";
+import { createTagsController } from "./scripts/js/tags-controller.mjs";
+import { createTableSortController } from "./scripts/js/table-sort-controller.mjs";
 
 const API_BASE = window.location.protocol === "file:" ? "http://127.0.0.1:5050" : "";
 const DUMMY_DATABASE_KEY = "transaction-use-dummy-database";
@@ -152,6 +154,23 @@ const csvImport = createCsvImportController({
   setMessage,
   showPopup,
 });
+const tagsController = createTagsController({
+  elements,
+  getTags: () => state.tags,
+  dataController,
+  promptForText,
+  closeTextInputDialog,
+  confirmDestructive,
+  showPopup,
+  onBulkImportTagsChange: () => {
+    setTypeGroupValue(elements.bulkImportTagsModeInput, elements.bulkImportTagsModeGroup, "overwrite", typeGroupOptions);
+    updateBulkImportActionState();
+  },
+  onBulkEditTagsChange: () => {
+    setTypeGroupValue(elements.bulkEditTagsModeInput, elements.bulkEditTagsModeGroup, "overwrite", typeGroupOptions);
+    updateBulkEditActionState();
+  },
+});
 const categoryUi = createCategoryUi({
   getCategories: () => state.categories,
   getEditingCategoryId: () => editingCategoryId,
@@ -253,6 +272,10 @@ const rawRowsController = createRawRowsController({
   openRawRowDialog,
   plainCategoryChip,
 });
+const tableSortController = createTableSortController({
+  tableSortState,
+  render,
+});
 databaseMode = createDatabaseModeController({
   elements,
   storageKey: DUMMY_DATABASE_KEY,
@@ -300,7 +323,7 @@ elements.dashboardFilterDialog.addEventListener("cancel", (event) => {
 window.addEventListener("scroll", updateScrollTopButton, { passive: true });
 elements.scrollTopButton.addEventListener("click", scrollActiveViewToTop);
 
-initializeSortableTables();
+tableSortController.initialize();
 initializeClearableTextFields();
 
 elements.accountAddButton.addEventListener("click", openAccountAddDialog);
@@ -320,7 +343,7 @@ elements.uploadedFileDialog.addEventListener("close", () => {
   activeUploadedFileId = null;
 });
 elements.categoryAddButton.addEventListener("click", openCategoryAddDialog);
-elements.tagAddButton.addEventListener("click", addTag);
+elements.tagAddButton.addEventListener("click", tagsController.addTag);
 elements.ruleForm.addEventListener("submit", saveRule);
 elements.rawAccountFilter.addEventListener("change", rawRowsController.render);
 elements.rawStatusFilter.addEventListener("change", rawRowsController.render);
@@ -677,55 +700,6 @@ function scrollActiveViewToTop() {
   updateScrollTopButton();
 }
 
-function initializeSortableTables() {
-  document.querySelectorAll("th[data-sort-table][data-sort-key]").forEach((header) => {
-    header.classList.add("sortable-header");
-    header.tabIndex = 0;
-    header.setAttribute("role", "button");
-    header.addEventListener("click", () => setTableSort(header));
-    header.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        setTableSort(header);
-      }
-    });
-  });
-  updateSortableHeaders();
-}
-
-function setTableSort(header) {
-  const table = header.dataset.sortTable;
-  const key = header.dataset.sortKey;
-  const type = header.dataset.sortType || "text";
-  const current = tableSortState[table];
-  const defaultDirection = type === "text" ? "asc" : "desc";
-  tableSortState[table] = {
-    key,
-    type,
-    direction: current?.key === key && current.direction === defaultDirection
-      ? oppositeSortDirection(defaultDirection)
-      : defaultDirection,
-  };
-  updateSortableHeaders();
-  render();
-}
-
-function updateSortableHeaders() {
-  document.querySelectorAll("th[data-sort-table][data-sort-key]").forEach((header) => {
-    const stateForTable = tableSortState[header.dataset.sortTable];
-    const isActive = stateForTable?.key === header.dataset.sortKey;
-    header.classList.toggle("is-sorted", isActive);
-    header.dataset.sortDirection = isActive ? stateForTable.direction : "";
-    header.setAttribute("aria-sort", isActive
-      ? (stateForTable.direction === "asc" ? "ascending" : "descending")
-      : "none");
-  });
-}
-
-function oppositeSortDirection(direction) {
-  return direction === "asc" ? "desc" : "asc";
-}
-
 function openAccountAddDialog() {
   accountDialogMode = "add";
   editingAccountId = null;
@@ -785,26 +759,6 @@ async function saveAccount(event) {
       error.message || (accountDialogMode === "edit" ? "Could not update account." : "Could not add account."),
       true,
     );
-  }
-}
-
-async function addTag() {
-  const name = await promptForText({
-    title: "Create Tag",
-    label: "Tag name",
-    value: "",
-  });
-  if (!name) {
-    return;
-  }
-  try {
-    const payload = await dataController.apiRequest("/api/tags", {
-      method: "POST",
-      body: JSON.stringify({ name }),
-    });
-    dataController.applyStateFromPayload(payload);
-  } catch (error) {
-    showPopup(error.message || "Could not add tag.", "error");
   }
 }
 
@@ -953,7 +907,7 @@ function openRuleAddDialog(prefill = {}) {
   setTypeGroupValue(elements.ruleMatchAmountInput, elements.ruleMatchAmountGroup, prefill.matchAmount || "any", typeGroupOptions);
   setTypeGroupValue(elements.ruleTypeInput, elements.ruleTypeGroup, prefill.setTransactionType || "expense", typeGroupOptions);
   setRuleCategoryValue(prefill.setCategoryId || null);
-  renderRuleTags(prefill.addTagIds || []);
+  tagsController.renderRuleTags(prefill.addTagIds || []);
   if (!elements.ruleDialog.open) {
     openModal(elements.ruleDialog);
   }
@@ -1029,7 +983,7 @@ function populateRuleEditDialog(rule) {
   form.elements.setCleanDescription.value = ruleContextCleanDescription(rule);
   setTypeGroupValue(elements.ruleTypeInput, elements.ruleTypeGroup, rule.set_transaction_type || "expense", typeGroupOptions);
   setRuleCategoryValue(rule.set_category_id);
-  renderRuleTags(rule.tag_ids || (rule.add_tag_id === null ? [] : [rule.add_tag_id]));
+  tagsController.renderRuleTags(rule.tag_ids || (rule.add_tag_id === null ? [] : [rule.add_tag_id]));
   ruleEditSnapshot = buildRulePayload(elements.ruleForm, elements.ruleTags);
   updateRuleFillButtons();
 }
@@ -1342,54 +1296,6 @@ async function deleteEditingCategory() {
   }
 }
 
-async function editTag(tag) {
-  const name = await promptForText({
-    title: "Edit Tag",
-    label: "Tag name",
-    value: tag.name,
-    deleteLabel: "Delete",
-    onDelete: async () => {
-      if (await deleteTag(tag)) {
-        closeTextInputDialog(null);
-      }
-    },
-  });
-  if (name === null) {
-    return;
-  }
-  if (clean(name) === clean(tag.name)) {
-    return;
-  }
-  try {
-    const payload = await dataController.apiRequest(`/api/tags/${tag.id}`, {
-      method: "PATCH",
-      body: JSON.stringify({ name: clean(name) }),
-    });
-    dataController.applyStateFromPayload(payload);
-  } catch (error) {
-    showPopup(error.message || "Could not update tag.", "error");
-  }
-}
-
-async function deleteTag(tag) {
-  const confirmed = await confirmDestructive({
-    title: "Delete Tag",
-    message: destructiveMessage(`Delete tag "${tag.name}"?`),
-    actionLabel: "Delete Tag",
-  });
-  if (!confirmed) {
-    return false;
-  }
-  try {
-    const payload = await dataController.apiRequest(`/api/tags/${tag.id}`, { method: "DELETE" });
-    dataController.applyStateFromPayload(payload);
-    return true;
-  } catch (error) {
-    showPopup(error.message || "Could not delete tag.", "error");
-    return false;
-  }
-}
-
 async function deleteRule(rule) {
   const confirmed = await confirmDestructive({
     title: "Delete Rule",
@@ -1435,7 +1341,7 @@ function render() {
   renderAccountSelects();
   renderImports();
   renderCategories();
-  renderTags();
+  tagsController.renderTags();
   renderRules();
   rawRowsController.render();
 }
@@ -1697,7 +1603,7 @@ function renderTransactionTags(transaction) {
       return;
     }
     state.tags.filter((tag) => selectedTagIds.has(Number(tag.id))).forEach((tag) => {
-      elements.transactionTags.appendChild(staticTagChip(tag.name));
+      elements.transactionTags.appendChild(tagsController.staticTagChip(tag.name));
     });
     return;
   }
@@ -1706,7 +1612,7 @@ function renderTransactionTags(transaction) {
     return;
   }
   state.tags.forEach((tag) => {
-    elements.transactionTags.appendChild(selectableTagChip(tag, selectedTagIds.has(Number(tag.id)), "tagIds"));
+    elements.transactionTags.appendChild(tagsController.selectableTagChip(tag, selectedTagIds.has(Number(tag.id)), "tagIds"));
   });
 }
 
@@ -1813,7 +1719,7 @@ function openManualImportDialog(rawRow) {
     ? previewDescription || clean(rawRow.default_clean_description)
     : previewDescription || clean(rawRow.default_clean_description);
   elements.manualImportForm.elements.note.value = rawRowStoredNote(rawRow);
-  renderManualImportTags(rawRow.preview_tag_ids || []);
+  tagsController.renderManualImportTags(rawRow.preview_tag_ids || []);
   openModal(elements.manualImportDialog);
   updateManualImportFillButtons();
 }
@@ -2130,63 +2036,6 @@ function sortedUploadDates(item) {
     .sort();
 }
 
-function renderTags() {
-  const tagList = document.querySelector("#tagList");
-  clear(tagList);
-  if (!state.tags.length) {
-    appendEmpty(tagList);
-  } else {
-    state.tags.forEach((tag) => {
-      if (tag.is_protected) {
-        tagList.appendChild(staticTagChip(tag.name));
-      } else {
-        tagList.appendChild(editableTagChip(tag, () => editTag(tag)));
-      }
-    });
-  }
-
-}
-
-function renderRuleTags(selectedTagIds) {
-  renderSelectableTags(elements.ruleTags, selectedTagIds, "addTagIds");
-}
-
-function renderManualImportTags(selectedTagIds) {
-  renderSelectableTags(elements.manualImportTags, selectedTagIds, "tagIds");
-}
-
-function renderBulkImportTags(selectedTagIds) {
-  renderSelectableTags(elements.bulkImportTags, selectedTagIds, "tagIds");
-  elements.bulkImportTags.querySelectorAll("input[type='checkbox']").forEach((checkbox) => {
-    checkbox.addEventListener("change", () => {
-      setTypeGroupValue(elements.bulkImportTagsModeInput, elements.bulkImportTagsModeGroup, "overwrite", typeGroupOptions);
-      updateBulkImportActionState();
-    });
-  });
-}
-
-function renderBulkEditTags(selectedTagIds) {
-  renderSelectableTags(elements.bulkEditTags, selectedTagIds, "tagIds");
-  elements.bulkEditTags.querySelectorAll("input[type='checkbox']").forEach((checkbox) => {
-    checkbox.addEventListener("change", () => {
-      setTypeGroupValue(elements.bulkEditTagsModeInput, elements.bulkEditTagsModeGroup, "overwrite", typeGroupOptions);
-      updateBulkEditActionState();
-    });
-  });
-}
-
-function renderSelectableTags(container, selectedTagIds, inputName) {
-  clear(container);
-  const selected = new Set(selectedTagIds.map((tagId) => Number(tagId)));
-  if (!state.tags.length) {
-    container.appendChild(el("span", "No tags available.", "list-meta"));
-    return;
-  }
-  state.tags.forEach((tag) => {
-    container.appendChild(selectableTagChip(tag, selected.has(Number(tag.id)), inputName));
-  });
-}
-
 function renderCategoryButton(button, categoryId, fallbackLabel = "No category") {
   clear(button);
   const category = selectedCategory(state.categories, categoryId);
@@ -2279,36 +2128,6 @@ function isTransferCategory(categoryOrId) {
   return clean(root?.name).toLowerCase() === "transfer";
 }
 
-function staticTagChip(label) {
-  return el("span", label, "tag-chip tag-chip-filled");
-}
-
-function editableTagChip(tag, onEdit) {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "tag-chip tag-chip-filled tag-chip-action";
-  button.append(materialIcon("edit"), el("span", tag.name));
-  button.addEventListener("click", onEdit);
-  return button;
-}
-
-function selectableTagChip(tag, isSelected, inputName) {
-  const label = document.createElement("label");
-  label.className = `tag-chip tag-chip-select${isSelected ? " is-selected" : ""}`;
-  const checkbox = document.createElement("input");
-  checkbox.type = "checkbox";
-  checkbox.name = inputName;
-  checkbox.value = String(tag.id);
-  checkbox.checked = isSelected;
-  const icon = materialIcon("check");
-  icon.classList.add("tag-chip-check");
-  label.append(checkbox, icon, el("span", tag.name));
-  checkbox.addEventListener("change", () => {
-    label.classList.toggle("is-selected", checkbox.checked);
-  });
-  return label;
-}
-
 function renderRules() {
   const tbody = document.querySelector("#rulesTable");
   clear(tbody);
@@ -2378,7 +2197,7 @@ function resetBulkImportForm() {
   setOptionalTypeGroupValue(elements.bulkImportTypeInput, elements.bulkImportTypeGroup, "");
   setBulkImportCategoryValue(null);
   setTypeGroupValue(elements.bulkImportTagsModeInput, elements.bulkImportTagsModeGroup, "keep", typeGroupOptions);
-  renderBulkImportTags([]);
+  tagsController.renderBulkImportTags([]);
   updateBulkImportActionState();
 }
 
@@ -2409,7 +2228,7 @@ function resetBulkEditForm() {
   setOptionalTypeGroupValue(elements.bulkEditTypeInput, elements.bulkEditTypeGroup, "");
   setBulkEditCategoryValue(null);
   setTypeGroupValue(elements.bulkEditTagsModeInput, elements.bulkEditTagsModeGroup, "keep", typeGroupOptions);
-  renderBulkEditTags([]);
+  tagsController.renderBulkEditTags([]);
   updateBulkEditActionState();
 }
 
@@ -2558,13 +2377,13 @@ function ruleActions(rule, category) {
 
   if (rule.tags?.length) {
     const tags = el("div", "", "effect-chip-row");
-    rule.tags.forEach((item) => tags.appendChild(staticTagChip(item.name)));
+    rule.tags.forEach((item) => tags.appendChild(tagsController.staticTagChip(item.name)));
     list.appendChild(tags);
   } else if (rule.add_tag_id !== null && rule.add_tag_id !== undefined) {
     const tag = state.tags.find((candidate) => candidate.id === rule.add_tag_id);
     if (tag) {
       const tags = el("div", "", "effect-chip-row");
-      tags.appendChild(staticTagChip(tag.name));
+      tags.appendChild(tagsController.staticTagChip(tag.name));
       list.appendChild(tags);
     }
   }
