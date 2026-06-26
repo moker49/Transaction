@@ -1,16 +1,18 @@
 import { clean } from "./scripts/js/common.mjs";
 import { parseCsv, normalizeCsvRow, detectCsvLayout, sourceAccountKeyFromCsvRows, accountImportKeys, sha256 } from "./scripts/js/csv.mjs";
 import { addDays, addMonths, allTimeDateRangePeriod, customDateRangePeriod, dateRangePeriodForRange, dateRangeYearOptions, daysInMonth, firstOfMonth, formatDateKey, formatDateRangeLabel, isYearRange, monthName, parseDateKey, rangeStartDate, startOfDay, yearRangeValue } from "./scripts/js/date-range.mjs";
-import { compareSortValues, formatCents, formatDateTime, formatDisplayDate, formatMaybeDateTime, formatDollars } from "./scripts/js/format.mjs";
+import { formatCents, formatDateTime, formatDisplayDate, formatMaybeDateTime, formatDollars } from "./scripts/js/format.mjs";
 import { actionButtons, appendEmpty, cell, clear, displayDateCell, el, emptyTableRow, fillSelect, makeEditableRow, manageableChip, materialIcon, renderDefinitionList, setText, tableRow } from "./scripts/js/dom.mjs";
 import { renderPieChart, renderStackedBar } from "./scripts/js/charts.mjs";
 import { getElements } from "./scripts/js/dom-elements.mjs";
 import { buildAccountPayload, buildBulkEditOverrides, buildBulkImportOverrides, buildCategoryPayload, buildManualImportPayload, buildRulePayload, buildTransactionPayload, payloadMatchesSnapshot, selectedTagIdsFrom } from "./scripts/js/form-payloads.mjs";
 import { randomComfortableColor, normalizeHexColor, hexToHsl, hslToHex } from "./scripts/js/colors.mjs";
 import { dashboardFromTransactions } from "./scripts/js/dashboard-model.mjs";
+import { categoryDescendantIds, categoryLabel, categoryOptions, effectiveCategoryColor, orderedCategories, rootCategoryId, selectedCategory } from "./scripts/js/category-model.mjs";
 import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, matchAmountLabel, statusClass, statusLabel, transactionTypeLabel } from "./scripts/js/labels.mjs";
 import { clearSelectedRawRowsExceptStatus, isBaseSelectableRawRow, isImportableRawRow, isSelectableRawRow, isTemplateRawRow, nextSelectVisibleStatus, parseRawAmount, rawRowMatchesStatusFilter, ruleMatchValues, selectedRawRowStatus, topMatchingRuleForRawRow, visibleSelectableRawRowIds } from "./scripts/js/raw-row-model.mjs";
 import { navigateOptionalTypeGroup, navigateTypeGroup, selectOptionalTypeFromGroup, selectTypeFromGroup, setOptionalTypeGroupValue, setTypeGroupValue } from "./scripts/js/type-groups.mjs";
+import { sortedTableRows } from "./scripts/js/table-sort.mjs";
 
   const API_BASE = window.location.protocol === "file:" ? "http://127.0.0.1:5050" : "";
   const DUMMY_DATABASE_KEY = "transaction-use-dummy-database";
@@ -1256,7 +1258,7 @@ import { navigateOptionalTypeGroup, navigateTypeGroup, selectOptionalTypeFromGro
     elements.categoryMessage.classList.remove("error");
     elements.categoryDialogForm.elements.name.value = category.name || "";
     setCategoryParentValue(category.parent_id);
-    elements.categoryParentButton.disabled = categoryDescendantIds(category.id).size > 0;
+    elements.categoryParentButton.disabled = categoryDescendantIds(state.categories, category.id).size > 0;
     setCategoryDialogColor(category.color || randomComfortableColor());
     updateCategoryColorControl();
     categoryEditSnapshot = buildCategoryPayload(elements.categoryDialogForm);
@@ -1856,6 +1858,15 @@ import { navigateOptionalTypeGroup, navigateTypeGroup, selectOptionalTypeFromGro
     }
   }
 
+  function tableSortContext() {
+    return {
+      accounts: state.accounts,
+      categories: state.categories,
+      rawRows: state.rawRows,
+      rawRowNotes,
+    };
+  }
+
   function render() {
     renderDashboard();
     renderAccounts();
@@ -1959,7 +1970,7 @@ import { navigateOptionalTypeGroup, navigateTypeGroup, selectOptionalTypeFromGro
       return;
     }
 
-    sortedTableRows("accounts", state.accounts).forEach((account) => {
+    sortedTableRows("accounts", state.accounts, tableSortState, tableSortContext()).forEach((account) => {
       const rowCount = account.raw_row_count ?? state.rawRows.filter((row) => row.account_id === account.id).length;
       const row = tableRow([
         account.name,
@@ -1976,7 +1987,7 @@ import { navigateOptionalTypeGroup, navigateTypeGroup, selectOptionalTypeFromGro
     const tbody = document.querySelector("#transactionsTable");
     clear(tbody);
     const categoryFilter = Number(elements.transactionCategoryFilter.value) || null;
-    const categoryIds = categoryFilter === null ? null : new Set([categoryFilter, ...categoryDescendantIds(categoryFilter)]);
+    const categoryIds = categoryFilter === null ? null : new Set([categoryFilter, ...categoryDescendantIds(state.categories, categoryFilter)]);
     const search = clean(elements.transactionSearch.value).toLowerCase();
     const transactions = state.transactions.filter((transaction) => {
       if (categoryIds && !categoryIds.has(Number(transaction.category_id))) {
@@ -2000,7 +2011,7 @@ import { navigateOptionalTypeGroup, navigateTypeGroup, selectOptionalTypeFromGro
       return;
     }
 
-    sortedTableRows("transactions", transactions).forEach((transaction) => {
+    sortedTableRows("transactions", transactions, tableSortState, tableSortContext()).forEach((transaction) => {
       const category = state.categories.find((candidate) => candidate.id === transaction.category_id)
         || state.categories.find((candidate) => candidate.name === transaction.category);
       const checkbox = document.createElement("input");
@@ -2660,16 +2671,10 @@ import { navigateOptionalTypeGroup, navigateTypeGroup, selectOptionalTypeFromGro
     });
   }
 
-  function selectedCategory(categoryId) {
-    const id = Number(categoryId);
-    return Number.isInteger(id) && id > 0
-      ? state.categories.find((category) => category.id === id) || null
-      : null;
-  }
 
   function renderCategoryButton(button, categoryId, fallbackLabel = "No category") {
     clear(button);
-    const category = selectedCategory(categoryId);
+    const category = selectedCategory(state.categories, categoryId);
     if (category) {
       button.appendChild(plainCategoryChip(category));
     } else {
@@ -2747,9 +2752,6 @@ import { navigateOptionalTypeGroup, navigateTypeGroup, selectOptionalTypeFromGro
     updateCategoryColorControl();
   }
 
-  function categoryOptions() {
-    return orderedCategories().map((category) => ({ value: String(category.id), label: categoryLabel(category) }));
-  }
 
   function openCategoryPicker(target) {
     categoryPickerTarget = target;
@@ -2823,7 +2825,7 @@ import { navigateOptionalTypeGroup, navigateTypeGroup, selectOptionalTypeFromGro
 
   function scrollCategoryPickerToSelectedSection() {
     const selectedId = selectedCategoryPickerId();
-    const rootId = selectedId ? rootCategoryId(selectedId) : null;
+    const rootId = selectedId ? rootCategoryId(state.categories, selectedId) : null;
     const panel = elements.categoryPickerDialog.querySelector(".modal-panel");
     const section = rootId
       ? elements.categoryPickerList.querySelector(`[data-category-root-id="${rootId}"]`)
@@ -2842,17 +2844,6 @@ import { navigateOptionalTypeGroup, navigateTypeGroup, selectOptionalTypeFromGro
     });
   }
 
-  function rootCategoryId(categoryId) {
-    let category = state.categories.find((candidate) => candidate.id === Number(categoryId));
-    while (category?.parent_id) {
-      const parent = state.categories.find((candidate) => candidate.id === category.parent_id);
-      if (!parent) {
-        break;
-      }
-      category = parent;
-    }
-    return category?.id || null;
-  }
 
   function categoryPickerTransferCategoryMode() {
     if (!["transaction", "rule", "manual-import", "bulk-import", "bulk-edit"].includes(categoryPickerTarget || "")) {
@@ -2887,7 +2878,7 @@ import { navigateOptionalTypeGroup, navigateTypeGroup, selectOptionalTypeFromGro
     if (!category) {
       return false;
     }
-    const rootId = rootCategoryId(category.id);
+    const rootId = rootCategoryId(state.categories, category.id);
     const root = state.categories.find((candidate) => candidate.id === rootId);
     return clean(root?.name).toLowerCase() === "transfer";
   }
@@ -3008,7 +2999,7 @@ import { navigateOptionalTypeGroup, navigateTypeGroup, selectOptionalTypeFromGro
       appendEmpty(elements.dashboardFilterList);
       return;
     }
-    const roots = orderedCategories().filter((category) => category.parent_id === null);
+    const roots = orderedCategories(state.categories).filter((category) => category.parent_id === null);
     const rendered = new Set();
     roots.forEach((root) => {
       const section = document.createElement("section");
@@ -3020,7 +3011,7 @@ import { navigateOptionalTypeGroup, navigateTypeGroup, selectOptionalTypeFromGro
       chips.className = "category-section-chips";
       chips.appendChild(dashboardFilterCategoryChip(root, () => toggleDashboardFilterRoot(root)));
       rendered.add(root.id);
-      orderedCategories()
+      orderedCategories(state.categories)
         .filter((category) => category.parent_id === root.id)
         .forEach((child) => {
           chips.appendChild(dashboardFilterCategoryChip(child, () => toggleDashboardFilterCategory(child.id)));
@@ -3029,7 +3020,7 @@ import { navigateOptionalTypeGroup, navigateTypeGroup, selectOptionalTypeFromGro
       section.append(header, chips);
       elements.dashboardFilterList.appendChild(section);
     });
-    orderedCategories()
+    orderedCategories(state.categories)
       .filter((category) => !rendered.has(category.id))
       .forEach((category) => elements.dashboardFilterList.appendChild(dashboardFilterCategoryChip(category, () => toggleDashboardFilterCategory(category.id))));
   }
@@ -3041,7 +3032,7 @@ import { navigateOptionalTypeGroup, navigateTypeGroup, selectOptionalTypeFromGro
     button.className = selected
       ? "dashboard-filter-chip is-selected"
       : "dashboard-filter-chip chip category-chip";
-    button.style.setProperty("--category-color", effectiveCategoryColor(category));
+    button.style.setProperty("--category-color", effectiveCategoryColor(state.categories, category));
     button.setAttribute("aria-pressed", selected ? "true" : "false");
     if (selected) {
       const icon = materialIcon("check");
@@ -3054,7 +3045,7 @@ import { navigateOptionalTypeGroup, navigateTypeGroup, selectOptionalTypeFromGro
   }
 
   function toggleDashboardFilterRoot(root) {
-    const categoryIds = [root.id, ...orderedCategories()
+    const categoryIds = [root.id, ...orderedCategories(state.categories)
       .filter((category) => category.parent_id === root.id)
       .map((category) => category.id)];
     const shouldSelect = !dashboardFilterCategoryIds.has(root.id);
@@ -3109,12 +3100,12 @@ import { navigateOptionalTypeGroup, navigateTypeGroup, selectOptionalTypeFromGro
     const selectable = Boolean(options.selectable);
     const parentOnly = Boolean(options.parentOnly);
     const transferCategoryMode = options.transferCategoryMode || "all";
-    const roots = orderedCategories().filter((category) => category.parent_id === null);
+    const roots = orderedCategories(state.categories).filter((category) => category.parent_id === null);
     const rendered = new Set();
     roots.forEach((root) => {
       if (!categoryMatchesTransferMode(root, transferCategoryMode)) {
         rendered.add(root.id);
-        orderedCategories()
+        orderedCategories(state.categories)
           .filter((category) => category.parent_id === root.id)
           .forEach((category) => rendered.add(category.id));
         return;
@@ -3136,7 +3127,7 @@ import { navigateOptionalTypeGroup, navigateTypeGroup, selectOptionalTypeFromGro
       chips.className = "category-section-chips";
       const children = parentOnly
         ? []
-        : orderedCategories().filter((category) => category.parent_id === root.id && categoryMatchesTransferMode(category, transferCategoryMode));
+        : orderedCategories(state.categories).filter((category) => category.parent_id === root.id && categoryMatchesTransferMode(category, transferCategoryMode));
       if (selectable) {
         chips.appendChild(selectableCategoryChip(root, options.selectedId === root.id, options.onSelect));
         rendered.add(root.id);
@@ -3157,7 +3148,7 @@ import { navigateOptionalTypeGroup, navigateTypeGroup, selectOptionalTypeFromGro
       categoryList.appendChild(section);
       rendered.add(root.id);
     });
-    orderedCategories()
+    orderedCategories(state.categories)
       .filter((category) => !rendered.has(category.id) && (!parentOnly || category.parent_id === null) && categoryMatchesTransferMode(category, transferCategoryMode))
       .forEach((category) => categoryList.appendChild(selectable
         ? selectableCategoryChip(category, options.selectedId === category.id, options.onSelect)
@@ -3189,13 +3180,13 @@ import { navigateOptionalTypeGroup, navigateTypeGroup, selectOptionalTypeFromGro
 
   function categoryChip(category) {
     const chip = category.is_default ? plainCategoryChip(category) : manageableChip(category.name, () => editCategory(category), "category-chip");
-    chip.style.setProperty("--category-color", effectiveCategoryColor(category));
+    chip.style.setProperty("--category-color", effectiveCategoryColor(state.categories, category));
     return chip;
   }
 
   function plainCategoryChip(category) {
     const chip = el("span", category.name, "chip category-chip");
-    chip.style.setProperty("--category-color", effectiveCategoryColor(category));
+    chip.style.setProperty("--category-color", effectiveCategoryColor(state.categories, category));
     return chip;
   }
 
@@ -3231,7 +3222,7 @@ import { navigateOptionalTypeGroup, navigateTypeGroup, selectOptionalTypeFromGro
 
   function displayCategoryChip(category) {
     const chip = el("span", "", "chip category-chip transaction-category-chip");
-    chip.style.setProperty("--category-color", effectiveCategoryColor(category));
+    chip.style.setProperty("--category-color", effectiveCategoryColor(state.categories, category));
     manualChipWrap(category.name, 11).forEach((line) => {
       chip.appendChild(el("span", line, "transaction-category-chip-line"));
     });
@@ -3260,56 +3251,16 @@ import { navigateOptionalTypeGroup, navigateTypeGroup, selectOptionalTypeFromGro
     return lines;
   }
 
-  function effectiveCategoryColor(category) {
-    if (category.color) {
-      return category.color;
-    }
-    const parent = state.categories.find((candidate) => candidate.id === category.parent_id);
-    return parent?.color;
-  }
 
-  function orderedCategories() {
-    return state.categories.slice().sort((a, b) => categorySortKey(a).localeCompare(categorySortKey(b)));
-  }
 
-  function categorySortKey(category) {
-    const parent = state.categories.find((candidate) => candidate.id === category.parent_id);
-    const parentName = parent?.name || category.name;
-    const parentRank = Number.isFinite(Number(parent?.sort_order ?? category.sort_order))
-      ? Number(parent?.sort_order ?? category.sort_order)
-      : 999999;
-    const categoryRank = category.parent_id === null
-      ? -1
-      : Number.isFinite(Number(category.sort_order))
-        ? Number(category.sort_order)
-        : 999999;
-    return `${String(parentRank).padStart(6, "0")}:${parentName}:${String(categoryRank).padStart(6, "0")}:${category.name}`;
-  }
 
-  function categoryLabel(category) {
-    const parent = state.categories.find((candidate) => candidate.id === category.parent_id);
-    return parent ? `${parent.name} / ${category.name}` : category.name;
-  }
 
-  function categoryDescendantIds(categoryId) {
-    const descendants = new Set();
-    const visit = (parentId) => {
-      state.categories
-        .filter((category) => category.parent_id === parentId)
-        .forEach((category) => {
-          descendants.add(category.id);
-          visit(category.id);
-        });
-    };
-    visit(categoryId);
-    return descendants;
-  }
 
   function renderRules() {
     const tbody = document.querySelector("#rulesTable");
     clear(tbody);
     const categoryFilter = Number(elements.ruleCategoryFilter.value) || null;
-    const categoryIds = categoryFilter === null ? null : new Set([categoryFilter, ...categoryDescendantIds(categoryFilter)]);
+    const categoryIds = categoryFilter === null ? null : new Set([categoryFilter, ...categoryDescendantIds(state.categories, categoryFilter)]);
     const search = clean(elements.ruleSearch.value).toLowerCase();
     const rules = state.rules.filter((rule) => {
       if (categoryIds && !categoryIds.has(Number(rule.set_category_id))) {
@@ -3325,7 +3276,7 @@ import { navigateOptionalTypeGroup, navigateTypeGroup, selectOptionalTypeFromGro
       return;
     }
 
-    sortedTableRows("rules", rules)
+    sortedTableRows("rules", rules, tableSortState, tableSortContext())
       .forEach((rule) => {
         const category = state.categories.find((candidate) => candidate.id === rule.set_category_id);
         const kind = (rule.rule_type || "auto-import") === "template" ? "Pre-fill" : "Auto-import";
@@ -3392,7 +3343,7 @@ import { navigateOptionalTypeGroup, navigateTypeGroup, selectOptionalTypeFromGro
       }
       return true;
     });
-    const sortedRows = sortedTableRows("rawRows", rows);
+    const sortedRows = sortedTableRows("rawRows", rows, tableSortState, tableSortContext());
     visibleRawRows = sortedRows;
     if (!rows.length) {
       tbody.appendChild(emptyTableRow(rawColumnCount));
@@ -4177,75 +4128,8 @@ import { navigateOptionalTypeGroup, navigateTypeGroup, selectOptionalTypeFromGro
 
 
 
-  function sortedTableRows(table, rows) {
-    const sortState = tableSortState[table];
-    if (!sortState) {
-      return rows.slice();
-    }
-    return rows
-      .slice()
-      .sort((left, right) => {
-        const comparison = compareSortValues(
-          tableSortValue(table, left, sortState.key),
-          tableSortValue(table, right, sortState.key),
-          sortState.type,
-          sortState.direction,
-        );
-        if (comparison !== 0) {
-          return comparison;
-        }
-        return compareSortValues(tableSortValue(table, left, "id"), tableSortValue(table, right, "id"), "number");
-      });
-  }
 
-  function tableSortValue(table, item, key) {
-    if (key === "id") {
-      return item.id;
-    }
-    if (table === "accounts") {
-      return {
-        name: item.name,
-        institution: item.institution,
-        type: item.account_type,
-        records: item.raw_row_count ?? state.rawRows.filter((row) => row.account_id === item.id).length,
-      }[key];
-    }
-    if (table === "transactions") {
-      return {
-        date: item.posted_date,
-        category: item.category || categoryLabelById(item.category_id),
-        description: item.clean_description,
-        amount: item.amount_cents,
-        account: item.account,
-        notes: item.notes,
-      }[key];
-    }
-    if (table === "rawRows") {
-      const account = state.accounts.find((candidate) => candidate.id === item.account_id);
-      return {
-        date: item.raw_date,
-        category: clean(item.preview_category) || item.raw_category,
-        description: clean(item.preview_clean_description) || item.default_clean_description || item.raw_description,
-        amount: item.raw_amount,
-        account: account?.name,
-        status: statusLabel(item.import_status),
-        notes: rawRowNotes.get(item.id),
-      }[key];
-    }
-    if (table === "rules") {
-      const matches = ruleMatchValues(item);
-      return {
-        name: item.name,
-        match: `${matches.description} ${matches.category}`.trim(),
-      }[key];
-    }
-    return null;
-  }
 
-  function categoryLabelById(categoryId) {
-    const category = state.categories.find((candidate) => candidate.id === categoryId);
-    return category ? categoryLabel(category) : "";
-  }
 
 
 

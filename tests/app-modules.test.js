@@ -144,3 +144,34 @@ test("updates segmented type groups", async () => {
   assert.equal(input.value, "");
   assert.equal(buttons[0].tabIndex, 0);
 });
+
+test("orders and labels category trees", async () => {
+  const categories = await import("../scripts/js/category-model.mjs");
+  const list = [
+    { id: 2, name: "Restaurants", parent_id: 1, sort_order: 2, color: null },
+    { id: 1, name: "Food", parent_id: null, sort_order: 1, color: "#111111" },
+    { id: 3, name: "Groceries", parent_id: 1, sort_order: 1, color: null },
+  ];
+
+  assert.equal(categories.selectedCategory(list, "2")?.name, "Restaurants");
+  assert.equal(categories.rootCategoryId(list, 2), 1);
+  assert.equal(categories.effectiveCategoryColor(list, list[0]), "#111111");
+  assert.deepEqual([...categories.categoryDescendantIds(list, 1)], [2, 3]);
+  assert.deepEqual(categories.orderedCategories(list).map((category) => category.name), ["Food", "Groceries", "Restaurants"]);
+  assert.equal(categories.categoryLabel(list, list[0]), "Food / Restaurants");
+  assert.equal(categories.categoryLabelById(list, 3), "Food / Groceries");
+});
+
+test("sorts table rows with app context", async () => {
+  const tableSort = await import("../scripts/js/table-sort.mjs");
+  const rows = [
+    { id: 2, posted_date: "2026-01-01", category_id: 1, clean_description: "B", amount_cents: 200 },
+    { id: 1, posted_date: "2026-01-02", category_id: 1, clean_description: "A", amount_cents: 100 },
+  ];
+  const sortState = { transactions: { key: "date", direction: "desc", type: "date" } };
+
+  assert.deepEqual(
+    tableSort.sortedTableRows("transactions", rows, sortState, { categories: [{ id: 1, name: "Food", parent_id: null }] }).map((row) => row.id),
+    [1, 2],
+  );
+});
