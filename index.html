@@ -170,7 +170,7 @@
                   <th data-sort-table="transactions" data-sort-key="date" data-sort-type="date">Date</th>
                   <th data-sort-table="transactions" data-sort-key="category">Category</th>
                   <th data-sort-table="transactions" data-sort-key="description">Description</th>
-                  <th data-sort-table="transactions" data-sort-key="amount" data-sort-type="number">Amount</th>
+                  <th data-sort-table="transactions" data-sort-key="amount" data-sort-type="number">Amt</th>
                   <th data-sort-table="transactions" data-sort-key="account">Account</th>
                   <th data-sort-table="transactions" data-sort-key="notes">Notes</th>
                 </tr>
@@ -295,17 +295,19 @@
             <table id="rawRowsTableElement">
               <thead>
                 <tr>
-                  <th data-raw-column="select"></th>
+                  <th class="transaction-select-column" data-raw-column="select"></th>
                   <th data-raw-column="date" data-sort-table="rawRows" data-sort-key="date" data-sort-type="date">Date
                   </th>
                   <th data-raw-column="category" data-sort-table="rawRows" data-sort-key="category">Category</th>
                   <th data-raw-column="description" data-sort-table="rawRows" data-sort-key="description">Description
                   </th>
                   <th data-raw-column="amount" data-sort-table="rawRows" data-sort-key="amount" data-sort-type="number">
-                    Amount</th>
-                  <th data-raw-column="account" data-sort-table="rawRows" data-sort-key="account">Account</th>
+                    Amt</th>
+                  <th class="transaction-account-cell" data-raw-column="account" data-sort-table="rawRows"
+                    data-sort-key="account">Account</th>
                   <th data-raw-column="status" data-sort-table="rawRows" data-sort-key="status">Status</th>
-                  <th data-raw-column="notes" data-sort-table="rawRows" data-sort-key="notes">Notes</th>
+                  <th class="transaction-notes-cell" data-raw-column="notes" data-sort-table="rawRows"
+                    data-sort-key="notes">Notes</th>
                 </tr>
               </thead>
               <tbody id="rawRowsTable"></tbody>

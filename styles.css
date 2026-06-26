@@ -1241,10 +1241,6 @@ td {
   font-size: 0.9rem;
 }
 
-#rawRowsTable tr {
-  height: 72px;
-}
-
 #transactionsView th[data-sort-key="amount"],
 th[data-raw-column="amount"],
 td.amount {
@@ -1548,7 +1544,8 @@ button.category-chip.manageable-chip {
 .category-chip:not(.manageable-chip) {
   display: inline-block;
   white-space: normal;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 .transaction-category-chip {
@@ -1557,9 +1554,6 @@ button.category-chip.manageable-chip {
   width: max-content;
   max-width: none;
   gap: 0;
-  white-space: normal;
-  overflow-wrap: normal;
-  word-break: normal;
 }
 
 .transaction-category-chip-line {
@@ -2617,10 +2611,6 @@ tr.is-selected-row td {
     min-width: 0;
   }
 
-  #rawRowsTableElement {
-    table-layout: fixed;
-  }
-
   th,
   td {
     padding-right: 8px;
@@ -2704,70 +2694,16 @@ tr.is-selected-row td {
 
   #transactionsView th[data-sort-key="account"],
   #transactionsView th[data-sort-key="notes"],
-  #transactionsView .transaction-account-cell,
-  #transactionsView .transaction-notes-cell,
+  .transaction-account-cell,
+  .transaction-notes-cell,
   #accountsView th:nth-child(2),
   #accountsView th:nth-child(3),
   #accountsView td:nth-child(2),
   #accountsView td:nth-child(3),
   #rulesView th:nth-child(2),
   #rulesView td:nth-child(2),
-  .uploaded-date-column,
-  #rawRowsTableElement th[data-raw-column="account"],
-  #rawRowsTableElement th[data-raw-column="status"],
-  #rawRowsTableElement th[data-raw-column="notes"],
-  #rawRowsTable td[data-raw-column="account"],
-  #rawRowsTable td[data-raw-column="status"],
-  #rawRowsTable td[data-raw-column="notes"] {
+  .uploaded-date-column {
     display: none;
-  }
-
-  #rawRowsTableElement th[data-raw-column="select"],
-  #rawRowsTable td[data-raw-column="select"] {
-    display: none;
-  }
-
-  th[data-raw-column="select"],
-  td[data-raw-column="select"]{
-    padding-right: 8px;
-  }
-
-  #rawRowsTableElement th[data-raw-column="select"],
-  #rawRowsTable td[data-raw-column="select"],
-  #rawRowsTableElement th[data-raw-column="date"],
-  #rawRowsTable td[data-raw-column="date"] {
-    width: 74px;
-    min-width: 74px;
-    max-width: 74px;
-  }
-
-  #rawRowsTableElement th[data-raw-column="category"],
-  #rawRowsTable td[data-raw-column="category"] {
-    width: 111px;
-    min-width: 111px;
-    max-width: 111px;
-  }
-
-  #rawRowsTableElement th[data-raw-column="amount"],
-  #rawRowsTable td[data-raw-column="amount"] {
-    width: 80px;
-    min-width: 80px;
-    max-width: 80px;
-  }
-
-  #rawRowsTableElement th[data-raw-column="description"],
-  #rawRowsTable td[data-raw-column="description"] {
-    width: auto;
-    min-width: 0;
-    max-width: none;
-  }
-
-  #rawRowsTable td[data-raw-column="description"],
-  #rawRowsTable td[data-raw-column="description"] .raw-value,
-  #rawRowsTable td[data-raw-column="description"] .rule-preview {
-    min-width: 0;
-    white-space: normal;
-    overflow-wrap: anywhere;
   }
 
   .metric-grid {

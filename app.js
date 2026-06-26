@@ -3957,12 +3957,12 @@
           rawRowNotes.delete(rawRow.id);
         }
       });
-      const selectCell = cell(checkbox, "raw-select-cell");
+      const selectCell = cell(checkbox, "transaction-select-cell raw-select-cell");
       selectCell.addEventListener("click", (event) => {
         event.stopPropagation();
         checkbox.click();
       });
-      const dateCell = cell(displayDateCell(rawRow.raw_date), "date-cell raw-date-select-cell");
+      const dateCell = cell(displayDateCell(rawRow.raw_date), "date-cell transaction-date-select-cell raw-date-select-cell");
       dateCell.addEventListener("click", (event) => {
         event.stopPropagation();
         if (!checkbox.disabled) {
@@ -3976,9 +3976,9 @@
         ["category", cell(rawCategoryValueWithPreview(rawRow))],
         ["description", cell(rawValueWithPreview(rawRow.raw_description, rawRowPreviewCleanDescription(rawRow)))],
         ["amount", cell(rawRow.raw_amount || "-", "amount")],
-        ["account", cell(account ? account.name : "Unknown", "muted-cell")],
+        ["account", cell(account ? account.name : "Unknown", "transaction-account-cell muted-cell")],
         ["status", cell(statusBadge(rawRow), "status-cell")],
-        ["notes", cell(noteInput)],
+        ["notes", cell(noteInput, "transaction-notes-cell")],
       ];
       tr.append(...cells
         .filter(([column]) => !hiddenColumns.has(column))
