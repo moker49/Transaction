@@ -56,6 +56,8 @@
   --scrim: rgb(0 0 0);
   --shadow-color: rgb(0 0 0);
   --shadow: 0 14px 35px color-mix(in srgb, var(--shadow-color) 26%, transparent);
+  --fixed-fab-clearance: calc(96px + env(safe-area-inset-bottom));
+  --mobile-fixed-fab-clearance: calc(126px + env(safe-area-inset-bottom));
 }
 
 * {
@@ -93,7 +95,7 @@ button[hidden] {
 .app-shell {
   width: min(1240px, calc(100% - 32px));
   margin: 0 auto;
-  padding: 24px 0 14px;
+  padding: 24px 0 var(--fixed-fab-clearance);
 }
 
 .topbar {
@@ -2566,6 +2568,7 @@ tr.is-selected-row td {
   .app-shell {
     width: min(100% - 20px, 1240px);
     padding-top: 4px;
+    padding-bottom: var(--mobile-fixed-fab-clearance);
   }
 
   .topbar {

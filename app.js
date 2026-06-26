@@ -3071,7 +3071,7 @@
     const result = await confirmDestructive({
       title: "Delete Uploaded File",
       message: destructiveMessage(
-        `Delete "${item.filename}"?\n
+        `Delete ${item.filename}?\n
         This will also delete:
         - ${rawRowCount} raw transactions
         - ${transactionCount} transactions\n`,
@@ -3082,7 +3082,7 @@
       return;
     }
     try {
-      const payload = await apiRequest(`/api/imports/${item.id}`, { method: "DELETE" });
+      const payload = await apiRequest(mutationPath(`/api/imports/${item.id}`), { method: "DELETE" });
       closeUploadedFileDialog();
       applyStateFromPayload(payload);
       showPopup("Uploaded file deleted.", "success");

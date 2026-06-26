@@ -153,6 +153,7 @@ CREATE INDEX IF NOT EXISTS idx_transactions_category_date ON transactions(catego
 CREATE INDEX IF NOT EXISTS idx_transactions_posted_date ON transactions(posted_date DESC);
 CREATE INDEX IF NOT EXISTS idx_transactions_clean_description ON transactions(clean_description);
 CREATE INDEX IF NOT EXISTS idx_transactions_hash ON transactions(account_id, transaction_hash);
+CREATE INDEX IF NOT EXISTS idx_transactions_raw_imported_row_id ON transactions(raw_imported_row_id);
 CREATE INDEX IF NOT EXISTS idx_transaction_import_rules_active_type ON transaction_import_rules(is_active, rule_type, id);
 CREATE INDEX IF NOT EXISTS idx_transaction_import_rules_type_active ON transaction_import_rules(rule_type, is_active, id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_transaction_import_rules_unique_match

@@ -289,6 +289,7 @@ def delete_account(account_id: int):
 def delete_imported_source(imported_source_id: int):
     ensure_database()
     with closing(connect(current_db_path())) as conn:
+        ensure_uploaded_file_delete_indexes(conn)
         source = conn.execute(
             """
             SELECT id, filename
@@ -308,19 +309,7 @@ def delete_imported_source(imported_source_id: int):
             """,
             (imported_source_id,),
         ).fetchone()["count"]
-        transaction_count = conn.execute(
-            """
-            SELECT COUNT(*) AS count
-            FROM transactions
-            WHERE raw_imported_row_id IN (
-                SELECT id
-                FROM raw_imported_rows
-                WHERE imported_source_id = ?
-            )
-            """,
-            (imported_source_id,),
-        ).fetchone()["count"]
-        conn.execute(
+        deleted_transactions = conn.execute(
             """
             DELETE FROM transactions
             WHERE raw_imported_row_id IN (
@@ -331,8 +320,9 @@ def delete_imported_source(imported_source_id: int):
             """,
             (imported_source_id,),
         )
+        deleted_transaction_count = max(deleted_transactions.rowcount or 0, 0)
         conn.execute("DELETE FROM imported_source WHERE id = ?", (imported_source_id,))
-        state = read_state(conn)
+        payload = mutation_response_payload(conn, refresh_raw_status=True)
         conn.commit()
 
     return jsonify(
@@ -340,8 +330,8 @@ def delete_imported_source(imported_source_id: int):
             "status": "deleted",
             "imported_source": dict(source),
             "deleted_raw_row_count": raw_row_count,
-            "deleted_transaction_count": transaction_count,
-            "state": state,
+            "deleted_transaction_count": deleted_transaction_count,
+            **payload,
         }
     )
 
@@ -1302,6 +1292,15 @@ def ensure_database() -> None:
         return
     init_db(db_path)
     ENSURED_DATABASE_PATHS.add(db_path)
+
+
+def ensure_uploaded_file_delete_indexes(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS idx_transactions_raw_imported_row_id
+        ON transactions(raw_imported_row_id)
+        """
+    )
 
 
 def parse_date_query_param(value: str | None, field_name: str) -> str:
