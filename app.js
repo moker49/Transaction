@@ -1,13 +1,13 @@
 import { clean } from "./scripts/js/common.mjs";
 import { parseCsv, normalizeCsvRow, detectCsvLayout, sourceAccountKeyFromCsvRows, accountImportKeys, sha256 } from "./scripts/js/csv.mjs";
 import { formatCents, formatDateTime, formatDisplayDate, formatMaybeDateTime, formatDollars } from "./scripts/js/format.mjs";
-import { actionButtons, appendEmpty, cell, clear, displayDateCell, el, emptyTableRow, fillSelect, makeEditableRow, manageableChip, materialIcon, renderDefinitionList, setText, tableRow } from "./scripts/js/dom.mjs";
+import { appendEmpty, cell, clear, displayDateCell, el, emptyTableRow, fillSelect, makeEditableRow, materialIcon, renderDefinitionList, setText, tableRow } from "./scripts/js/dom.mjs";
 import { renderPieChart, renderStackedBar } from "./scripts/js/charts.mjs";
 import { getElements } from "./scripts/js/dom-elements.mjs";
 import { buildAccountPayload, buildBulkEditOverrides, buildBulkImportOverrides, buildCategoryPayload, buildManualImportPayload, buildRulePayload, buildTransactionPayload, payloadMatchesSnapshot, selectedTagIdsFrom } from "./scripts/js/form-payloads.mjs";
 import { randomComfortableColor, normalizeHexColor, hexToHsl, hslToHex } from "./scripts/js/colors.mjs";
 import { dashboardFromTransactions } from "./scripts/js/dashboard-model.mjs";
-import { categoryDescendantIds, categoryLabel, categoryOptions, effectiveCategoryColor, orderedCategories, rootCategoryId, selectedCategory } from "./scripts/js/category-model.mjs";
+import { categoryDescendantIds, categoryLabel, categoryOptions, rootCategoryId, selectedCategory } from "./scripts/js/category-model.mjs";
 import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, matchAmountLabel, statusClass, statusLabel, transactionTypeLabel } from "./scripts/js/labels.mjs";
 import { clearSelectedRawRowsExceptStatus, isBaseSelectableRawRow, isImportableRawRow, isSelectableRawRow, isTemplateRawRow, nextSelectVisibleStatus, parseRawAmount, rawRowMatchesStatusFilter, ruleMatchValues, selectedRawRowStatus, topMatchingRuleForRawRow, visibleSelectableRawRowIds } from "./scripts/js/raw-row-model.mjs";
 import { navigateOptionalTypeGroup, navigateTypeGroup, selectOptionalTypeFromGroup, selectTypeFromGroup, setOptionalTypeGroupValue, setTypeGroupValue } from "./scripts/js/type-groups.mjs";
@@ -15,6 +15,9 @@ import { sortedTableRows } from "./scripts/js/table-sort.mjs";
 import { DEFAULT_STATE, normalizeState, pruneMissingIds, pruneMissingMapKeys, transactionSliceForRange } from "./scripts/js/state-model.mjs";
 import { createDateRangeController } from "./scripts/js/date-range-controller.mjs";
 import { createUiController } from "./scripts/js/ui-controller.mjs";
+import { createCategoryUi } from "./scripts/js/category-ui.mjs";
+import { createDashboardFilterController } from "./scripts/js/dashboard-filter-controller.mjs";
+import { createCategoryPickerController } from "./scripts/js/category-picker-controller.mjs";
 
 const API_BASE = window.location.protocol === "file:" ? "http://127.0.0.1:5050" : "";
 const DUMMY_DATABASE_KEY = "transaction-use-dummy-database";
@@ -61,7 +64,6 @@ let ruleEditSnapshot = null;
 let ruleRawRowContext = null;
 let transactionEditSnapshot = null;
 let duplicateRuleResolver = null;
-let categoryPickerTarget = null;
 let categoryColorDraft = "#2f8f2f";
 let mobileDrawerHistoryActive = false;
 let activeViewName = "overview";
@@ -71,7 +73,6 @@ let dashboardSplurgePieMode = "splurge";
 let shouldAnimateDashboardCategoryPie = false;
 let shouldAnimateDashboardSplurgePie = false;
 let importFileAnalysisToken = 0;
-let dashboardFilterCategoryIds = new Set();
 const viewScrollPositions = new Map();
 const sectionViewSelections = new Map();
 const tableSortState = {
@@ -125,6 +126,97 @@ const dateRange = createDateRangeController({
   loadTransactionData,
   isMobileLayout: () => window.matchMedia(MOBILE_LAYOUT_QUERY).matches,
 });
+const categoryUi = createCategoryUi({
+  getCategories: () => state.categories,
+  getEditingCategoryId: () => editingCategoryId,
+  editCategory,
+  isTransferCategory,
+});
+const {
+  displayCategoryChip,
+  plainCategoryChip,
+  renderCategorySections,
+} = categoryUi;
+const categoryPicker = createCategoryPickerController({
+  elements,
+  getCategories: () => state.categories,
+  openModal,
+  renderCategorySections,
+  rootCategoryId,
+  isTransferCategory,
+  targets: {
+    transaction: {
+      title: "Select Category",
+      selectedId: () => elements.transactionCategoryInput.value,
+      setValue: setTransactionCategoryValue,
+      transactionType: () => elements.transactionTypeInput.value,
+    },
+    "transaction-filter": {
+      title: "Filter By Category",
+      clearLabel: "All Categories",
+      canClear: true,
+      selectedId: () => elements.transactionCategoryFilter.value,
+      setValue: setTransactionCategoryFilterValue,
+    },
+    "rule-filter": {
+      title: "Filter By Category",
+      clearLabel: "All Categories",
+      canClear: true,
+      selectedId: () => elements.ruleCategoryFilter.value,
+      setValue: setRuleCategoryFilterValue,
+    },
+    rule: {
+      title: "Select Clean Category",
+      clearLabel: "No Category",
+      canClear: true,
+      selectedId: () => elements.ruleCategoryInput.value,
+      setValue: setRuleCategoryValue,
+      transactionType: () => elements.ruleTypeInput.value,
+    },
+    "manual-import": {
+      title: "Select Clean Category",
+      clearLabel: "No Category",
+      canClear: true,
+      selectedId: () => elements.manualImportCategoryInput.value,
+      setValue: setManualImportCategoryValue,
+      transactionType: () => elements.manualImportTypeInput.value,
+    },
+    "bulk-import": {
+      title: "Select Clean Category",
+      clearLabel: "Keep Category",
+      canClear: true,
+      selectedId: () => elements.bulkImportCategoryInput.value,
+      setValue: setBulkImportCategoryValue,
+      transactionType: () => elements.bulkImportTypeInput.value,
+    },
+    "bulk-edit": {
+      title: "Select Clean Category",
+      clearLabel: "Keep Category",
+      canClear: true,
+      selectedId: () => elements.bulkEditCategoryInput.value,
+      setValue: setBulkEditCategoryValue,
+      transactionType: () => elements.bulkEditTypeInput.value,
+    },
+    "category-parent": {
+      title: "Select Parent Category",
+      clearLabel: "No Parent",
+      canClear: true,
+      selectedId: () => elements.categoryParentInput.value,
+      setValue: setCategoryParentValue,
+    },
+  },
+});
+const dashboardFilter = createDashboardFilterController({
+  elements,
+  keys: {
+    enabled: DASHBOARD_FILTER_ENABLED_KEY,
+    categoryIds: DASHBOARD_FILTER_CATEGORY_IDS_KEY,
+  },
+  getCategories: () => state.categories,
+  isTransferCategory,
+  openModal,
+  renderDashboard,
+});
 const typeGroupOptions = {
   onChange: ({ input, value }) => {
     if (input === elements.ruleKindInput && value === "template") {
@@ -147,19 +239,19 @@ elements.dashboardCategoryPieFrame.addEventListener("click", toggleDashboardCate
 elements.dashboardCategoryPieFrame.addEventListener("keydown", (event) => activateDashboardPieToggleFromKeyboard(event, toggleDashboardCategoryPieMode));
 elements.dashboardSplurgePieFrame.addEventListener("click", toggleDashboardSplurgePieMode);
 elements.dashboardSplurgePieFrame.addEventListener("keydown", (event) => activateDashboardPieToggleFromKeyboard(event, toggleDashboardSplurgePieMode));
-elements.dashboardFilterButton.addEventListener("click", openDashboardFilterDialog);
+elements.dashboardFilterButton.addEventListener("click", dashboardFilter.openDialog);
 elements.mobileDashboardFilterButton.addEventListener("click", () => {
   closeMobileDrawer();
-  openDashboardFilterDialog();
+  dashboardFilter.openDialog();
 });
-elements.dashboardFilterToggle.addEventListener("change", () => setDashboardFilterEnabled(elements.dashboardFilterToggle.checked));
-elements.mobileDashboardFilterToggle.addEventListener("change", () => setDashboardFilterEnabled(elements.mobileDashboardFilterToggle.checked));
-elements.dashboardFilterCloseButton.addEventListener("click", closeDashboardFilterDialog);
-elements.dashboardFilterDoneButton.addEventListener("click", closeDashboardFilterDialog);
-elements.dashboardFilterResetButton.addEventListener("click", resetDashboardFilterSelection);
+elements.dashboardFilterToggle.addEventListener("change", () => dashboardFilter.setEnabled(elements.dashboardFilterToggle.checked));
+elements.mobileDashboardFilterToggle.addEventListener("change", () => dashboardFilter.setEnabled(elements.mobileDashboardFilterToggle.checked));
+elements.dashboardFilterCloseButton.addEventListener("click", dashboardFilter.closeDialog);
+elements.dashboardFilterDoneButton.addEventListener("click", dashboardFilter.closeDialog);
+elements.dashboardFilterResetButton.addEventListener("click", dashboardFilter.resetSelection);
 elements.dashboardFilterDialog.addEventListener("cancel", (event) => {
   event.preventDefault();
-  closeDashboardFilterDialog();
+  dashboardFilter.closeDialog();
 });
 window.addEventListener("scroll", updateScrollTopButton, { passive: true });
 elements.scrollTopButton.addEventListener("click", scrollActiveViewToTop);
@@ -197,7 +289,7 @@ elements.ruleAddButton.addEventListener("click", () => openRuleAddDialog());
 elements.ruleCancelButton.addEventListener("click", closeRuleDialog);
 elements.ruleDismissButton.addEventListener("click", handleRuleDismissButton);
 elements.ruleDeleteButton.addEventListener("click", deleteEditingRule);
-elements.ruleCategoryButton.addEventListener("click", () => openCategoryPicker("rule"));
+elements.ruleCategoryButton.addEventListener("click", () => categoryPicker.open("rule"));
 elements.ruleKindGroup.addEventListener("click", (event) => {
   selectTypeFromGroup(event, elements.ruleKindInput, elements.ruleKindGroup, typeGroupOptions);
   syncRuleDialogModeForSelectedType();
@@ -208,11 +300,11 @@ elements.ruleKindGroup.addEventListener("keydown", (event) => {
 });
 elements.ruleTypeGroup.addEventListener("click", (event) => {
   selectTypeFromGroup(event, elements.ruleTypeInput, elements.ruleTypeGroup, typeGroupOptions);
-  clearTransferCategoryIfTypeIsNotTransfer("rule");
+  categoryPicker.clearTransferCategoryIfTypeIsNotTransfer("rule");
 });
 elements.ruleTypeGroup.addEventListener("keydown", (event) => {
   navigateTypeGroup(event, elements.ruleTypeInput, elements.ruleTypeGroup, typeGroupOptions);
-  clearTransferCategoryIfTypeIsNotTransfer("rule");
+  categoryPicker.clearTransferCategoryIfTypeIsNotTransfer("rule");
 });
 elements.ruleMatchAmountGroup.addEventListener("click", (event) => selectTypeFromGroup(event, elements.ruleMatchAmountInput, elements.ruleMatchAmountGroup, typeGroupOptions));
 elements.ruleMatchAmountGroup.addEventListener("keydown", (event) => navigateTypeGroup(event, elements.ruleMatchAmountInput, elements.ruleMatchAmountGroup, typeGroupOptions));
@@ -244,15 +336,15 @@ elements.bulkImportForm.addEventListener("submit", importSelectedRawRows);
 elements.bulkImportCloseButton.addEventListener("click", closeBulkImportDialog);
 elements.bulkImportCancelButton.addEventListener("click", closeBulkImportDialog);
 elements.bulkImportResetButton.addEventListener("click", resetBulkImportForm);
-elements.bulkImportCategoryButton.addEventListener("click", () => openCategoryPicker("bulk-import"));
+elements.bulkImportCategoryButton.addEventListener("click", () => categoryPicker.open("bulk-import"));
 elements.bulkImportTypeGroup.addEventListener("click", (event) => {
   selectOptionalTypeFromGroup(event, elements.bulkImportTypeInput, elements.bulkImportTypeGroup);
-  clearTransferCategoryIfTypeIsNotTransfer("bulk-import");
+  categoryPicker.clearTransferCategoryIfTypeIsNotTransfer("bulk-import");
   updateBulkImportActionState();
 });
 elements.bulkImportTypeGroup.addEventListener("keydown", (event) => {
   navigateOptionalTypeGroup(event, elements.bulkImportTypeInput, elements.bulkImportTypeGroup);
-  clearTransferCategoryIfTypeIsNotTransfer("bulk-import");
+  categoryPicker.clearTransferCategoryIfTypeIsNotTransfer("bulk-import");
   updateBulkImportActionState();
 });
 elements.bulkImportTagsModeGroup.addEventListener("click", (event) => {
@@ -269,15 +361,15 @@ elements.bulkEditForm.addEventListener("submit", bulkEditTransactions);
 elements.bulkEditCloseButton.addEventListener("click", closeBulkEditDialog);
 elements.bulkEditCancelButton.addEventListener("click", closeBulkEditDialog);
 elements.bulkEditResetButton.addEventListener("click", resetBulkEditForm);
-elements.bulkEditCategoryButton.addEventListener("click", () => openCategoryPicker("bulk-edit"));
+elements.bulkEditCategoryButton.addEventListener("click", () => categoryPicker.open("bulk-edit"));
 elements.bulkEditTypeGroup.addEventListener("click", (event) => {
   selectOptionalTypeFromGroup(event, elements.bulkEditTypeInput, elements.bulkEditTypeGroup);
-  clearTransferCategoryIfTypeIsNotTransfer("bulk-edit");
+  categoryPicker.clearTransferCategoryIfTypeIsNotTransfer("bulk-edit");
   updateBulkEditActionState();
 });
 elements.bulkEditTypeGroup.addEventListener("keydown", (event) => {
   navigateOptionalTypeGroup(event, elements.bulkEditTypeInput, elements.bulkEditTypeGroup);
-  clearTransferCategoryIfTypeIsNotTransfer("bulk-edit");
+  categoryPicker.clearTransferCategoryIfTypeIsNotTransfer("bulk-edit");
   updateBulkEditActionState();
 });
 elements.bulkEditTagsModeGroup.addEventListener("click", (event) => {
@@ -292,14 +384,14 @@ elements.bulkEditForm.elements.cleanDescription.addEventListener("input", update
 elements.manualImportForm.addEventListener("submit", importManualRawRow);
 elements.manualImportCloseButton.addEventListener("click", closeManualImportDialog);
 elements.manualImportCancelButton.addEventListener("click", closeManualImportDialog);
-elements.manualImportCategoryButton.addEventListener("click", () => openCategoryPicker("manual-import"));
+elements.manualImportCategoryButton.addEventListener("click", () => categoryPicker.open("manual-import"));
 elements.manualImportTypeGroup.addEventListener("click", (event) => {
   selectTypeFromGroup(event, elements.manualImportTypeInput, elements.manualImportTypeGroup, typeGroupOptions);
-  clearTransferCategoryIfTypeIsNotTransfer("manual-import");
+  categoryPicker.clearTransferCategoryIfTypeIsNotTransfer("manual-import");
 });
 elements.manualImportTypeGroup.addEventListener("keydown", (event) => {
   navigateTypeGroup(event, elements.manualImportTypeInput, elements.manualImportTypeGroup, typeGroupOptions);
-  clearTransferCategoryIfTypeIsNotTransfer("manual-import");
+  categoryPicker.clearTransferCategoryIfTypeIsNotTransfer("manual-import");
 });
 elements.manualImportForm.elements.cleanDescription.addEventListener("input", updateManualImportFieldErrorState);
 elements.manualImportDialog.addEventListener("close", () => {
@@ -366,22 +458,22 @@ elements.confirmDialog.addEventListener("cancel", (event) => {
   closeConfirmDialog(false);
 });
 elements.transactionForm.addEventListener("submit", saveTransaction);
-elements.transactionCategoryFilterButton.addEventListener("click", () => openCategoryPicker("transaction-filter"));
-elements.ruleCategoryFilterButton.addEventListener("click", () => openCategoryPicker("rule-filter"));
+elements.transactionCategoryFilterButton.addEventListener("click", () => categoryPicker.open("transaction-filter"));
+elements.ruleCategoryFilterButton.addEventListener("click", () => categoryPicker.open("rule-filter"));
 elements.transactionCloseButton.addEventListener("click", closeTransactionDialog);
 elements.transactionCancelButton.addEventListener("click", closeTransactionDialog);
 elements.transactionTagsEditButton.addEventListener("click", toggleTransactionTagsEditMode);
 elements.transactionDeleteButton.addEventListener("click", deleteActiveTransaction);
 elements.transactionCategoryButton.addEventListener("click", () => {
-  openCategoryPicker("transaction");
+  categoryPicker.open("transaction");
 });
 elements.transactionTypeGroup.addEventListener("click", (event) => {
   selectTypeFromGroup(event, elements.transactionTypeInput, elements.transactionTypeGroup, typeGroupOptions);
-  clearTransferCategoryIfTypeIsNotTransfer("transaction");
+  categoryPicker.clearTransferCategoryIfTypeIsNotTransfer("transaction");
 });
 elements.transactionTypeGroup.addEventListener("keydown", (event) => {
   navigateTypeGroup(event, elements.transactionTypeInput, elements.transactionTypeGroup, typeGroupOptions);
-  clearTransferCategoryIfTypeIsNotTransfer("transaction");
+  categoryPicker.clearTransferCategoryIfTypeIsNotTransfer("transaction");
 });
 elements.rawRowCloseButton.addEventListener("click", closeRawRowDialog);
 elements.rawRowImportButton.addEventListener("click", importActiveRawRow);
@@ -404,7 +496,7 @@ elements.categoryCancelButton.addEventListener("click", closeCategoryDialog);
 elements.categoryDeleteButton.addEventListener("click", deleteEditingCategory);
 elements.categoryParentButton.addEventListener("click", () => {
   if (!elements.categoryParentButton.disabled) {
-    openCategoryPicker("category-parent");
+    categoryPicker.open("category-parent");
   }
 });
 elements.categoryColorPickButton.addEventListener("click", openCategoryColorPicker);
@@ -423,12 +515,12 @@ elements.categoryColorDialog.addEventListener("cancel", (event) => {
 elements.categoryDialog.addEventListener("close", () => {
   editingCategoryId = null;
 });
-elements.categoryPickerCloseButton.addEventListener("click", closeCategoryPicker);
-elements.categoryPickerCancelButton.addEventListener("click", closeCategoryPicker);
-elements.categoryPickerClearButton.addEventListener("click", () => selectPickedCategory(null));
+elements.categoryPickerCloseButton.addEventListener("click", categoryPicker.close);
+elements.categoryPickerCancelButton.addEventListener("click", categoryPicker.close);
+elements.categoryPickerClearButton.addEventListener("click", () => categoryPicker.select(null));
 elements.categoryPickerDialog.addEventListener("cancel", (event) => {
   event.preventDefault();
-  closeCategoryPicker();
+  categoryPicker.close();
 });
 document.querySelectorAll("dialog.modal").forEach((dialog) => {
   dialog.addEventListener("close", () => clearModalErrorState(dialog));
@@ -456,7 +548,7 @@ window.matchMedia(MOBILE_LAYOUT_QUERY).addEventListener("change", () => {
 
 dateRange.initialize();
 initializeDatabaseMode();
-initializeDashboardFilter();
+dashboardFilter.initialize();
 activateView("overview");
 loadInitialState();
 
@@ -1616,7 +1708,7 @@ function render() {
 function renderDashboard() {
   const dashboard = dashboardFromTransactions(state.transactions, {
     categories: state.categories,
-    filterTransactions: dashboardFilterTransactions,
+    filterTransactions: dashboardFilter.filterTransactions,
     segmentLimit: DASHBOARD_CATEGORY_SEGMENT_LIMIT,
   });
   setText("#dashboardIncome", formatDollars(dashboard.income || 0));
@@ -1642,38 +1734,6 @@ function renderDashboard() {
   });
   shouldAnimateDashboardCategoryPie = false;
   shouldAnimateDashboardSplurgePie = false;
-}
-
-function initializeDashboardFilter() {
-  const savedEnabled = localStorage.getItem(DASHBOARD_FILTER_ENABLED_KEY);
-  const enabled = savedEnabled !== "false";
-  elements.dashboardFilterToggle.checked = enabled;
-  elements.mobileDashboardFilterToggle.checked = enabled;
-  dashboardFilterCategoryIds = readDashboardFilterCategoryIds() || new Set();
-}
-
-function setDashboardFilterEnabled(enabled) {
-  localStorage.setItem(DASHBOARD_FILTER_ENABLED_KEY, enabled ? "true" : "false");
-  elements.dashboardFilterToggle.checked = enabled;
-  elements.mobileDashboardFilterToggle.checked = enabled;
-  renderDashboard();
-}
-
-function openDashboardFilterDialog() {
-  normalizeDashboardFilterSelection();
-  renderDashboardFilterList();
-  openModal(elements.dashboardFilterDialog);
-}
-
-function closeDashboardFilterDialog() {
-  elements.dashboardFilterDialog.close();
-}
-
-function resetDashboardFilterSelection() {
-  dashboardFilterCategoryIds = defaultDashboardFilterCategoryIds();
-  persistDashboardFilterSelection();
-  renderDashboardFilterList();
-  renderDashboard();
 }
 
 function toggleDashboardCategoryPieMode() {
@@ -2487,124 +2547,6 @@ function setCategoryParentValue(categoryId) {
 }
 
 
-function openCategoryPicker(target) {
-  categoryPickerTarget = target;
-  const canClear = target === "rule" || target === "manual-import" || target === "bulk-import" || target === "bulk-edit" || target === "transaction-filter" || target === "rule-filter" || target === "category-parent";
-  elements.categoryPickerTitle.textContent = target === "rule" || target === "manual-import" || target === "bulk-import" || target === "bulk-edit"
-    ? "Select Clean Category"
-    : target === "transaction-filter" || target === "rule-filter"
-      ? "Filter By Category"
-      : target === "category-parent"
-        ? "Select Parent Category"
-        : "Select Category";
-  elements.categoryPickerClearButton.textContent = target === "transaction-filter" || target === "rule-filter"
-    ? "All Categories"
-    : target === "category-parent"
-      ? "No Parent"
-      : target === "bulk-import" || target === "bulk-edit"
-        ? "Keep Category"
-        : "No Category";
-  elements.categoryPickerClearButton.hidden = !canClear;
-  renderCategoryPicker();
-  openModal(elements.categoryPickerDialog);
-  scrollCategoryPickerToSelectedSection();
-}
-
-function closeCategoryPicker() {
-  categoryPickerTarget = null;
-  elements.categoryPickerDialog.close();
-}
-
-function renderCategoryPicker() {
-  clear(elements.categoryPickerList);
-  if (!state.categories.length) {
-    appendEmpty(elements.categoryPickerList);
-    return;
-  }
-  const selectedId = selectedCategoryPickerId();
-  const parentOnly = categoryPickerTarget === "category-parent";
-  renderCategorySections(elements.categoryPickerList, {
-    selectable: true,
-    selectedId,
-    parentOnly,
-    transferCategoryMode: categoryPickerTransferCategoryMode(),
-    onSelect: (category) => selectPickedCategory(category.id),
-  });
-}
-
-function selectedCategoryPickerId() {
-  if (categoryPickerTarget === "transaction") {
-    return Number(elements.transactionCategoryInput.value) || null;
-  }
-  if (categoryPickerTarget === "transaction-filter") {
-    return Number(elements.transactionCategoryFilter.value) || null;
-  }
-  if (categoryPickerTarget === "rule-filter") {
-    return Number(elements.ruleCategoryFilter.value) || null;
-  }
-  if (categoryPickerTarget === "category-parent") {
-    return Number(elements.categoryParentInput.value) || null;
-  }
-  if (categoryPickerTarget === "manual-import") {
-    return Number(elements.manualImportCategoryInput.value) || null;
-  }
-  if (categoryPickerTarget === "bulk-import") {
-    return Number(elements.bulkImportCategoryInput.value) || null;
-  }
-  if (categoryPickerTarget === "bulk-edit") {
-    return Number(elements.bulkEditCategoryInput.value) || null;
-  }
-  return Number(elements.ruleCategoryInput.value) || null;
-}
-
-function scrollCategoryPickerToSelectedSection() {
-  const selectedId = selectedCategoryPickerId();
-  const rootId = selectedId ? rootCategoryId(state.categories, selectedId) : null;
-  const panel = elements.categoryPickerDialog.querySelector(".modal-panel");
-  const section = rootId
-    ? elements.categoryPickerList.querySelector(`[data-category-root-id="${rootId}"]`)
-    : null;
-  if (!panel || !section) {
-    return;
-  }
-  requestAnimationFrame(() => {
-    const panelRect = panel.getBoundingClientRect();
-    const sectionRect = section.getBoundingClientRect();
-    const centeredTop = panel.scrollTop
-      + sectionRect.top
-      - panelRect.top
-      - ((panel.clientHeight - sectionRect.height) / 2);
-    panel.scrollTo({ top: Math.max(0, centeredTop), left: 0 });
-  });
-}
-
-
-function categoryPickerTransferCategoryMode() {
-  if (!["transaction", "rule", "manual-import", "bulk-import", "bulk-edit"].includes(categoryPickerTarget || "")) {
-    return "all";
-  }
-  return pendingCategoryPickerTransactionType() === "transfer" ? "transfer-only" : "non-transfer";
-}
-
-function pendingCategoryPickerTransactionType() {
-  if (categoryPickerTarget === "transaction") {
-    return clean(elements.transactionTypeInput.value);
-  }
-  if (categoryPickerTarget === "rule") {
-    return clean(elements.ruleTypeInput.value);
-  }
-  if (categoryPickerTarget === "manual-import") {
-    return clean(elements.manualImportTypeInput.value);
-  }
-  if (categoryPickerTarget === "bulk-import") {
-    return clean(elements.bulkImportTypeInput.value);
-  }
-  if (categoryPickerTarget === "bulk-edit") {
-    return clean(elements.bulkEditTypeInput.value);
-  }
-  return "";
-}
-
 function isTransferCategory(categoryOrId) {
   const category = typeof categoryOrId === "object"
     ? categoryOrId
@@ -2615,313 +2557,6 @@ function isTransferCategory(categoryOrId) {
   const rootId = rootCategoryId(state.categories, category.id);
   const root = state.categories.find((candidate) => candidate.id === rootId);
   return clean(root?.name).toLowerCase() === "transfer";
-}
-
-function clearTransferCategoryIfTypeIsNotTransfer(target) {
-  const transactionType = pendingTransactionTypeForTarget(target);
-  const categoryId = selectedCategoryIdForTarget(target);
-  if (!categoryId) {
-    return;
-  }
-  const categoryIsTransfer = isTransferCategory(categoryId);
-  const categoryIsValid = transactionType === "transfer" ? categoryIsTransfer : !categoryIsTransfer;
-  if (categoryIsValid) {
-    return;
-  }
-  setCategoryValueForTarget(target, null);
-}
-
-function pendingTransactionTypeForTarget(target) {
-  if (target === "transaction") {
-    return clean(elements.transactionTypeInput.value);
-  }
-  if (target === "rule") {
-    return clean(elements.ruleTypeInput.value);
-  }
-  if (target === "manual-import") {
-    return clean(elements.manualImportTypeInput.value);
-  }
-  if (target === "bulk-import") {
-    return clean(elements.bulkImportTypeInput.value);
-  }
-  if (target === "bulk-edit") {
-    return clean(elements.bulkEditTypeInput.value);
-  }
-  return "";
-}
-
-function selectedCategoryIdForTarget(target) {
-  if (target === "transaction") {
-    return Number(elements.transactionCategoryInput.value) || null;
-  }
-  if (target === "rule") {
-    return Number(elements.ruleCategoryInput.value) || null;
-  }
-  if (target === "manual-import") {
-    return Number(elements.manualImportCategoryInput.value) || null;
-  }
-  if (target === "bulk-import") {
-    return Number(elements.bulkImportCategoryInput.value) || null;
-  }
-  if (target === "bulk-edit") {
-    return Number(elements.bulkEditCategoryInput.value) || null;
-  }
-  return null;
-}
-
-function setCategoryValueForTarget(target, categoryId) {
-  if (target === "transaction") {
-    setTransactionCategoryValue(categoryId);
-  } else if (target === "rule") {
-    setRuleCategoryValue(categoryId);
-  } else if (target === "manual-import") {
-    setManualImportCategoryValue(categoryId);
-  } else if (target === "bulk-import") {
-    setBulkImportCategoryValue(categoryId);
-  } else if (target === "bulk-edit") {
-    setBulkEditCategoryValue(categoryId);
-  }
-}
-
-function readDashboardFilterCategoryIds() {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(DASHBOARD_FILTER_CATEGORY_IDS_KEY) || "null");
-    if (!Array.isArray(parsed)) {
-      return null;
-    }
-    return new Set(parsed.map((id) => Number(id)).filter(Boolean));
-  } catch {
-    return null;
-  }
-}
-
-function persistDashboardFilterSelection() {
-  localStorage.setItem(DASHBOARD_FILTER_CATEGORY_IDS_KEY, JSON.stringify([...dashboardFilterCategoryIds]));
-}
-
-function defaultDashboardFilterCategoryIds() {
-  return new Set(state.categories
-    .filter((category) => !isTransferCategory(category))
-    .map((category) => category.id));
-}
-
-function normalizeDashboardFilterSelection() {
-  const validIds = new Set(state.categories.map((category) => category.id));
-  const storedIds = readDashboardFilterCategoryIds();
-  dashboardFilterCategoryIds = storedIds || defaultDashboardFilterCategoryIds();
-  dashboardFilterCategoryIds = new Set([...dashboardFilterCategoryIds].filter((categoryId) => validIds.has(categoryId)));
-  if (!storedIds && state.categories.length) {
-    persistDashboardFilterSelection();
-  }
-}
-
-function dashboardFilterEnabled() {
-  return elements.dashboardFilterToggle.checked;
-}
-
-function dashboardFilterTransactions(transactions) {
-  if (!dashboardFilterEnabled()) {
-    return transactions;
-  }
-  normalizeDashboardFilterSelection();
-  return transactions.filter((transaction) => dashboardFilterCategoryIds.has(Number(transaction.category_id)));
-}
-
-function renderDashboardFilterList() {
-  clear(elements.dashboardFilterList);
-  if (!state.categories.length) {
-    appendEmpty(elements.dashboardFilterList);
-    return;
-  }
-  const roots = orderedCategories(state.categories).filter((category) => category.parent_id === null);
-  const rendered = new Set();
-  roots.forEach((root) => {
-    const section = document.createElement("section");
-    section.className = "category-section";
-    const header = document.createElement("div");
-    header.className = "category-section-heading";
-    header.appendChild(el("h3", root.name));
-    const chips = document.createElement("div");
-    chips.className = "category-section-chips";
-    chips.appendChild(dashboardFilterCategoryChip(root, () => toggleDashboardFilterRoot(root)));
-    rendered.add(root.id);
-    orderedCategories(state.categories)
-      .filter((category) => category.parent_id === root.id)
-      .forEach((child) => {
-        chips.appendChild(dashboardFilterCategoryChip(child, () => toggleDashboardFilterCategory(child.id)));
-        rendered.add(child.id);
-      });
-    section.append(header, chips);
-    elements.dashboardFilterList.appendChild(section);
-  });
-  orderedCategories(state.categories)
-    .filter((category) => !rendered.has(category.id))
-    .forEach((category) => elements.dashboardFilterList.appendChild(dashboardFilterCategoryChip(category, () => toggleDashboardFilterCategory(category.id))));
-}
-
-function dashboardFilterCategoryChip(category, onClick) {
-  const selected = dashboardFilterCategoryIds.has(category.id);
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = selected
-    ? "dashboard-filter-chip is-selected"
-    : "dashboard-filter-chip chip category-chip";
-  button.style.setProperty("--category-color", effectiveCategoryColor(state.categories, category));
-  button.setAttribute("aria-pressed", selected ? "true" : "false");
-  if (selected) {
-    const icon = materialIcon("check");
-    icon.classList.add("dashboard-filter-chip-check");
-    button.append(icon);
-  }
-  button.appendChild(el("span", category.name));
-  button.addEventListener("click", onClick);
-  return button;
-}
-
-function toggleDashboardFilterRoot(root) {
-  const categoryIds = [root.id, ...orderedCategories(state.categories)
-    .filter((category) => category.parent_id === root.id)
-    .map((category) => category.id)];
-  const shouldSelect = !dashboardFilterCategoryIds.has(root.id);
-  categoryIds.forEach((categoryId) => {
-    if (shouldSelect) {
-      dashboardFilterCategoryIds.add(categoryId);
-    } else {
-      dashboardFilterCategoryIds.delete(categoryId);
-    }
-  });
-  persistDashboardFilterSelection();
-  renderDashboardFilterList();
-  renderDashboard();
-}
-
-function toggleDashboardFilterCategory(categoryId) {
-  if (dashboardFilterCategoryIds.has(categoryId)) {
-    dashboardFilterCategoryIds.delete(categoryId);
-  } else {
-    dashboardFilterCategoryIds.add(categoryId);
-  }
-  persistDashboardFilterSelection();
-  renderDashboardFilterList();
-  renderDashboard();
-}
-
-function selectPickedCategory(categoryId) {
-  if (categoryPickerTarget === "transaction") {
-    if (categoryId === null) {
-      return;
-    }
-    setTransactionCategoryValue(categoryId);
-  } else if (categoryPickerTarget === "transaction-filter") {
-    setTransactionCategoryFilterValue(categoryId);
-  } else if (categoryPickerTarget === "rule-filter") {
-    setRuleCategoryFilterValue(categoryId);
-  } else if (categoryPickerTarget === "rule") {
-    setRuleCategoryValue(categoryId);
-  } else if (categoryPickerTarget === "manual-import") {
-    setManualImportCategoryValue(categoryId);
-  } else if (categoryPickerTarget === "bulk-import") {
-    setBulkImportCategoryValue(categoryId);
-  } else if (categoryPickerTarget === "bulk-edit") {
-    setBulkEditCategoryValue(categoryId);
-  } else if (categoryPickerTarget === "category-parent") {
-    setCategoryParentValue(categoryId);
-  }
-  closeCategoryPicker();
-}
-
-function renderCategorySections(categoryList, options = {}) {
-  const selectable = Boolean(options.selectable);
-  const parentOnly = Boolean(options.parentOnly);
-  const transferCategoryMode = options.transferCategoryMode || "all";
-  const roots = orderedCategories(state.categories).filter((category) => category.parent_id === null);
-  const rendered = new Set();
-  roots.forEach((root) => {
-    if (!categoryMatchesTransferMode(root, transferCategoryMode)) {
-      rendered.add(root.id);
-      orderedCategories(state.categories)
-        .filter((category) => category.parent_id === root.id)
-        .forEach((category) => rendered.add(category.id));
-      return;
-    }
-    if (parentOnly && root.id === editingCategoryId) {
-      rendered.add(root.id);
-      return;
-    }
-    const section = document.createElement("section");
-    section.className = "category-section";
-    section.dataset.categoryRootId = String(root.id);
-    const header = document.createElement("div");
-    header.className = "category-section-heading";
-    header.appendChild(el("h3", root.name));
-    if (!root.is_default) {
-      header.appendChild(actionButtons([["edit", `Edit ${root.name}`, () => editCategory(root)]]));
-    }
-    const chips = document.createElement("div");
-    chips.className = "category-section-chips";
-    const children = parentOnly
-      ? []
-      : orderedCategories(state.categories).filter((category) => category.parent_id === root.id && categoryMatchesTransferMode(category, transferCategoryMode));
-    if (selectable) {
-      chips.appendChild(selectableCategoryChip(root, options.selectedId === root.id, options.onSelect));
-      rendered.add(root.id);
-    }
-    if (!selectable && !children.length && !root.is_default) {
-      chips.appendChild(selectable
-        ? selectableCategoryChip(root, options.selectedId === root.id, options.onSelect)
-        : categoryChip(root));
-      rendered.add(root.id);
-    }
-    children.forEach((child) => {
-      chips.appendChild(selectable
-        ? selectableCategoryChip(child, options.selectedId === child.id, options.onSelect)
-        : categoryChip(child));
-      rendered.add(child.id);
-    });
-    section.append(header, chips);
-    categoryList.appendChild(section);
-    rendered.add(root.id);
-  });
-  orderedCategories(state.categories)
-    .filter((category) => !rendered.has(category.id) && (!parentOnly || category.parent_id === null) && categoryMatchesTransferMode(category, transferCategoryMode))
-    .forEach((category) => categoryList.appendChild(selectable
-      ? selectableCategoryChip(category, options.selectedId === category.id, options.onSelect)
-      : categoryChip(category)));
-}
-
-function categoryMatchesTransferMode(category, transferCategoryMode) {
-  if (transferCategoryMode === "transfer-only") {
-    return isTransferCategory(category);
-  }
-  if (transferCategoryMode === "non-transfer") {
-    return !isTransferCategory(category);
-  }
-  return true;
-}
-
-function selectableCategoryChip(category, isSelected, onSelect) {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "category-picker-chip";
-  button.setAttribute("aria-pressed", isSelected ? "true" : "false");
-  if (isSelected) {
-    button.classList.add("is-selected");
-  }
-  button.appendChild(plainCategoryChip(category));
-  button.addEventListener("click", () => onSelect?.(category));
-  return button;
-}
-
-function categoryChip(category) {
-  const chip = category.is_default ? plainCategoryChip(category) : manageableChip(category.name, () => editCategory(category), "category-chip");
-  chip.style.setProperty("--category-color", effectiveCategoryColor(state.categories, category));
-  return chip;
-}
-
-function plainCategoryChip(category) {
-  const chip = el("span", category.name, "chip category-chip");
-  chip.style.setProperty("--category-color", effectiveCategoryColor(state.categories, category));
-  return chip;
 }
 
 function staticTagChip(label) {
@@ -2952,37 +2587,6 @@ function selectableTagChip(tag, isSelected, inputName) {
     label.classList.toggle("is-selected", checkbox.checked);
   });
   return label;
-}
-
-function displayCategoryChip(category) {
-  const chip = el("span", "", "chip category-chip transaction-category-chip");
-  chip.style.setProperty("--category-color", effectiveCategoryColor(state.categories, category));
-  manualChipWrap(category.name, 11).forEach((line) => {
-    chip.appendChild(el("span", line, "transaction-category-chip-line"));
-  });
-  return chip;
-}
-
-function manualChipWrap(label, maxLineLength) {
-  const words = clean(label).split(/\s+/).filter(Boolean);
-  if (!words.length) {
-    return ["-"];
-  }
-  const lines = [];
-  let current = "";
-  words.forEach((word) => {
-    const next = current ? `${current} ${word}` : word;
-    if (current && next.length > maxLineLength) {
-      lines.push(current);
-      current = word;
-    } else {
-      current = next;
-    }
-  });
-  if (current) {
-    lines.push(current);
-  }
-  return lines;
 }
 
 
@@ -3592,3 +3196,4 @@ function ruleRawRowFillValueForField(field) {
   }
   return "";
 }
+
