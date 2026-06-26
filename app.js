@@ -3557,10 +3557,10 @@
     button.type = "button";
     button.className = selected
       ? "dashboard-filter-chip is-selected"
-      : "dashboard-filter-chip tag-chip tag-chip-select";
+      : "dashboard-filter-chip chip category-chip";
+    button.style.setProperty("--category-color", effectiveCategoryColor(category));
     button.setAttribute("aria-pressed", selected ? "true" : "false");
     if (selected) {
-      button.style.setProperty("--category-color", effectiveCategoryColor(category));
       const icon = materialIcon("check");
       icon.classList.add("dashboard-filter-chip-check");
       button.append(icon);

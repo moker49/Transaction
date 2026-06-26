@@ -774,7 +774,7 @@ h2 {
 
 @keyframes pie-toggle {
   0% {
-    opacity: 0.58;
+    opacity: 0.5;
     transform: scale(0.98);
   }
 
@@ -1225,7 +1225,7 @@ th.sortable-header::after {
   line-height: 1;
   text-transform: none;
   vertical-align: -0.18em;
-  opacity: 0.54;
+  opacity: 0.5;
 }
 
 th.sortable-header.is-sorted::after {
@@ -1326,6 +1326,10 @@ td.amount {
 
 .dashboard-filter-chip {
   cursor: pointer;
+}
+
+.dashboard-filter-chip:not(.is-selected) {
+  opacity: 0.4;
 }
 
 .dashboard-filter-chip.is-selected {
