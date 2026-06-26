@@ -35,7 +35,7 @@
   --control-border: color-mix(in srgb, var(--primary) var(--border-saturation), var(--neutral-border));
 
   --accent: color-mix(in srgb, var(--primary) 42%, var(--black));
-  --accent-dark: color-mix(in srgb, var(--primary) 80%, var(--white));
+  --accent-dark: color-mix(in srgb, var(--primary) 70%, var(--white));
   --accent-contrast: color-mix(in srgb, var(--white) 84%, var(--primary));
   --focus: color-mix(in srgb, var(--primary) 75%, transparent);
 
@@ -1692,6 +1692,12 @@ button.category-chip.manageable-chip {
   background: var(--surface);
   color: var(--text);
   box-shadow: var(--shadow);
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.modal::-webkit-scrollbar {
+  display: none;
 }
 
 .small-modal {
@@ -1735,6 +1741,12 @@ button.category-chip.manageable-chip {
   flex-direction: column;
   max-height: min(760px, calc(100vh - 56px));
   overflow: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.modal-panel::-webkit-scrollbar {
+  display: none;
 }
 
 .modal-actions {
