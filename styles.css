@@ -1388,13 +1388,8 @@ td.amount {
   outline-offset: 3px;
 }
 
-.empty-category-chip {
-  border-style: dashed;
-  color: var(--muted);
-}
-
-label.rule-field-error .empty-category-chip,
-label.field-error .empty-category-chip {
+label.rule-field-error,
+label.field-error {
   border-color: var(--danger);
   background: color-mix(in srgb, var(--danger) 18%, transparent);
   color: var(--danger);
