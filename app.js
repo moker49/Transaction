@@ -1,5 +1,4 @@
 import { clean } from "./scripts/js/common.mjs";
-import { normalizeCsvRow, sha256 } from "./scripts/js/csv.mjs";
 import { formatCents, formatDateTime, formatDisplayDate, formatMaybeDateTime, formatDollars } from "./scripts/js/format.mjs";
 import { appendEmpty, clear, displayDateCell, el, emptyTableRow, fillSelect, makeEditableRow, materialIcon, renderDefinitionList, setText, tableRow } from "./scripts/js/dom.mjs";
 import { renderPieChart, renderStackedBar } from "./scripts/js/charts.mjs";
@@ -7,7 +6,7 @@ import { getElements } from "./scripts/js/dom-elements.mjs";
 import { buildAccountPayload, buildBulkEditOverrides, buildBulkImportOverrides, buildCategoryPayload, buildManualImportPayload, buildRulePayload, buildTransactionPayload, payloadMatchesSnapshot, selectedTagIdsFrom } from "./scripts/js/form-payloads.mjs";
 import { randomComfortableColor, normalizeHexColor, hexToHsl, hslToHex } from "./scripts/js/colors.mjs";
 import { dashboardFromTransactions } from "./scripts/js/dashboard-model.mjs";
-import { categoryDescendantIds, categoryLabel, categoryOptions, rootCategoryId, selectedCategory } from "./scripts/js/category-model.mjs";
+import { categoryDescendantIds, rootCategoryId, selectedCategory } from "./scripts/js/category-model.mjs";
 import { accountLabel, accountTypeLabel, accountTypeValues, destructiveMessage, matchAmountLabel, transactionTypeLabel } from "./scripts/js/labels.mjs";
 import { isImportableRawRow, isTemplateRawRow, parseRawAmount, ruleMatchValues, topMatchingRuleForRawRow } from "./scripts/js/raw-row-model.mjs";
 import { navigateOptionalTypeGroup, navigateTypeGroup, selectOptionalTypeFromGroup, selectTypeFromGroup, setOptionalTypeGroupValue, setTypeGroupValue } from "./scripts/js/type-groups.mjs";
