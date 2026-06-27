@@ -2,8 +2,8 @@ import { clean } from "./common.mjs";
 
 export function randomComfortableColor() {
   const hue = Math.floor(Math.random() * 360);
-  const saturation = 38 + Math.floor(Math.random() * 23);
-  const lightness = 40 + Math.floor(Math.random() * 17);
+  const saturation = 20 + Math.floor(Math.random() * 50);
+  const lightness = 20 + Math.floor(Math.random() * 50);
   return hslToHex(hue, saturation, lightness);
 }
 

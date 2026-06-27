@@ -558,7 +558,6 @@ elements.transactionDialog.addEventListener("close", () => {
 });
 elements.categoryDialogForm.addEventListener("submit", saveCategory);
 elements.categoryCloseButton.addEventListener("click", closeCategoryDialog);
-elements.categoryCancelButton.addEventListener("click", closeCategoryDialog);
 elements.categoryDeleteButton.addEventListener("click", deleteEditingCategory);
 elements.categoryParentButton.addEventListener("click", () => {
   if (!elements.categoryParentButton.disabled) {

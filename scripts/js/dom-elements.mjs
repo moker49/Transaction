@@ -213,7 +213,6 @@ export function getElements() {
     categoryDialogForm: document.querySelector("#categoryDialogForm"),
     categoryDialogTitle: document.querySelector("#categoryDialogTitle"),
     categoryCloseButton: document.querySelector("#categoryCloseButton"),
-    categoryCancelButton: document.querySelector("#categoryCancelButton"),
     categoryDeleteButton: document.querySelector("#categoryDeleteButton"),
     categorySubmitButton: document.querySelector("#categorySubmitButton"),
     categoryParentInput: document.querySelector("#categoryParentInput"),
