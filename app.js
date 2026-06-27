@@ -2041,7 +2041,7 @@ function renderCategoryButton(button, categoryId, fallbackLabel = "No category")
   if (category) {
     button.appendChild(plainCategoryChip(category));
   } else {
-    button.appendChild(el("span", fallbackLabel, "chip category-chip empty-category-chip"));
+    button.appendChild(el("span", fallbackLabel, "chip category-chip"));
   }
 }
 
