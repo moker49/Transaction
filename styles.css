@@ -33,12 +33,13 @@
   --control-border: color-mix(in srgb, var(--primary) var(--border-saturation), var(--neutral-border));
 
   --accent: color-mix(in srgb, var(--primary) 50%, var(--white));
+  --accent-contrast: color-mix(in srgb, var(--white) 85%, var(--primary));
   --accent-dark: color-mix(in srgb, var(--primary) 45%, var(--black));
   --accent-muted: color-mix(in srgb, var(--gray) 75%, var(--primary));
-  --accent-muted-2: color-mix(in srgb, var(--gray) 30%, var(--accent-muted));
-  --accent-muted-2-light: color-mix(in srgb, var(--gray-light) 40%, var(--accent-muted));
-  --accent-contrast: color-mix(in srgb, var(--white) 85%, var(--primary));
-  --focus: color-mix(in srgb, var(--primary) 75%, transparent);
+  --accent-muted-contrast: color-mix(in srgb, var(--accent-dark) 24%, var(--text));
+  --accent-neutral: color-mix(in srgb, var(--gray) 30%, var(--accent-muted));
+  --accent-neutral-light: color-mix(in srgb, var(--gray-light) 40%, var(--accent-muted));
+  --focus: color-mix(in srgb, var(--primary) 70%, transparent);
 
   --danger: color-mix(in srgb, var(--error) 84%, var(--white));
   --danger-bg: color-mix(in srgb, var(--error) 48%, var(--black));
@@ -350,7 +351,7 @@ h2 {
   border: 0;
   border-radius: 12px;
   background: var(--accent-muted);
-  color: color-mix(in srgb, var(--accent-dark) 24%, var(--text));
+  color: var(--accent-muted-contrast);
   font-size: 0.88rem;
   font-weight: 780;
   line-height: 1;
@@ -1786,7 +1787,7 @@ button.category-chip.manageable-chip {
   gap: 12px;
   min-height: 76px;
   padding: 14px 16px;
-  border: 1px dashed var(--accent-muted-2);
+  border: 1px dashed var(--accent-neutral);
   border-radius: 8px;
   background: var(--surface-muted);
   color: var(--muted);
@@ -2096,10 +2097,10 @@ button.category-chip.manageable-chip {
   min-height: 32px;
   margin: 0;
   padding: 0 10px;
-  border: 1px solid var(--accent-muted-2-light);
+  border: 1px solid var(--accent-neutral-light);
   border-radius: 8px;
   background: transparent;
-  color: var(--accent-muted-2-light);
+  color: var(--accent-neutral-light);
   font: inherit;
   font-size: 0.86rem;
   font-weight: 720;
@@ -2109,7 +2110,7 @@ button.category-chip.manageable-chip {
 
 .tag-chip-filled {
   border-color: transparent;
-  background: var(--accent-muted-2);
+  background: var(--accent-neutral);
   color: var(--text-muted);
 }
 
@@ -2153,7 +2154,7 @@ button.category-chip.manageable-chip {
 
 .tag-chip-select.is-selected {
   border-color: transparent;
-  background: var(--accent-muted-2);
+  background: var(--accent-neutral);
   color: var(--text-muted);
 }
 
