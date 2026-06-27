@@ -65,11 +65,6 @@
   --scroll-top-fab-shadow-hover: 0 7px 11px var(--shadow-medium), 0 2px 4px var(--shadow-soft);
   --field-error-ring: color-mix(in srgb, var(--danger) 34%, var(--transparent));
   --field-error-bg: color-mix(in srgb, var(--danger) 18%, var(--transparent));
-  --category-chip-border: color-mix(in srgb, var(--category-color) 65%, var(--white));
-  --category-chip-bg: color-mix(in srgb, var(--category-color) 65%, var(--black));
-  --category-chip-text: color-mix(in srgb, var(--category-color) 55%, var(--white));
-  --category-preview-bg: color-mix(in srgb, var(--category-color) 38%, var(--surface-muted));
-  --category-preview-text: color-mix(in srgb, var(--category-color) 70%, var(--text));
   --modal-backdrop-bg: color-mix(in srgb, var(--scrim) 56%, var(--transparent));
   --mobile-drawer-backdrop-bg: color-mix(in srgb, var(--scrim) 38%, var(--transparent));
   --calendar-range-bg: color-mix(in srgb, var(--accent-contrast) 8%, var(--transparent));
@@ -1340,10 +1335,10 @@ td.amount {
   max-width: 100%;
   min-height: 30px;
   padding: 5px 10px;
-  border: 1px solid var(--category-chip-border);
+  border: 1px solid color-mix(in srgb, var(--category-color) 65%, var(--white));
   border-radius: 7px;
-  background: var(--category-chip-bg);
-  color: var(--category-chip-text);
+  background: color-mix(in srgb, var(--category-color) 65%, var(--black));
+  color: color-mix(in srgb, var(--category-color) 55%, var(--white));
   font: inherit;
   font-size: 0.86rem;
   font-weight: 700;
@@ -1527,9 +1522,9 @@ label.field-error {
   padding-top: 5px;
   padding-bottom: 5px;
   border-radius: 7px;
-  border-color: var(--category-chip-border);
-  background: var(--category-chip-bg);
-  color: var(--category-chip-text);
+  border-color: color-mix(in srgb, var(--category-color) 65%, var(--white));
+  background: color-mix(in srgb, var(--category-color) 65%, var(--black));
+  color: color-mix(in srgb, var(--category-color) 55%, var(--white));
 }
 
 button.category-chip.manageable-chip {
@@ -1589,8 +1584,8 @@ button.category-chip.manageable-chip {
   height: 72px;
   border: 2px solid var(--category-color);
   border-radius: 7px;
-  background: var(--category-preview-bg);
-  color: var(--category-preview-text);
+  background: color-mix(in srgb, var(--category-color) 38%, var(--surface-muted));
+  color: color-mix(in srgb, var(--category-color) 70%, var(--text));
   font-weight: 780;
   text-transform: none;
 }
