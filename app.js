@@ -31,7 +31,6 @@ const DATE_RANGE_CUSTOM_START_KEY = "transaction-date-range-custom-start";
 const DATE_RANGE_CUSTOM_END_KEY = "transaction-date-range-custom-end";
 const LEGACY_DATE_RANGE_CUSTOM_START_KEY = "transaction-dashboard-custom-start";
 const LEGACY_DATE_RANGE_CUSTOM_END_KEY = "transaction-dashboard-custom-end";
-const DASHBOARD_FILTER_ENABLED_KEY = "transaction-dashboard-filter-enabled";
 const DASHBOARD_FILTER_CATEGORY_IDS_KEY = "transaction-dashboard-filter-category-ids";
 const DEFAULT_DATE_RANGE = "last-month";
 const CUSTOM_DATE_RANGE = "custom";
@@ -254,13 +253,12 @@ const categoryPicker = createCategoryPickerController({
 const dashboardFilter = createDashboardFilterController({
   elements,
   keys: {
-    enabled: DASHBOARD_FILTER_ENABLED_KEY,
     categoryIds: DASHBOARD_FILTER_CATEGORY_IDS_KEY,
   },
   getCategories: () => state.categories,
   isTransferCategory,
   openModal,
-  renderDashboard,
+  renderFilteredViews,
 });
 const rawRowsController = createRawRowsController({
   elements,
@@ -308,11 +306,8 @@ elements.dashboardSplurgePieFrame.addEventListener("click", toggleDashboardSplur
 elements.dashboardSplurgePieFrame.addEventListener("keydown", (event) => activateDashboardPieToggleFromKeyboard(event, toggleDashboardSplurgePieMode));
 elements.dashboardFilterButton.addEventListener("click", dashboardFilter.openDialog);
 elements.mobileDashboardFilterButton.addEventListener("click", () => {
-  closeMobileDrawer();
   dashboardFilter.openDialog();
 });
-elements.dashboardFilterToggle.addEventListener("change", () => dashboardFilter.setEnabled(elements.dashboardFilterToggle.checked));
-elements.mobileDashboardFilterToggle.addEventListener("change", () => dashboardFilter.setEnabled(elements.mobileDashboardFilterToggle.checked));
 elements.dashboardFilterCloseButton.addEventListener("click", dashboardFilter.closeDialog);
 elements.dashboardFilterDoneButton.addEventListener("click", dashboardFilter.closeDialog);
 elements.dashboardFilterResetButton.addEventListener("click", dashboardFilter.resetSelection);
@@ -1366,6 +1361,11 @@ function render() {
   rawRowsController.render();
 }
 
+function renderFilteredViews() {
+  renderDashboard();
+  renderTransactions();
+}
+
 function renderDashboard() {
   const dashboard = dashboardFromTransactions(state.transactions, {
     categories: state.categories,
@@ -1444,7 +1444,7 @@ function renderTransactions() {
   const categoryFilter = Number(elements.transactionCategoryFilter.value) || null;
   const categoryIds = categoryFilter === null ? null : new Set([categoryFilter, ...categoryDescendantIds(state.categories, categoryFilter)]);
   const search = clean(elements.transactionSearch.value).toLowerCase();
-  const transactions = state.transactions.filter((transaction) => {
+  const transactions = dashboardFilter.filterTransactions(state.transactions).filter((transaction) => {
     if (categoryIds && !categoryIds.has(Number(transaction.category_id))) {
       return false;
     }

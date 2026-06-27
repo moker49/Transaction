@@ -2,13 +2,14 @@ import { clean } from "./common.mjs";
 import { cell, clear, displayDateCell, el, emptyTableRow, makeEditableRow } from "./dom.mjs";
 import { statusClass, statusLabel } from "./labels.mjs";
 import {
-  clearSelectedRawRowsExceptStatus,
+  clearSelectedRawRowsExceptStatusFromMap,
   isBaseSelectableRawRow,
   isSelectableRawRow,
   isTemplateRawRow,
   nextSelectVisibleStatus,
+  rawRowsByIdMap,
   rawRowMatchesStatusFilter,
-  selectedRawRowStatus,
+  selectedRawRowStatusFromMap,
   visibleSelectableRawRowIds,
 } from "./raw-row-model.mjs";
 import { sortedTableRows } from "./table-sort.mjs";
@@ -24,10 +25,17 @@ export function createRawRowsController({
   plainCategoryChip,
 }) {
   let visibleRawRows = [];
+  let renderContext = null;
 
   function render() {
     const tbody = document.querySelector("#rawRowsTable");
     clear(tbody);
+    const state = getState();
+    const rawRowsById = rawRowsByIdMap(state.rawRows);
+    const accountsById = new Map(state.accounts.map((account) => [account.id, account]));
+    const categoriesById = new Map(state.categories.map((category) => [category.id, category]));
+    const selectedStatus = selectedRawRowStatusFromMap(selectedRawRowIds, rawRowsById);
+    renderContext = { state, rawRowsById, accountsById, categoriesById, selectedStatus };
 
     const accountFilter = elements.rawAccountFilter.value;
     const statusFilter = elements.rawStatusFilter.value;
@@ -42,14 +50,18 @@ export function createRawRowsController({
     const rawColumnCount = 8 - hiddenColumns.size;
 
     pruneSelection();
+    renderContext.selectedStatus = selectedRawRowStatusFromMap(selectedRawRowIds, rawRowsById);
 
-    const rows = getState().rawRows.filter((row) => {
+    const rows = state.rawRows.filter((row) => {
       if (accountFilter !== "all" && String(row.account_id) !== accountFilter) {
         return false;
       }
       return rawRowMatchesStatusFilter(row, statusFilter);
     });
-    const sortedRows = sortedTableRows("rawRows", rows, tableSortState, tableSortContext());
+    const sortedRows = sortedTableRows("rawRows", rows, tableSortState, {
+      ...tableSortContext(),
+      accountsById,
+    });
     visibleRawRows = sortedRows;
     if (!rows.length) {
       tbody.appendChild(emptyTableRow(rawColumnCount));
@@ -66,15 +78,16 @@ export function createRawRowsController({
   }
 
   function pruneSelection() {
+    const { rawRowsById } = renderContext;
     [...selectedRawRowIds].forEach((rowId) => {
-      const rawRow = getState().rawRows.find((candidate) => candidate.id === rowId);
+      const rawRow = rawRowsById.get(rowId);
       if (!rawRow || !isBaseSelectableRawRow(rawRow)) {
         selectedRawRowIds.delete(rowId);
       }
     });
-    const lockedStatus = selectedRawRowStatus(selectedRawRowIds, getState().rawRows);
+    const lockedStatus = selectedRawRowStatusFromMap(selectedRawRowIds, rawRowsById);
     [...selectedRawRowIds].forEach((rowId) => {
-      const rawRow = getState().rawRows.find((candidate) => candidate.id === rowId);
+      const rawRow = rawRowsById.get(rowId);
       if (lockedStatus && rawRow?.import_status !== lockedStatus) {
         selectedRawRowIds.delete(rowId);
       }
@@ -82,7 +95,8 @@ export function createRawRowsController({
   }
 
   function rawRowTableRow(rawRow, hiddenColumns) {
-    const account = getState().accounts.find((candidate) => candidate.id === rawRow.account_id);
+    const { accountsById } = renderContext;
+    const account = accountsById.get(rawRow.account_id);
     const tr = document.createElement("tr");
     tr.classList.toggle("is-selected-row", selectedRawRowIds.has(rawRow.id));
     makeEditableRow(tr, `View raw transaction ${rawRow.id}`, () => openRawRowDialog(rawRow));
@@ -122,17 +136,18 @@ export function createRawRowsController({
   }
 
   function rowCheckbox(rawRow) {
+    const { rawRowsById, selectedStatus } = renderContext;
     const checkbox = document.createElement("input");
     checkbox.className = "row-checkbox";
     checkbox.type = "checkbox";
     checkbox.checked = selectedRawRowIds.has(rawRow.id);
-    checkbox.disabled = !isSelectableRawRow(rawRow, selectedRawRowStatus(selectedRawRowIds, getState().rawRows));
+    checkbox.disabled = !isSelectableRawRow(rawRow, selectedStatus);
     checkbox.setAttribute("aria-label", `Select row ${rawRow.id}`);
     checkbox.addEventListener("click", (event) => event.stopPropagation());
     checkbox.addEventListener("keydown", (event) => event.stopPropagation());
     checkbox.addEventListener("change", () => {
       if (checkbox.checked) {
-        clearSelectedRawRowsExceptStatus(selectedRawRowIds, getState().rawRows, rawRow.import_status);
+        clearSelectedRawRowsExceptStatusFromMap(selectedRawRowIds, rawRowsById, rawRow.import_status);
         selectedRawRowIds.add(rawRow.id);
       } else {
         selectedRawRowIds.delete(rawRow.id);
@@ -143,12 +158,14 @@ export function createRawRowsController({
   }
 
   function noteField(rawRow) {
+    const { selectedStatus } = renderContext;
     const noteInput = document.createElement("input");
     noteInput.type = "text";
     noteInput.className = "raw-note-input";
     noteInput.value = rawRowNotes.get(rawRow.id) || "";
-    noteInput.disabled = !isSelectableRawRow(rawRow, selectedRawRowStatus(selectedRawRowIds, getState().rawRows));
-    noteInput.placeholder = isSelectableRawRow(rawRow, selectedRawRowStatus(selectedRawRowIds, getState().rawRows)) ? "Transaction note" : "";
+    const selectable = isSelectableRawRow(rawRow, selectedStatus);
+    noteInput.disabled = !selectable;
+    noteInput.placeholder = selectable ? "Transaction note" : "";
     noteInput.setAttribute("aria-label", `Note for row ${rawRow.id}`);
     noteInput.addEventListener("click", (event) => event.stopPropagation());
     noteInput.addEventListener("keydown", (event) => event.stopPropagation());
@@ -164,14 +181,17 @@ export function createRawRowsController({
   }
 
   function selectedImportableRowIds() {
+    const { rawRowsById } = renderContext;
+    const selectedStatus = selectedRawRowStatusFromMap(selectedRawRowIds, rawRowsById);
     return [...selectedRawRowIds].filter((rowId) => {
-      const rawRow = getState().rawRows.find((candidate) => candidate.id === rowId);
-      return rawRow && isSelectableRawRow(rawRow, selectedRawRowStatus(selectedRawRowIds, getState().rawRows));
+      const rawRow = rawRowsById.get(rowId);
+      return rawRow && isSelectableRawRow(rawRow, selectedStatus);
     });
   }
 
   function selectVisibleRows() {
-    const selectedStatus = selectedRawRowStatus(selectedRawRowIds, getState().rawRows);
+    const rawRowsById = renderContext?.rawRowsById || rawRowsByIdMap(getState().rawRows);
+    const selectedStatus = selectedRawRowStatusFromMap(selectedRawRowIds, rawRowsById);
     const autoImportIds = visibleSelectableRawRowIds(visibleRawRows, "auto-importable");
     const prefillIds = visibleSelectableRawRowIds(visibleRawRows, "pre-fill");
     const targetStatus = nextSelectVisibleStatus(selectedStatus, autoImportIds, prefillIds, selectedRawRowIds);
@@ -196,9 +216,10 @@ export function createRawRowsController({
   }
 
   function updateSelectVisibleButton() {
+    const { rawRowsById } = renderContext;
     const autoImportIds = visibleSelectableRawRowIds(visibleRawRows, "auto-importable");
     const prefillIds = visibleSelectableRawRowIds(visibleRawRows, "pre-fill");
-    const selectedStatus = selectedRawRowStatus(selectedRawRowIds, getState().rawRows);
+    const selectedStatus = selectedRawRowStatusFromMap(selectedRawRowIds, rawRowsById);
     const nextStatus = nextSelectVisibleStatus(selectedStatus, autoImportIds, prefillIds, selectedRawRowIds);
     const selectableCount = autoImportIds.length + prefillIds.length;
     const title = nextStatus === "auto-importable"
@@ -249,10 +270,11 @@ export function createRawRowsController({
   }
 
   function rawCategoryValueWithPreview(rawRow) {
+    const { categoriesById } = renderContext;
     const wrapper = document.createElement("div");
     wrapper.className = "raw-value raw-category-value";
     wrapper.appendChild(el("span", rawRow.raw_category || "-"));
-    const category = getState().categories.find((candidate) => candidate.id === rawRow.preview_category_id);
+    const category = categoriesById.get(rawRow.preview_category_id);
     if (category) {
       const preview = document.createElement("span");
       preview.className = "rule-preview raw-category-preview";

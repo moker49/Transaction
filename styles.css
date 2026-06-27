@@ -119,6 +119,10 @@ button[hidden] {
   margin-bottom: 18px;
 }
 
+.topbar>div:first-child {
+  min-width: 0;
+}
+
 h1,
 h2,
 p {
@@ -1443,6 +1447,15 @@ label.field-error {
   outline-offset: 4px;
 }
 
+.range-setting-field {
+  display: inline-flex;
+  align-items: stretch;
+  min-width: 0;
+  border: 1px solid var(--control-border);
+  border-radius: 20px;
+  overflow: hidden;
+}
+
 .range-setting-button {
   position: relative;
   isolation: isolate;
@@ -1451,17 +1464,45 @@ label.field-error {
   justify-content: space-between;
   gap: 12px;
   min-height: 40px;
-  padding: 0 16px;
+  padding: 0 12px 0 16px;
   background: var(--transparent);
-  color: var(--accent);
-  border: 1px solid var(--control-border);
-  border-radius: 20px;
+  color: var(--text);
+  border: 0;
   font-weight: 760;
   text-align: left;
   overflow: hidden;
 }
 
+.range-setting-button span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.date-range-filter-button {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  min-width: 42px;
+  min-height: 40px;
+  padding: 0;
+  border: 0;
+  border-left: 1px solid var(--control-border);
+  background: var(--transparent);
+  color: var(--text);
+  overflow: hidden;
+}
+
+.date-range-filter-button.is-filter-active {
+  color: var(--accent);
+}
+
 .range-setting-button::before,
+.date-range-filter-button::before,
 .range-preset-button::before,
 .calendar-nav-button::before,
 .calendar-day::before {
@@ -1476,10 +1517,17 @@ label.field-error {
 }
 
 .range-setting-button:hover::before,
+.date-range-filter-button:hover::before,
 .range-preset-button:hover::before,
 .calendar-nav-button:hover::before,
 .calendar-day:hover::before {
   opacity: 0.08;
+}
+
+.range-setting-button:focus-visible,
+.date-range-filter-button:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: -3px;
 }
 
 .setting-note {
@@ -2486,14 +2534,24 @@ tr.is-selected-row td {
     color: var(--text);
   }
 
+  .mobile-range-field {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    min-height: 56px;
+    border-radius: 28px;
+    background: var(--surface-muted);
+    overflow: hidden;
+    justify-content: space-between;
+  }
+
   .mobile-range-button {
     display: flex;
     align-items: center;
     min-width: 0;
     min-height: 56px;
-    padding: 0 34px;
-    border-radius: 28px;
-    background: var(--surface-muted);
+    padding: 0 16px 0 26px;
+    background: var(--transparent);
     color: var(--text);
     font-size: 1rem;
     font-weight: 700;
@@ -2505,6 +2563,20 @@ tr.is-selected-row td {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .mobile-range-field .date-range-filter-button {
+    color: var(--text);
+    width: 52px;
+    min-width: 52px;
+    min-height: 56px;
+    padding: 0;
+    border-left: 0;
+    margin-right: 2px;
+  }
+
+  .mobile-range-field .date-range-filter-button.is-filter-active {
+    color: var(--accent);
   }
 
   .mobile-drawer-backdrop {

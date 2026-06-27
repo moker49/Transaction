@@ -7,24 +7,14 @@ export function createDashboardFilterController({
   getCategories,
   isTransferCategory,
   openModal,
-  renderDashboard,
+  renderFilteredViews,
   storage = localStorage,
 }) {
   let selectedCategoryIds = new Set();
 
   function initialize() {
-    const savedEnabled = storage.getItem(keys.enabled);
-    const enabled = savedEnabled !== "false";
-    elements.dashboardFilterToggle.checked = enabled;
-    elements.mobileDashboardFilterToggle.checked = enabled;
     selectedCategoryIds = readCategoryIds() || new Set();
-  }
-
-  function setEnabled(enabled) {
-    storage.setItem(keys.enabled, enabled ? "true" : "false");
-    elements.dashboardFilterToggle.checked = enabled;
-    elements.mobileDashboardFilterToggle.checked = enabled;
-    renderDashboard();
+    updateFilterButtonState();
   }
 
   function openDialog() {
@@ -40,14 +30,12 @@ export function createDashboardFilterController({
   function resetSelection() {
     selectedCategoryIds = defaultCategoryIds();
     persistSelection();
+    updateFilterButtonState();
     renderList();
-    renderDashboard();
+    renderFilteredViews();
   }
 
   function filterTransactions(transactions) {
-    if (!isEnabled()) {
-      return transactions;
-    }
     normalizeSelection();
     return transactions.filter((transaction) => selectedCategoryIds.has(Number(transaction.category_id)));
   }
@@ -83,10 +71,22 @@ export function createDashboardFilterController({
     if (!storedIds && categories.length) {
       persistSelection();
     }
+    updateFilterButtonState();
   }
 
-  function isEnabled() {
-    return elements.dashboardFilterToggle.checked;
+  function updateFilterButtonState() {
+    const isActive = !setsEqual(selectedCategoryIds, defaultCategoryIds());
+    [elements.dashboardFilterButton, elements.mobileDashboardFilterButton].forEach((button) => {
+      button?.classList.toggle("is-filter-active", isActive);
+      button?.setAttribute("aria-pressed", isActive ? "true" : "false");
+    });
+  }
+
+  function setsEqual(left, right) {
+    if (left.size !== right.size) {
+      return false;
+    }
+    return [...left].every((item) => right.has(item));
   }
 
   function renderList() {
@@ -155,8 +155,9 @@ export function createDashboardFilterController({
       }
     });
     persistSelection();
+    updateFilterButtonState();
     renderList();
-    renderDashboard();
+    renderFilteredViews();
   }
 
   function toggleCategory(categoryId) {
@@ -166,8 +167,9 @@ export function createDashboardFilterController({
       selectedCategoryIds.add(categoryId);
     }
     persistSelection();
+    updateFilterButtonState();
     renderList();
-    renderDashboard();
+    renderFilteredViews();
   }
 
   return {
@@ -176,6 +178,5 @@ export function createDashboardFilterController({
     initialize,
     openDialog,
     resetSelection,
-    setEnabled,
   };
 }

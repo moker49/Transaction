@@ -14,9 +14,15 @@
     <button type="button" class="mobile-menu-button" id="mobileMenuButton" aria-label="Open settings">
       <span class="material-symbols-outlined" aria-hidden="true">menu</span>
     </button>
-    <button type="button" class="mobile-range-button" id="mobileDateRangeButton">
-      <span id="mobileDateRangeLabel">Last month</span>
-    </button>
+    <div class="mobile-range-field">
+      <button type="button" class="mobile-range-button" id="mobileDateRangeButton">
+        <span id="mobileDateRangeLabel">Last month</span>
+      </button>
+      <button type="button" class="date-range-filter-button" id="mobileDashboardFilterButton"
+        aria-label="Filter dashboard and transactions by category" title="Category filter">
+        <span class="material-symbols-outlined" aria-hidden="true">filter_list</span>
+      </button>
+    </div>
   </div>
 
   <div class="mobile-drawer-backdrop" id="mobileDrawerBackdrop" hidden></div>
@@ -25,20 +31,6 @@
       <strong>Personal Finances</strong>
     </div>
     <div class="settings-list mobile-drawer-settings">
-      <div class="setting-row">
-        <button type="button" class="setting-text-button" id="mobileDashboardFilterButton">
-          <strong>Dashboard Filter</strong>
-          <span class="setting-note">Choose categories to filter</span>
-        </button>
-        <label class="switch-toggle" title="Use dashboard filter">
-          <input type="checkbox" id="mobileDashboardFilterToggle" aria-label="Use dashboard filter">
-          <span class="switch-track" aria-hidden="true">
-            <span class="switch-thumb"></span>
-            <span class="switch-icon switch-icon-off material-symbols-outlined">filter_alt_off</span>
-            <span class="switch-icon switch-icon-on material-symbols-outlined">filter_alt</span>
-          </span>
-        </label>
-      </div>
       <div class="setting-row">
         <div>
           <strong id="mobileDummyDatabaseLabel">Database</strong>
@@ -67,6 +59,18 @@
       <div>
         <h1>Personal Finaces</h1>
         <p class="subtle">Self-hosted finances tracker</p>
+      </div>
+      <div class="topbar-actions">
+        <div class="range-setting-field">
+          <button type="button" class="range-setting-button" id="dateRangeButton">
+            <span id="dateRangeLabel">Last month</span>
+            <span class="material-symbols-outlined" aria-hidden="true">calendar_month</span>
+          </button>
+          <button type="button" class="date-range-filter-button" id="dashboardFilterButton"
+            aria-label="Filter dashboard and transactions by category" title="Category filter">
+            <span class="material-symbols-outlined" aria-hidden="true">filter_list</span>
+          </button>
+        </div>
       </div>
     </header>
 
@@ -359,20 +363,6 @@
           </div>
           <div class="settings-list">
             <div class="setting-row">
-              <button type="button" class="setting-text-button" id="dashboardFilterButton">
-                <strong>Dashboard Filter</strong>
-                <span class="setting-note">Choose categories to filter</span>
-              </button>
-              <label class="switch-toggle" title="Use dashboard filter">
-                <input type="checkbox" id="dashboardFilterToggle" aria-label="Use dashboard filter">
-                <span class="switch-track" aria-hidden="true">
-                  <span class="switch-thumb"></span>
-                  <span class="switch-icon switch-icon-off material-symbols-outlined">filter_alt_off</span>
-                  <span class="switch-icon switch-icon-on material-symbols-outlined">filter_alt</span>
-                </span>
-              </label>
-            </div>
-            <div class="setting-row">
               <div>
                 <strong id="dummyDatabaseLabel">Use dummy database</strong>
                 <span class="setting-note" id="dummyDatabaseDescription">Route all reads, writes, imports, and dev
@@ -386,15 +376,6 @@
                   <span class="switch-icon switch-icon-on material-symbols-outlined">science</span>
                 </span>
               </label>
-            </div>
-            <div class="setting-row date-range-row">
-              <div>
-                <strong>Date range</strong>
-              </div>
-              <button type="button" class="range-setting-button" id="dateRangeButton">
-                <span id="dateRangeLabel">Last month</span>
-                <span class="material-symbols-outlined" aria-hidden="true">calendar_month</span>
-              </button>
             </div>
             <div class="setting-row danger-row">
               <button type="button" class="danger-button" id="regenerateDatabaseButton">
@@ -989,7 +970,7 @@
   <dialog id="dashboardFilterDialog" class="modal category-picker-modal" tabindex="-1">
     <div class="modal-panel">
       <div class="panel-heading">
-        <h2>Dashboard Filter</h2>
+        <h2>Category Filter</h2>
         <button class="icon-only" type="button" id="dashboardFilterCloseButton" aria-label="Close">
           <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>

@@ -29,8 +29,13 @@ export function isSelectableRawRow(rawRow, selectedStatus = null) {
 }
 
 export function selectedRawRowStatus(selectedRawRowIds, rawRows) {
+  const rawRowsById = rawRowsByIdMap(rawRows);
+  return selectedRawRowStatusFromMap(selectedRawRowIds, rawRowsById);
+}
+
+export function selectedRawRowStatusFromMap(selectedRawRowIds, rawRowsById) {
   for (const rowId of selectedRawRowIds) {
-    const rawRow = rawRows.find((candidate) => candidate.id === rowId);
+    const rawRow = rawRowsById.get(rowId);
     if (rawRow && isBaseSelectableRawRow(rawRow)) {
       return rawRow.import_status;
     }
@@ -39,12 +44,21 @@ export function selectedRawRowStatus(selectedRawRowIds, rawRows) {
 }
 
 export function clearSelectedRawRowsExceptStatus(selectedRawRowIds, rawRows, status) {
+  const rawRowsById = rawRowsByIdMap(rawRows);
+  clearSelectedRawRowsExceptStatusFromMap(selectedRawRowIds, rawRowsById, status);
+}
+
+export function clearSelectedRawRowsExceptStatusFromMap(selectedRawRowIds, rawRowsById, status) {
   [...selectedRawRowIds].forEach((rowId) => {
-    const rawRow = rawRows.find((candidate) => candidate.id === rowId);
+    const rawRow = rawRowsById.get(rowId);
     if (!rawRow || rawRow.import_status !== status) {
       selectedRawRowIds.delete(rowId);
     }
   });
+}
+
+export function rawRowsByIdMap(rawRows) {
+  return new Map(rawRows.map((row) => [row.id, row]));
 }
 
 export function visibleSelectableRawRowIds(visibleRawRows, status) {

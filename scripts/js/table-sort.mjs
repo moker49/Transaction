@@ -52,7 +52,8 @@ export function tableSortValue(table, item, key, context = {}) {
     }[key];
   }
   if (table === "rawRows") {
-    const account = (context.accounts || []).find((candidate) => candidate.id === item.account_id);
+    const account = context.accountsById?.get(item.account_id)
+      || (context.accounts || []).find((candidate) => candidate.id === item.account_id);
     return {
       date: item.raw_date,
       category: clean(item.preview_category) || item.raw_category,

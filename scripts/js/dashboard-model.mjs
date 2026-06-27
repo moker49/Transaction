@@ -3,6 +3,7 @@ import { clean } from "./common.mjs";
 export function dashboardFromTransactions(transactions, options = {}) {
   const { categories = [], filterTransactions = (items) => items, segmentLimit = 7 } = options;
   const dashboardTransactions = filterTransactions(transactions);
+  const categoriesById = categoriesByIdMap(categories);
   const income = sumTypedTransactions(dashboardTransactions, "income", false);
   const bills = sumExpenseTransactions(dashboardTransactions, true);
   const splurge = sumExpenseTransactions(dashboardTransactions, false);
@@ -17,10 +18,10 @@ export function dashboardFromTransactions(transactions, options = {}) {
       { label: "Splurge", value: splurge, color: "#7c6bc2" },
       { label: "Saved", value: Math.max(saved, 0), color: "#2f8f2f" },
     ],
-    incomeSegments: categoryTransactionSegments(dashboardTransactions, "income", { categories, segmentLimit }),
-    categorySegments: categorySpendingSegments(dashboardTransactions, "all-expenses", { categories, segmentLimit }),
-    billSegments: categorySpendingSegments(dashboardTransactions, "bills", { categories, segmentLimit }),
-    splurgeSegments: categorySpendingSegments(dashboardTransactions, "splurge", { categories, segmentLimit }),
+    incomeSegments: categoryTransactionSegments(dashboardTransactions, "income", { categories, categoriesById, segmentLimit }),
+    categorySegments: categorySpendingSegments(dashboardTransactions, "all-expenses", { categories, categoriesById, segmentLimit }),
+    billSegments: categorySpendingSegments(dashboardTransactions, "bills", { categories, categoriesById, segmentLimit }),
+    splurgeSegments: categorySpendingSegments(dashboardTransactions, "splurge", { categories, categoriesById, segmentLimit }),
   };
 }
 
@@ -69,12 +70,12 @@ export function categorySpendingSegments(transactions, expenseMode, options = {}
 }
 
 export function categoryTransactionSegments(transactions, transactionType, options = {}) {
-  const { categories = [], segmentLimit = 7 } = options;
+  const { categories = [], categoriesById = categoriesByIdMap(categories), segmentLimit = 7 } = options;
   const totals = new Map();
   transactions
     .filter((transaction) => transaction.transaction_type === transactionType)
     .forEach((transaction) => {
-      const parent = parentCategoryForTransaction(transaction, categories);
+      const parent = parentCategoryForTransaction(transaction, categoriesById);
       if (!parent) {
         return;
       }
@@ -98,13 +99,18 @@ export function categoryTransactionSegments(transactions, transactionType, optio
   return visible;
 }
 
-export function parentCategoryForTransaction(transaction, categories) {
-  const category = categories.find((candidate) => candidate.id === transaction.category_id);
+export function categoriesByIdMap(categories) {
+  return new Map(categories.map((category) => [category.id, category]));
+}
+
+export function parentCategoryForTransaction(transaction, categoriesOrMap) {
+  const categoriesById = categoriesOrMap instanceof Map ? categoriesOrMap : categoriesByIdMap(categoriesOrMap);
+  const category = categoriesById.get(transaction.category_id);
   if (!category) {
     return null;
   }
   if (category.parent_id === null) {
     return category;
   }
-  return categories.find((candidate) => candidate.id === category.parent_id) || category;
+  return categoriesById.get(category.parent_id) || category;
 }
