@@ -2150,7 +2150,7 @@ button.category-chip.manageable-chip {
   min-height: 32px;
   margin: 0;
   padding: 0 10px;
-  border: 1px solid var(--accent-neutral-light);
+  border: 1px solid var(--accent-neutral);
   border-radius: 8px;
   background: var(--transparent);
   color: var(--accent-neutral-light);
@@ -2768,6 +2768,8 @@ tr.is-selected-row td {
 
   #transactionsView th[data-sort-key="account"],
   #transactionsView th[data-sort-key="notes"],
+  #rawRowsTableElement th[data-raw-column="status"],
+  #rawRowsTableElement td[data-raw-column="status"],
   .transaction-account-cell,
   .transaction-notes-cell,
   #accountsView th:nth-child(2),
