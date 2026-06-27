@@ -96,6 +96,7 @@ const {
   closeConfirmDialog,
   closeTextInputDialog,
   confirmDestructive,
+  enableModalBackdropClose,
   hidePopup,
   initializeClearableTextFields,
   openModal,
@@ -590,6 +591,27 @@ elements.categoryPickerDialog.addEventListener("cancel", (event) => {
 document.querySelectorAll("dialog.modal").forEach((dialog) => {
   dialog.addEventListener("close", () => clearModalErrorState(dialog));
   dialog.addEventListener("close", updateModalScrollLock);
+});
+[
+  [elements.accountDialog, closeAccountDialog],
+  [elements.ruleDialog, closeRuleDialog],
+  [elements.duplicateRuleDialog, () => closeDuplicateRuleWarning("cancel")],
+  [elements.bulkImportDialog, closeBulkImportDialog],
+  [elements.bulkEditDialog, closeBulkEditDialog],
+  [elements.manualImportDialog, closeManualImportDialog],
+  [elements.transactionDialog, closeTransactionDialog],
+  [elements.importDialog, csvImport.closeDialog],
+  [elements.uploadedFileDialog, closeUploadedFileDialog],
+  [elements.rawRowDialog, closeRawRowDialog],
+  [elements.categoryDialog, closeCategoryDialog],
+  [elements.categoryPickerDialog, categoryPicker.close],
+  [elements.dashboardFilterDialog, dashboardFilter.closeDialog],
+  [elements.categoryColorDialog, closeCategoryColorPicker],
+  [elements.textInputDialog, () => closeTextInputDialog(null)],
+  [elements.confirmDialog, () => closeConfirmDialog(false)],
+  [elements.dateRangeDialog, dateRange.closeDialog],
+].forEach(([dialog, closeHandler]) => {
+  enableModalBackdropClose(dialog, closeHandler);
 });
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && elements.mobileNavDrawer.classList.contains("is-open")) {

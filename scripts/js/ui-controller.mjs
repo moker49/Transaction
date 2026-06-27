@@ -188,6 +188,23 @@ export function createUiController({ elements, mobileLayoutQuery, fillValueForFi
     dialog.focus({ preventScroll: true });
   }
 
+  function enableModalBackdropClose(dialog, closeHandler) {
+    let pointerStartedOnBackdrop = false;
+
+    dialog.addEventListener("pointerdown", (event) => {
+      pointerStartedOnBackdrop = event.target === dialog;
+    });
+
+    dialog.addEventListener("click", (event) => {
+      if (!pointerStartedOnBackdrop || event.target !== dialog) {
+        pointerStartedOnBackdrop = false;
+        return;
+      }
+      pointerStartedOnBackdrop = false;
+      closeHandler();
+    });
+  }
+
   function anchorModalToCurrentViewportCenter(dialog) {
     if (!window.matchMedia(mobileLayoutQuery).matches) {
       dialog.style.removeProperty("--modal-top-offset");
@@ -274,6 +291,7 @@ export function createUiController({ elements, mobileLayoutQuery, fillValueForFi
     closeConfirmDialog,
     closeTextInputDialog,
     confirmDestructive,
+    enableModalBackdropClose,
     hidePopup,
     initializeClearableTextFields,
     openModal,
