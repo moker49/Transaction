@@ -1,6 +1,6 @@
 :root {
   color-scheme: dark;
-  --primary: rgb(225, 0, 255);
+  --primary: rgb(255, 0, 255);
   --tertiary: hsl(200, 45%, 55%);
   --error: hsl(5, 100%, 65%);
   --warning: hsl(35, 90%, 65%);
@@ -10,8 +10,7 @@
   --border-saturation: 20%;
 
   --neutral-bg: hsl(0, 0%, 9%);
-  --neutral-surface: hsl(0, 0%, 13%);
-  --neutral-surface-muted: hsl(0, 0%, 16%);
+  --neutral-surface: hsl(0, 0%, 12%);
   --neutral-input: hsl(0, 0%, 5%);
   --neutral-item: hsl(0, 0%, 12%);
   --neutral-border: hsl(0, 0%, 22%);
@@ -25,7 +24,8 @@
 
   --bg: color-mix(in srgb, var(--primary) var(--background-saturation), var(--neutral-bg));
   --surface: color-mix(in srgb, var(--primary) var(--surface-saturation), var(--neutral-surface));
-  --surface-muted: color-mix(in srgb, var(--primary) var(--surface-saturation), var(--neutral-surface-muted));
+  --surface-2: color-mix(in srgb, var(--primary) var(--surface-saturation), var(--neutral-surface) 5%);
+  --surface-muted: color-mix(in srgb, var(--primary) var(--surface-saturation), var(--neutral-surface));
   --input-bg: color-mix(in srgb, var(--primary) max(0%, calc(var(--surface-saturation) - 6%)), var(--neutral-input));
   --text: color-mix(in srgb, var(--primary) 10%, var(--white));
   --muted: color-mix(in srgb, var(--primary) 10%, var(--gray-light));
@@ -1204,7 +1204,7 @@ th {
   position: sticky;
   top: 0;
   z-index: 1;
-  background: var(--surface-muted);
+  background: var(--surface-2);
   color: var(--muted);
   font-size: 0.78rem;
   text-transform: uppercase;
@@ -1242,6 +1242,7 @@ th.sortable-header::after {
 
 th.sortable-header.is-sorted::after {
   content: "arrow_upward";
+  color: var(--accent);
   opacity: 1;
 }
 
