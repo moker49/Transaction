@@ -21,25 +21,26 @@
   --gray: hsl(0, 0%, 30%);
   --gray-dark: hsl(0, 0%, 10%);
   --black: hsl(0, 0%, 2%);
+  --transparent: rgb(0 0 0 / 0);
 
   --bg: color-mix(in srgb, var(--primary) var(--background-saturation), var(--neutral-bg));
   --surface: color-mix(in srgb, var(--primary) var(--surface-saturation), var(--neutral-surface));
   --surface-muted: color-mix(in srgb, var(--primary) var(--surface-saturation), var(--neutral-surface-muted));
   --input-bg: color-mix(in srgb, var(--primary) max(0%, calc(var(--surface-saturation) - 6%)), var(--neutral-input));
-  --text: color-mix(in srgb, var(--white) 90%, var(--primary));
-  --muted: color-mix(in srgb, var(--gray-light) 90%, var(--primary));
+  --text: color-mix(in srgb, var(--primary) 10%, var(--white));
+  --muted: color-mix(in srgb, var(--primary) 10%, var(--gray-light));
   --text-muted: color-mix(in srgb, var(--text) 50%, var(--muted));
   --border: color-mix(in srgb, var(--primary) var(--border-saturation), var(--neutral-border));
   --control-border: color-mix(in srgb, var(--primary) var(--border-saturation), var(--neutral-border));
 
   --accent: color-mix(in srgb, var(--primary) 50%, var(--white));
-  --accent-contrast: color-mix(in srgb, var(--white) 85%, var(--primary));
+  --accent-contrast: color-mix(in srgb, var(--primary) 15%, var(--white));
   --accent-dark: color-mix(in srgb, var(--primary) 45%, var(--black));
-  --accent-muted: color-mix(in srgb, var(--gray) 75%, var(--primary));
+  --accent-muted: color-mix(in srgb, var(--primary) 25%, var(--gray));
   --accent-muted-contrast: color-mix(in srgb, var(--accent-dark) 24%, var(--text));
-  --accent-neutral: color-mix(in srgb, var(--gray) 30%, var(--accent-muted));
-  --accent-neutral-light: color-mix(in srgb, var(--gray-light) 40%, var(--accent-muted));
-  --focus: color-mix(in srgb, var(--primary) 70%, transparent);
+  --accent-neutral: color-mix(in srgb, var(--accent-muted) 70%, var(--gray));
+  --accent-neutral-light: color-mix(in srgb, var(--accent-muted) 60%, var(--gray-light));
+  --focus: color-mix(in srgb, var(--primary) 70%, var(--transparent));
 
   --danger: color-mix(in srgb, var(--error) 84%, var(--white));
   --danger-bg: color-mix(in srgb, var(--error) 48%, var(--black));
@@ -54,14 +55,32 @@
   --outflow: color-mix(in srgb, var(--error) 72%, var(--black));
   --scrim: rgb(0 0 0);
   --shadow-color: rgb(0 0 0);
-  --shadow: 0 14px 35px color-mix(in srgb, var(--shadow-color) 26%, transparent);
+  --shadow-soft: color-mix(in srgb, var(--shadow-color) 18%, var(--transparent));
+  --shadow-medium: color-mix(in srgb, var(--shadow-color) 20%, var(--transparent));
+  --shadow-strong: color-mix(in srgb, var(--shadow-color) 26%, var(--transparent));
+  --shadow: 0 14px 35px var(--shadow-strong);
+  --fab-shadow: 0 6px 10px var(--shadow-soft), 0 1px 3px var(--shadow-soft);
+  --fab-shadow-hover: 0 8px 12px var(--shadow-medium), 0 2px 4px var(--shadow-soft);
+  --scroll-top-fab-shadow: 0 5px 9px var(--shadow-soft), 0 1px 3px var(--shadow-soft);
+  --scroll-top-fab-shadow-hover: 0 7px 11px var(--shadow-medium), 0 2px 4px var(--shadow-soft);
+  --field-error-ring: color-mix(in srgb, var(--danger) 34%, var(--transparent));
+  --field-error-bg: color-mix(in srgb, var(--danger) 18%, var(--transparent));
+  --category-chip-border: color-mix(in srgb, var(--category-color) 65%, var(--white));
+  --category-chip-bg: color-mix(in srgb, var(--category-color) 65%, var(--black));
+  --category-chip-text: color-mix(in srgb, var(--category-color) 55%, var(--white));
+  --category-preview-bg: color-mix(in srgb, var(--category-color) 38%, var(--surface-muted));
+  --category-preview-text: color-mix(in srgb, var(--category-color) 70%, var(--text));
+  --modal-backdrop-bg: color-mix(in srgb, var(--scrim) 56%, var(--transparent));
+  --mobile-drawer-backdrop-bg: color-mix(in srgb, var(--scrim) 38%, var(--transparent));
+  --calendar-range-bg: color-mix(in srgb, var(--accent-contrast) 8%, var(--transparent));
+  --selected-row-bg: color-mix(in srgb, var(--accent-dark) 25%, var(--transparent));
   --fixed-fab-clearance: calc(96px + env(safe-area-inset-bottom));
   --mobile-fixed-fab-clearance: calc(126px + env(safe-area-inset-bottom));
 }
 
 * {
   box-sizing: border-box;
-  -webkit-tap-highlight-color: transparent;
+  -webkit-tap-highlight-color: var(--transparent);
 }
 
 body {
@@ -208,7 +227,7 @@ h2 {
 }
 
 .icon-button {
-  background: transparent;
+  background: var(--transparent);
   border: 1px solid var(--control-border);
   color: var(--accent);
 }
@@ -313,7 +332,7 @@ h2 {
 
 .danger-button {
   flex: 0 0 auto;
-  background: transparent;
+  background: var(--transparent);
   border: 1px solid var(--danger-border);
   color: var(--danger);
   font-weight: 800;
@@ -329,7 +348,7 @@ h2 {
   width: 100%;
   gap: 3px;
   padding: 0;
-  background: transparent;
+  background: var(--transparent);
 }
 
 #ruleKindGroup {
@@ -397,8 +416,7 @@ h2 {
   font-size: 0.9rem;
   font-weight: 760;
   line-height: 1;
-  box-shadow: 0 6px 10px color-mix(in srgb, var(--shadow-color) 18%, transparent),
-    0 1px 3px color-mix(in srgb, var(--shadow-color) 18%, transparent);
+  box-shadow: var(--fab-shadow);
   transition: background-color 150ms ease, box-shadow 150ms ease;
 }
 
@@ -416,8 +434,7 @@ h2 {
 
 .fab:hover {
   background: var(--accent-dark);
-  box-shadow: 0 8px 12px color-mix(in srgb, var(--shadow-color) 20%, transparent),
-    0 2px 4px color-mix(in srgb, var(--shadow-color) 18%, transparent);
+  box-shadow: var(--fab-shadow-hover);
 }
 
 .fab:hover::before {
@@ -465,8 +482,7 @@ h2 {
   border-radius: 14px;
   background: var(--accent-muted);
   color: var(--text);
-  box-shadow: 0 5px 9px color-mix(in srgb, var(--shadow-color) 18%, transparent),
-    0 1px 3px color-mix(in srgb, var(--shadow-color) 18%, transparent);
+  box-shadow: var(--scroll-top-fab-shadow);
   transition: background-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
 }
 
@@ -487,8 +503,7 @@ h2 {
 }
 
 .scroll-top-fab:hover {
-  box-shadow: 0 7px 11px color-mix(in srgb, var(--shadow-color) 20%, transparent),
-    0 2px 4px color-mix(in srgb, var(--shadow-color) 18%, transparent);
+  box-shadow: var(--scroll-top-fab-shadow-hover);
 }
 
 .scroll-top-fab:hover::before {
@@ -548,7 +563,7 @@ h2 {
   min-height: 48px;
   border-radius: 7px;
   padding: 0 14px;
-  background: transparent;
+  background: var(--transparent);
   color: var(--muted);
   font-weight: 760;
 }
@@ -582,9 +597,9 @@ h2 {
   flex: 0 0 auto;
   min-height: 42px;
   padding: 0 14px;
-  background: transparent;
+  background: var(--transparent);
   color: var(--muted);
-  border-bottom: 3px solid transparent;
+  border-bottom: 3px solid var(--transparent);
   font-weight: 720;
 }
 
@@ -895,7 +910,7 @@ label.rule-field-error input,
 label.field-error input,
 label.field-error select {
   border-color: var(--danger);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--danger) 34%, transparent);
+  box-shadow: 0 0 0 2px var(--field-error-ring);
 }
 
 .form-field {
@@ -948,7 +963,7 @@ input[type="search"]::-webkit-search-cancel-button {
   transform: translateY(-50%);
   border: 0;
   border-radius: 0;
-  background: transparent;
+  background: var(--transparent);
   color: var(--muted);
   font-weight: 760;
   line-height: 1;
@@ -988,7 +1003,7 @@ input[type="checkbox"]:not(.tag-chip-select input) {
   padding: 0;
   border: 2px solid var(--muted);
   border-radius: 2px;
-  background: transparent;
+  background: var(--transparent);
   color: var(--accent-contrast);
 }
 
@@ -1049,7 +1064,7 @@ input[type="file"]::file-selector-button {
   margin: 0;
   padding: 0;
   border: 0;
-  background: transparent;
+  background: var(--transparent);
 }
 
 input:focus,
@@ -1161,7 +1176,7 @@ button:focus-visible {
   min-height: 36px;
   padding: 0 8px;
   border-radius: 18px;
-  background: transparent;
+  background: var(--transparent);
   color: var(--accent);
   font: inherit;
   font-weight: 800;
@@ -1325,10 +1340,10 @@ td.amount {
   max-width: 100%;
   min-height: 30px;
   padding: 5px 10px;
-  border: 1px solid color-mix(in srgb, var(--category-color) 65%, white);
+  border: 1px solid var(--category-chip-border);
   border-radius: 7px;
-  background: color-mix(in srgb, var(--category-color) 65%, black);
-  color: color-mix(in srgb, var(--category-color) 55%, white);
+  background: var(--category-chip-bg);
+  color: var(--category-chip-text);
   font: inherit;
   font-size: 0.86rem;
   font-weight: 700;
@@ -1357,7 +1372,7 @@ td.amount {
   margin: 0;
   padding: 0;
   border: 0;
-  background: transparent;
+  background: var(--transparent);
   color: inherit;
   font: inherit;
   text-align: left;
@@ -1391,7 +1406,7 @@ td.amount {
 label.rule-field-error,
 label.field-error {
   border-color: var(--danger);
-  background: color-mix(in srgb, var(--danger) 18%, transparent);
+  background: var(--field-error-bg);
   color: var(--danger);
 }
 
@@ -1421,7 +1436,7 @@ label.field-error {
   min-width: 0;
   padding: 0;
   border: 0;
-  background: transparent;
+  background: var(--transparent);
   color: inherit;
   font: inherit;
   text-align: left;
@@ -1442,7 +1457,7 @@ label.field-error {
   gap: 12px;
   min-height: 40px;
   padding: 0 16px;
-  background: transparent;
+  background: var(--transparent);
   color: var(--accent);
   border: 1px solid var(--control-border);
   border-radius: 20px;
@@ -1512,9 +1527,9 @@ label.field-error {
   padding-top: 5px;
   padding-bottom: 5px;
   border-radius: 7px;
-  border-color: color-mix(in srgb, var(--category-color) 65%, white);
-  background: color-mix(in srgb, var(--category-color) 65%, black);
-  color: color-mix(in srgb, var(--category-color) 55%, white);
+  border-color: var(--category-chip-border);
+  background: var(--category-chip-bg);
+  color: var(--category-chip-text);
 }
 
 button.category-chip.manageable-chip {
@@ -1574,8 +1589,8 @@ button.category-chip.manageable-chip {
   height: 72px;
   border: 2px solid var(--category-color);
   border-radius: 7px;
-  background: color-mix(in srgb, var(--category-color) 38%, var(--surface-muted));
-  color: color-mix(in srgb, var(--category-color) 70%, var(--text));
+  background: var(--category-preview-bg);
+  color: var(--category-preview-text);
   font-weight: 780;
   text-transform: none;
 }
@@ -1620,7 +1635,7 @@ button.category-chip.manageable-chip {
   min-height: 40px;
   padding: 0;
   border-radius: 20px;
-  background: transparent;
+  background: var(--transparent);
   border: 0;
   color: var(--muted);
 }
@@ -1689,7 +1704,7 @@ button.category-chip.manageable-chip {
 }
 
 .modal::backdrop {
-  background: color-mix(in srgb, var(--scrim) 56%, transparent);
+  background: var(--modal-backdrop-bg);
 }
 
 .modal-panel {
@@ -1832,9 +1847,9 @@ button.category-chip.manageable-chip {
   isolation: isolate;
   min-height: 40px;
   padding: 0 16px;
-  background: transparent;
+  background: var(--transparent);
   color: var(--accent);
-  border: 1px solid transparent;
+  border: 1px solid var(--transparent);
   border-radius: 20px;
   font-weight: 760;
   text-align: left;
@@ -1913,7 +1928,7 @@ button.category-chip.manageable-chip {
   justify-content: center;
   min-width: 0;
   min-height: 36px;
-  border: 1px solid transparent;
+  border: 1px solid var(--transparent);
 }
 
 .calendar-weekday {
@@ -1925,7 +1940,7 @@ button.category-chip.manageable-chip {
 .calendar-day {
   position: relative;
   isolation: isolate;
-  background: transparent;
+  background: var(--transparent);
   color: var(--text);
   border-radius: 18px;
   font-weight: 720;
@@ -1933,7 +1948,7 @@ button.category-chip.manageable-chip {
 }
 
 .calendar-day.is-in-range {
-  background: color-mix(in srgb, var(--accent-contrast) 8%, transparent);
+  background: var(--calendar-range-bg);
 }
 
 .calendar-day.is-range-edge {
@@ -2068,7 +2083,7 @@ button.category-chip.manageable-chip {
 
 .tag-edit-button,
 .tag-edit-button:hover {
-  background: transparent;
+  background: var(--transparent);
   color: var(--muted);
 }
 
@@ -2094,7 +2109,7 @@ button.category-chip.manageable-chip {
   padding: 0 10px;
   border: 1px solid var(--accent-neutral-light);
   border-radius: 8px;
-  background: transparent;
+  background: var(--transparent);
   color: var(--accent-neutral-light);
   font: inherit;
   font-size: 0.86rem;
@@ -2104,7 +2119,7 @@ button.category-chip.manageable-chip {
 }
 
 .tag-chip-filled {
-  border-color: transparent;
+  border-color: var(--transparent);
   background: var(--accent-neutral);
   color: var(--text-muted);
 }
@@ -2148,7 +2163,7 @@ button.category-chip.manageable-chip {
 }
 
 .tag-chip-select.is-selected {
-  border-color: transparent;
+  border-color: var(--transparent);
   background: var(--accent-neutral);
   color: var(--text-muted);
 }
@@ -2274,7 +2289,7 @@ select:disabled {
 }
 
 .app-message::backdrop {
-  background: transparent;
+  background: var(--transparent);
 }
 
 .app-message .material-symbols-outlined {
@@ -2392,7 +2407,7 @@ th[data-raw-column="select"],
 }
 
 tr.is-selected-row td {
-  background: color-mix(in srgb, var(--accent-dark) 25%, transparent);
+  background: var(--selected-row-bg);
 }
 
 .raw-note-input {
@@ -2472,7 +2487,7 @@ tr.is-selected-row td {
     width: 48px;
     height: 48px;
     border-radius: 24px;
-    background: transparent;
+    background: var(--transparent);
     color: var(--text);
   }
 
@@ -2502,7 +2517,7 @@ tr.is-selected-row td {
     inset: 0;
     z-index: 60;
     display: block;
-    background: color-mix(in srgb, var(--scrim) 38%, transparent);
+    background: var(--mobile-drawer-backdrop-bg);
   }
 
   .mobile-drawer-backdrop[hidden] {
@@ -2772,7 +2787,7 @@ tr.is-selected-row td {
   }
 
   .nav-item.is-active {
-    background: transparent;
+    background: var(--transparent);
   }
 
   .nav-item.is-active .material-symbols-outlined {
