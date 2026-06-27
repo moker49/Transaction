@@ -16,7 +16,7 @@
     </button>
     <div class="mobile-range-field">
       <button type="button" class="mobile-range-button" id="mobileDateRangeButton">
-        <span id="mobileDateRangeLabel">Last month</span>
+        <span id="mobileDateRangeLabel"></span>
       </button>
       <button type="button" class="date-range-filter-button" id="mobileDashboardFilterButton"
         aria-label="Filter dashboard and transactions by category" title="Category filter">
@@ -63,7 +63,7 @@
       <div class="topbar-actions">
         <div class="range-setting-field">
           <button type="button" class="range-setting-button" id="dateRangeButton">
-            <span id="dateRangeLabel">Last month</span>
+            <span id="dateRangeLabel"></span>
             <span class="material-symbols-outlined" aria-hidden="true">calendar_month</span>
           </button>
           <button type="button" class="date-range-filter-button" id="dashboardFilterButton"
@@ -97,13 +97,13 @@
       </button>
     </nav>
 
-    <nav class="tabs" aria-label="Section views">
+    <nav class="tabs" aria-label="Section views" hidden>
       <button class="tab" type="button" data-section="manage" data-view="rules">Rules</button>
       <button class="tab" type="button" data-section="manage" data-view="accounts">Accounts</button>
       <button class="tab" type="button" data-section="manage" data-view="categories">Categories</button>
       <button class="tab" type="button" data-section="manage" data-view="tags">Tags</button>
       <button class="tab" type="button" data-section="import" data-view="raw">Import</button>
-      <button class="tab" type="button" data-section="import" data-view="import">CSV Upload</button>
+      <button class="tab" type="button" data-section="import" data-view="import">File Upload</button>
     </nav>
 
     <main>
@@ -260,8 +260,8 @@
             </div>
           </section>
         </div>
-        <button type="button" class="primary fab fixed-fab extended-fab" id="csvUploadButton" aria-label="Upload CSV"
-          title="Upload CSV">
+        <button type="button" class="primary fab fixed-fab extended-fab" id="csvUploadButton" aria-label="Upload file"
+          title="Upload file">
           <span class="material-symbols-outlined" aria-hidden="true">upload_file</span>
           <span class="fab-label">Upload</span>
         </button>
@@ -829,21 +829,22 @@
   <dialog id="importDialog" class="modal import-modal" tabindex="-1">
     <form id="importForm" class="modal-panel">
       <div class="panel-heading">
-        <h2>Upload CSV</h2>
+        <h2>Upload File</h2>
         <button class="icon-only" type="button" id="importCloseButton" aria-label="Close">
           <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="import-upload-dialog">
         <label class="file-upload-field" id="importFileDropZone">
-          <span class="file-upload-title">CSV file</span>
-          <input name="csvFile" id="importCsvFileInput" type="file" accept=".csv,text/csv" required>
+          <span class="file-upload-title">CSV or PDF file</span>
+          <input name="files" id="importCsvFileInput" type="file" accept=".csv,text/csv,.pdf,application/pdf" multiple
+            required>
           <span class="file-upload-surface">
             <span class="material-symbols-outlined" aria-hidden="true">attach_file</span>
             <span id="importFileName">Choose file</span>
           </span>
         </label>
-        <label>
+        <label id="importAccountField">
           <span>Account</span>
           <select name="accountId" id="importAccountSelect" required></select>
         </label>

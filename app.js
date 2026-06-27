@@ -151,6 +151,7 @@ const csvImport = createCsvImportController({
   dataController,
   openModal,
   setMessage,
+  setModalMessage,
   showPopup,
 });
 const tagsController = createTagsController({
@@ -324,7 +325,7 @@ initializeClearableTextFields();
 elements.accountAddButton.addEventListener("click", openAccountAddDialog);
 elements.accountForm.addEventListener("submit", saveAccount);
 elements.csvUploadButton.addEventListener("click", csvImport.openDialog);
-elements.importForm.addEventListener("submit", csvImport.importCsv);
+elements.importForm.addEventListener("submit", csvImport.importFile);
 elements.importCloseButton.addEventListener("click", csvImport.closeDialog);
 elements.importCancelButton.addEventListener("click", csvImport.closeDialog);
 elements.importCsvFileInput.addEventListener("change", csvImport.handleFileChange);

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import mimetypes
 import os
 import shutil
@@ -63,6 +64,7 @@ from db_cli import (  # noqa: E402
     normalize_text,
 )
 from init_db import init_db  # noqa: E402
+from parse_statements import OUT_COLUMNS as PDF_IMPORT_COLUMNS, parse_pdf_dicts  # noqa: E402
 
 
 mimetypes.add_type("application/javascript", ".mjs")
@@ -989,6 +991,98 @@ def bulk_edit_transactions():
     return jsonify({"status": "updated", "updated_count": len(transaction_ids), "state": state})
 
 
+def insert_imported_raw_rows(
+    conn: sqlite3.Connection,
+    *,
+    account_id: int,
+    filename: str,
+    source_type: str,
+    file_hash: str,
+    raw_rows: list[dict[str, str | None]],
+    metadata: dict[str, Any],
+) -> dict[str, Any]:
+    cursor = conn.execute(
+        """
+        INSERT INTO imported_source (
+            account_id,
+            filename,
+            source_type,
+            sha256,
+            row_count,
+            metadata_json
+        )
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            account_id,
+            filename,
+            source_type,
+            file_hash,
+            len(raw_rows),
+            json.dumps(metadata, sort_keys=True),
+        ),
+    )
+    imported_source_id = int(cursor.lastrowid)
+    conn.executemany(
+        """
+        INSERT INTO raw_imported_rows (
+            imported_source_id,
+            raw_date,
+            raw_category,
+            raw_description,
+            default_clean_description,
+            raw_amount,
+            raw_row_hash
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+            (
+                imported_source_id,
+                row["raw_date"],
+                row["raw_category"],
+                row["raw_description"],
+                format_prefilled_clean_description(row["raw_description"]),
+                row["raw_amount"],
+                raw_row_hash(row),
+            )
+            for row in raw_rows
+        ],
+    )
+    return dict(fetch_imported_source(conn, imported_source_id))
+
+
+def group_pdf_rows_by_account(rows: list[dict[str, str]]) -> dict[str, list[dict[str, str]]]:
+    groups: dict[str, list[dict[str, str]]] = {}
+    for row in rows:
+        source_account_key = normalize_pdf_account_key(row)
+        if source_account_key is None:
+            raise CliError("PDF parser returned a row without an account.")
+        groups.setdefault(source_account_key, []).append(row)
+    return groups
+
+
+def normalize_pdf_account_key(row: dict[str, str]) -> str | None:
+    account = normalize_text(row.get("account"))
+    if account is None:
+        return None
+    normalized = account.casefold().replace(" ", "-")
+    if normalized.startswith("sofi_checking"):
+        return "checking_sofi"
+    if normalized.startswith("sofi_savings"):
+        return "savings_sofi"
+    return normalized
+
+
+def pdf_row_to_raw_row(row: dict[str, str]) -> dict[str, str | None]:
+    return {
+        "raw_date": normalize_text(row.get("post_date")) or normalize_text(row.get("transaction_date")),
+        "raw_category": normalize_text(row.get("category")),
+        "raw_description": normalize_text(row.get("description")),
+        "raw_amount": normalize_text(row.get("amount")),
+    }
+
+
 @app.post("/api/imports/csv")
 def import_csv():
     ensure_database()
@@ -1011,7 +1105,7 @@ def import_csv():
     finally:
         temp_path.unlink(missing_ok=True)
 
-    file_hash = __import__("hashlib").sha256(csv_bytes).hexdigest()
+    file_hash = hashlib.sha256(csv_bytes).hexdigest()
     source_signature = imported_source_signature(raw_rows)
     metadata = {
         "columns": fieldnames,
@@ -1042,55 +1136,15 @@ def import_csv():
                 }
             )
 
-        cursor = conn.execute(
-            """
-            INSERT INTO imported_source (
-                account_id,
-                filename,
-                source_type,
-                sha256,
-                row_count,
-                metadata_json
-            )
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (
-                account_id,
-                Path(file.filename).name,
-                source_type,
-                file_hash,
-                len(raw_rows),
-                json.dumps(metadata, sort_keys=True),
-            ),
+        source = insert_imported_raw_rows(
+            conn,
+            account_id=account_id,
+            filename=Path(file.filename).name,
+            source_type=source_type,
+            file_hash=file_hash,
+            raw_rows=raw_rows,
+            metadata=metadata,
         )
-        imported_source_id = int(cursor.lastrowid)
-        conn.executemany(
-            """
-            INSERT INTO raw_imported_rows (
-                imported_source_id,
-                raw_date,
-                raw_category,
-                raw_description,
-                default_clean_description,
-                raw_amount,
-                raw_row_hash
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            [
-                (
-                    imported_source_id,
-                    row["raw_date"],
-                    row["raw_category"],
-                    row["raw_description"],
-                    format_prefilled_clean_description(row["raw_description"]),
-                    row["raw_amount"],
-                    raw_row_hash(row),
-                )
-                for row in raw_rows
-            ],
-        )
-        source = dict(fetch_imported_source(conn, imported_source_id))
         state = read_state(conn)
         conn.commit()
 
@@ -1103,6 +1157,134 @@ def import_csv():
             "state": state,
         }
     ), 201
+
+
+@app.post("/api/imports/pdf")
+def import_pdf():
+    ensure_database()
+    files = request.files.getlist("pdfFiles")
+    if not files:
+        file = request.files.get("pdfFile")
+        files = [file] if file is not None else []
+    files = [file for file in files if file is not None and file.filename]
+    if not files:
+        raise CliError("Choose a PDF file.")
+
+    imported_sources = []
+    already_imported_sources = []
+    total_inserted_rows = 0
+
+    with closing(connect(current_db_path())) as conn:
+        for file in files:
+            pdf_bytes = file.read()
+            if not pdf_bytes:
+                raise CliError(f"{Path(file.filename).name} is empty.")
+            filename = Path(file.filename).name
+            with NamedTemporaryFile("wb", suffix=".pdf", delete=False) as temp_file:
+                temp_file.write(pdf_bytes)
+                temp_path = Path(temp_file.name)
+            try:
+                parsed_rows = parse_pdf_dicts(temp_path)
+            finally:
+                temp_path.unlink(missing_ok=True)
+            if not parsed_rows:
+                raise CliError(f"No importable rows were found in {filename}.")
+
+            for source_account_key, source_rows in group_pdf_rows_by_account(parsed_rows).items():
+                account = fetch_account_by_import_key(conn, source_account_key)
+                if account is None:
+                    raise CliError(f'No existing account matches PDF account "{source_account_key}".')
+                account_id = int(account["id"])
+                raw_rows = [pdf_row_to_raw_row(row) for row in source_rows]
+                source_signature = imported_source_signature(raw_rows)
+                existing = find_imported_source_by_signature(conn, source_signature)
+                if existing is not None:
+                    if int(existing["account_id"]) != account_id:
+                        raise CliError(f'{filename} appears to match a previously imported file for a different account.')
+                    already_imported_sources.append(dict(fetch_imported_source(conn, int(existing["id"]))))
+                    continue
+
+                group_hash = hashlib.sha256(
+                    pdf_bytes + b"\0" + source_account_key.encode("utf-8")
+                ).hexdigest()
+                source = insert_imported_raw_rows(
+                    conn,
+                    account_id=account_id,
+                    filename=filename,
+                    source_type="pdf",
+                    file_hash=group_hash,
+                    raw_rows=raw_rows,
+                    metadata={
+                        "columns": PDF_IMPORT_COLUMNS,
+                        "layout": "pdf_statement",
+                        "source_account": source_account_key,
+                        "parser": "scripts/parse_statements.py",
+                    },
+                )
+                imported_sources.append(source)
+                total_inserted_rows += len(raw_rows)
+        state = read_state(conn)
+        conn.commit()
+
+    status = "already_imported" if not imported_sources and already_imported_sources else "imported"
+    return jsonify(
+        {
+            "status": status,
+            "imported_sources": imported_sources,
+            "already_imported_sources": already_imported_sources,
+            "inserted_raw_row_count": total_inserted_rows,
+            "state": state,
+        }
+    ), 200 if status == "already_imported" else 201
+
+
+@app.post("/api/imports/pdf/analyze")
+def analyze_pdf_import():
+    ensure_database()
+    files = request.files.getlist("pdfFiles")
+    if not files:
+        file = request.files.get("pdfFile")
+        files = [file] if file is not None else []
+    files = [file for file in files if file is not None and file.filename]
+    if not files:
+        raise CliError("Choose a PDF file.")
+
+    account_matches: dict[int, dict[str, Any]] = {}
+    with closing(connect(current_db_path(), readonly=True)) as conn:
+        for file in files:
+            pdf_bytes = file.read()
+            if not pdf_bytes:
+                raise CliError(f"{Path(file.filename).name} is empty.")
+            filename = Path(file.filename).name
+            with NamedTemporaryFile("wb", suffix=".pdf", delete=False) as temp_file:
+                temp_file.write(pdf_bytes)
+                temp_path = Path(temp_file.name)
+            try:
+                parsed_rows = parse_pdf_dicts(temp_path)
+            finally:
+                temp_path.unlink(missing_ok=True)
+            if not parsed_rows:
+                raise CliError(f"No importable rows were found in {filename}.")
+            for source_account_key in group_pdf_rows_by_account(parsed_rows):
+                account = fetch_account_by_import_key(conn, source_account_key)
+                if account is None:
+                    raise CliError(f'No existing account matches PDF account "{source_account_key}".')
+                account_matches[int(account["id"])] = {
+                    "id": int(account["id"]),
+                    "name": account["name"],
+                    "institution": account["institution"],
+                    "account_type": account["account_type"],
+                    "source_account": source_account_key,
+                }
+
+    accounts = sorted(account_matches.values(), key=lambda item: item["id"])
+    return jsonify(
+        {
+            "status": "ok",
+            "accounts": accounts,
+            "account": accounts[0] if len(accounts) == 1 else None,
+        }
+    )
 
 
 @app.post("/api/raw-rows/import")

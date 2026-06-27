@@ -39,6 +39,7 @@ export function getElements() {
     importCsvFileInput: document.querySelector("#importCsvFileInput"),
     importFileDropZone: document.querySelector("#importFileDropZone"),
     importFileName: document.querySelector("#importFileName"),
+    importAccountField: document.querySelector("#importAccountField"),
     categoryAddButton: document.querySelector("#categoryAddButton"),
     tagAddButton: document.querySelector("#tagAddButton"),
     ruleForm: document.querySelector("#ruleForm"),

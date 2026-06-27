@@ -6,18 +6,35 @@ export function createCsvImportController({
   dataController,
   openModal,
   setMessage,
+  setModalMessage,
   showPopup,
 }) {
   let analysisToken = 0;
 
-  async function importCsv(event) {
+  async function importFile(event) {
     event.preventDefault();
     setMessage("");
+    setModalMessage(elements.importMessage, "");
 
-    const formElement = event.currentTarget;
-    const form = new FormData(formElement);
+    const files = [...(elements.importCsvFileInput.files || [])];
+    const uploadMode = selectedUploadMode(files);
+    if (uploadMode === "empty") {
+      showPopup("Choose a CSV or PDF file.", "warning");
+      return;
+    }
+    if (uploadMode === "mixed") {
+      showPopup("Choose either one CSV file or one or more PDF files.", "warning");
+      return;
+    }
+    if (uploadMode === "csv") {
+      await importCsv(files[0]);
+      return;
+    }
+    await importPdf(files);
+  }
+
+  async function importCsv(file) {
     const accountId = Number(elements.importAccountSelect.value);
-    const file = form.get("csvFile");
     const sourceType = "csv";
 
     if (!accountId || !(file instanceof File) || !file.name) {
@@ -47,6 +64,31 @@ export function createCsvImportController({
     }
   }
 
+  async function importPdf(files) {
+    try {
+      const upload = new FormData();
+      files.forEach((file) => upload.append("pdfFiles", file));
+      const payload = await dataController.apiRequest("/api/imports/pdf", {
+        method: "POST",
+        body: upload,
+      });
+      resetDialogState();
+      closeDialog();
+      dataController.applyStateFromPayload(payload);
+      const insertedCount = payload.inserted_raw_row_count || 0;
+      const duplicateCount = payload.already_imported_sources?.length || 0;
+      if (insertedCount) {
+        showPopup(`Imported ${insertedCount} raw transactions from PDF.`, "success");
+      } else if (duplicateCount) {
+        showPopup("PDF file already imported.", "warning");
+      } else {
+        showPopup("No PDF rows were imported.", "warning");
+      }
+    } catch (error) {
+      setModalMessage(elements.importMessage, error.message || "PDF import failed.", true);
+    }
+  }
+
   function openDialog() {
     setMessage("");
     resetDialogState();
@@ -58,21 +100,23 @@ export function createCsvImportController({
   }
 
   function updateFileName() {
-    const file = elements.importCsvFileInput.files?.[0];
-    elements.importFileName.textContent = file?.name || "Choose file";
-    elements.importFileDropZone.classList.toggle("has-file", Boolean(file));
+    const files = [...(elements.importCsvFileInput.files || [])];
+    elements.importFileName.textContent = fileLabel(files);
+    elements.importFileDropZone.classList.toggle("has-file", files.length > 0);
+    updateAccountVisibility(files);
   }
 
   function handleFileChange() {
-    updateFileName();
     setAccountLocked(false);
-    analyzeFileAccount();
+    updateFileName();
+    analyzeSelectedFilesAccount();
   }
 
   function resetDialogState() {
     analysisToken += 1;
     elements.importForm.reset();
     setAccountLocked(false);
+    setModalMessage(elements.importMessage, "");
     updateFileName();
   }
 
@@ -81,9 +125,20 @@ export function createCsvImportController({
     elements.importAccountSelect.classList.toggle("is-locked-in", locked);
   }
 
-  async function analyzeFileAccount() {
-    const file = elements.importCsvFileInput.files?.[0];
+  async function analyzeSelectedFilesAccount() {
+    const files = [...(elements.importCsvFileInput.files || [])];
     const token = (analysisToken += 1);
+    const uploadMode = selectedUploadMode(files);
+    if (uploadMode === "csv") {
+      await analyzeCsvFileAccount(files[0], token);
+      return;
+    }
+    if (uploadMode === "pdf") {
+      await analyzePdfFileAccount(files, token);
+    }
+  }
+
+  async function analyzeCsvFileAccount(file, token) {
     if (!file) {
       return;
     }
@@ -121,6 +176,37 @@ export function createCsvImportController({
     }
   }
 
+  async function analyzePdfFileAccount(files, token) {
+    try {
+      const upload = new FormData();
+      files.forEach((file) => upload.append("pdfFiles", file));
+      const payload = await dataController.apiRequest("/api/imports/pdf/analyze", {
+        method: "POST",
+        body: upload,
+      });
+      if (token !== analysisToken) {
+        return;
+      }
+      const accounts = payload.accounts || [];
+      if (accounts.length === 1) {
+        elements.importAccountSelect.value = String(accounts[0].id);
+        setAccountLocked(true);
+        return;
+      }
+      elements.importAccountSelect.value = "";
+      setAccountLocked(false);
+      if (accounts.length > 1) {
+        setModalMessage(elements.importMessage, "Multiple PDF accounts detected; the parser will import each file to its matched account.");
+      }
+    } catch (error) {
+      if (token === analysisToken) {
+        elements.importAccountSelect.value = "";
+        setAccountLocked(false);
+        setModalMessage(elements.importMessage, error.message || "Could not inspect PDF file.", true);
+      }
+    }
+  }
+
   function handleFileDrag(event) {
     event.preventDefault();
     elements.importFileDropZone.classList.toggle("is-dragging", event.type === "dragover");
@@ -129,17 +215,63 @@ export function createCsvImportController({
   function handleFileDrop(event) {
     event.preventDefault();
     elements.importFileDropZone.classList.remove("is-dragging");
-    const file = [...event.dataTransfer.files].find((candidate) => {
-      return candidate.type === "text/csv" || candidate.name.toLowerCase().endsWith(".csv");
+    const acceptedFiles = [...event.dataTransfer.files].filter((candidate) => {
+      return isCsvFile(candidate) || isPdfFile(candidate);
     });
-    if (!file) {
-      showPopup("Choose a CSV file.", "warning");
+    if (!acceptedFiles.length) {
+      showPopup("Choose a CSV or PDF file.", "warning");
       return;
     }
     const files = new DataTransfer();
-    files.items.add(file);
+    acceptedFiles.forEach((file) => files.items.add(file));
     elements.importCsvFileInput.files = files.files;
     handleFileChange();
+  }
+
+  function updateAccountVisibility(files) {
+    const uploadMode = selectedUploadMode(files);
+    const showAccount = uploadMode === "csv" || uploadMode === "pdf" || uploadMode === "empty";
+    const requireAccount = uploadMode === "csv" || uploadMode === "empty";
+    elements.importAccountField.hidden = !showAccount;
+    elements.importAccountSelect.disabled = !showAccount;
+    elements.importAccountSelect.required = requireAccount;
+    if (!showAccount) {
+      elements.importAccountSelect.value = "";
+      elements.importAccountSelect.classList.remove("is-locked-in");
+    }
+  }
+
+  function selectedUploadMode(files) {
+    if (!files.length) {
+      return "empty";
+    }
+    const csvFiles = files.filter(isCsvFile);
+    const pdfFiles = files.filter(isPdfFile);
+    if (csvFiles.length === 1 && pdfFiles.length === 0 && files.length === 1) {
+      return "csv";
+    }
+    if (pdfFiles.length === files.length) {
+      return "pdf";
+    }
+    return "mixed";
+  }
+
+  function isCsvFile(file) {
+    return file.type === "text/csv" || file.name.toLowerCase().endsWith(".csv");
+  }
+
+  function isPdfFile(file) {
+    return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+  }
+
+  function fileLabel(files) {
+    if (!files.length) {
+      return "Choose file";
+    }
+    if (files.length === 1) {
+      return files[0].name;
+    }
+    return `${files.length} files selected`;
   }
 
   return {
@@ -147,7 +279,7 @@ export function createCsvImportController({
     handleFileChange,
     handleFileDrag,
     handleFileDrop,
-    importCsv,
+    importFile,
     openDialog,
   };
 }
