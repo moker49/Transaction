@@ -4,8 +4,10 @@
   --tertiary: hsl(200, 45%, 55%);
   --error: hsl(5, 100%, 65%);
   --warning: hsl(35, 90%, 65%);
-  --white: rgb(240 245 240);
-  --black: rgb(5 10 5);
+
+  --background-saturation: 3%;
+  --surface-saturation: 5%;
+  --border-saturation: 20%;
 
   --neutral-bg: hsl(0, 0%, 9%);
   --neutral-surface: hsl(0, 0%, 13%);
@@ -14,29 +16,28 @@
   --neutral-item: hsl(0, 0%, 12%);
   --neutral-border: hsl(0, 0%, 22%);
 
-  --gray: hsl(0, 0%, 70%);
-  --gray-dark: hsl(0, 0%, 8%);
-  --gray-border: hsl(0, 0%, 28%);
-
-  /* Tune how much primary color is mixed into neutral UI structure. */
-  --background-saturation: 3%;
-  --surface-saturation: 5%;
-  --border-saturation: 20%;
+  --white: hsl(0, 0%, 90%);
+  --gray-light: hsl(0, 0%, 70%);
+  --gray: hsl(0, 0%, 30%);
+  --gray-dark: hsl(0, 0%, 10%);
+  --black: hsl(0, 0%, 2%);
 
   --bg: color-mix(in srgb, var(--primary) var(--background-saturation), var(--neutral-bg));
   --surface: color-mix(in srgb, var(--primary) var(--surface-saturation), var(--neutral-surface));
   --surface-muted: color-mix(in srgb, var(--primary) var(--surface-saturation), var(--neutral-surface-muted));
   --input-bg: color-mix(in srgb, var(--primary) max(0%, calc(var(--surface-saturation) - 6%)), var(--neutral-input));
-  --item-bg: color-mix(in srgb, var(--primary) var(--surface-saturation), var(--neutral-item));
   --text: color-mix(in srgb, var(--white) 90%, var(--primary));
-  --muted: color-mix(in srgb, var(--gray) 90%, var(--primary));
+  --muted: color-mix(in srgb, var(--gray-light) 90%, var(--primary));
   --text-muted: color-mix(in srgb, var(--text) 50%, var(--muted));
   --border: color-mix(in srgb, var(--primary) var(--border-saturation), var(--neutral-border));
   --control-border: color-mix(in srgb, var(--primary) var(--border-saturation), var(--neutral-border));
 
-  --accent: color-mix(in srgb, var(--primary) 42%, var(--black));
-  --accent-dark: color-mix(in srgb, var(--primary) 70%, var(--white));
-  --accent-contrast: color-mix(in srgb, var(--white) 84%, var(--primary));
+  --accent: color-mix(in srgb, var(--primary) 50%, var(--white));
+  --accent-dark: color-mix(in srgb, var(--primary) 45%, var(--black));
+  --accent-muted: color-mix(in srgb, var(--gray) 75%, var(--primary));
+  --accent-muted-2: color-mix(in srgb, var(--gray) 30%, var(--accent-muted));
+  --accent-muted-2-light: color-mix(in srgb, var(--gray-light) 40%, var(--accent-muted));
+  --accent-contrast: color-mix(in srgb, var(--white) 85%, var(--primary));
   --focus: color-mix(in srgb, var(--primary) 75%, transparent);
 
   --danger: color-mix(in srgb, var(--error) 84%, var(--white));
@@ -47,33 +48,6 @@
   --warning-border: color-mix(in srgb, var(--warning) 54%, var(--border));
   --success-bg: color-mix(in srgb, var(--primary) 42%, var(--black));
   --success-border: color-mix(in srgb, var(--primary) 50%, var(--border));
-
-  --connected-bg: color-mix(
-    in srgb,
-    color-mix(in srgb, var(--gray-dark) 80%, var(--gray)) 85%,
-    var(--primary)
-  );
-
-  --connected-selected-bg: var(--accent);
-  --connected-selected-text: var(--accent-contrast);
-
-  --tag-chip-selected-bg: color-mix(
-    in srgb,
-    color-mix(in srgb, var(--gray-dark) 70%, var(--gray)) 90%,
-    var(--primary)
-  );
-
-  --tag-chip-selected-text: color-mix(
-    in srgb,
-    color-mix(in srgb, var(--white) 82%, var(--gray)) 92%,
-    var(--primary)
-  );
-
-  --tag-chip-outline: color-mix(
-    in srgb,
-    var(--gray-border) 88%,
-    var(--primary)
-  );
 
   --income: color-mix(in srgb, var(--tertiary) 72%, var(--black));
   --outflow: color-mix(in srgb, var(--error) 72%, var(--black));
@@ -235,7 +209,7 @@ h2 {
 .icon-button {
   background: transparent;
   border: 1px solid var(--control-border);
-  color: var(--accent-dark);
+  color: var(--accent);
 }
 
 .profile-button {
@@ -253,8 +227,8 @@ h2 {
 
 .profile-button:hover,
 .profile-button.is-active {
-  background: var(--accent);
-  color: var(--accent-dark);
+  background: var(--accent-dark);
+  color: var(--accent);
 }
 
 .switch-toggle {
@@ -290,12 +264,12 @@ h2 {
   width: 30px;
   height: 30px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--accent-dark);
   box-shadow: var(--shadow);
   transition: transform 160ms ease;
 }
 
-.switch-toggle input:checked + .switch-track .switch-thumb {
+.switch-toggle input:checked+.switch-track .switch-thumb {
   transform: translateX(34px);
 }
 
@@ -312,19 +286,19 @@ h2 {
   line-height: 1;
 }
 
-.switch-toggle input:not(:checked) + .switch-track .switch-icon-off,
-.switch-toggle input:checked + .switch-track .switch-icon-on {
+.switch-toggle input:not(:checked)+.switch-track .switch-icon-off,
+.switch-toggle input:checked+.switch-track .switch-icon-on {
   color: var(--accent-contrast);
 }
 
 .primary {
-  background: var(--accent);
+  background: var(--accent-dark);
   color: var(--accent-contrast);
   box-shadow: none;
 }
 
 .primary:hover {
-  background: var(--accent);
+  background: var(--accent-dark);
 }
 
 .primary.warning-button {
@@ -375,8 +349,8 @@ h2 {
   padding: 0 14px;
   border: 0;
   border-radius: 12px;
-  background: var(--connected-bg);
-  color: color-mix(in srgb, var(--accent) 24%, var(--text));
+  background: var(--accent-muted);
+  color: color-mix(in srgb, var(--accent-dark) 24%, var(--text));
   font-size: 0.88rem;
   font-weight: 780;
   line-height: 1;
@@ -385,8 +359,8 @@ h2 {
 }
 
 .connected-button.is-selected {
-  background: var(--connected-selected-bg);
-  color: var(--connected-selected-text);
+  background: var(--accent-dark);
+  color: var(--accent-contrast);
   border-radius: 999px;
 }
 
@@ -417,7 +391,7 @@ h2 {
   min-height: 56px;
   padding: 0;
   border-radius: 16px;
-  background: var(--accent);
+  background: var(--accent-dark);
   color: var(--accent-contrast);
   font-size: 0.9rem;
   font-weight: 760;
@@ -440,7 +414,7 @@ h2 {
 }
 
 .fab:hover {
-  background: var(--accent);
+  background: var(--accent-dark);
   box-shadow: 0 8px 12px color-mix(in srgb, var(--shadow-color) 20%, transparent),
     0 2px 4px color-mix(in srgb, var(--shadow-color) 18%, transparent);
 }
@@ -488,7 +462,7 @@ h2 {
   min-height: 42px;
   padding: 0;
   border-radius: 14px;
-  background: var(--connected-bg);
+  background: var(--accent-muted);
   color: var(--text);
   box-shadow: 0 5px 9px color-mix(in srgb, var(--shadow-color) 18%, transparent),
     0 1px 3px color-mix(in srgb, var(--shadow-color) 18%, transparent);
@@ -512,7 +486,6 @@ h2 {
 }
 
 .scroll-top-fab:hover {
-  background: var(--connected-bg);
   box-shadow: 0 7px 11px color-mix(in srgb, var(--shadow-color) 20%, transparent),
     0 2px 4px color-mix(in srgb, var(--shadow-color) 18%, transparent);
 }
@@ -584,8 +557,8 @@ h2 {
 }
 
 .nav-item.is-active {
-  background: var(--accent);
-  color: var(--accent-dark);
+  background: var(--accent-dark);
+  color: var(--accent);
 }
 
 .nav-item.is-active .material-symbols-outlined {
@@ -615,7 +588,7 @@ h2 {
 }
 
 .tab.is-active {
-  color: var(--accent-dark);
+  color: var(--accent);
   border-color: var(--border);
 }
 
@@ -912,8 +885,8 @@ label {
   font-weight: 700;
 }
 
-label.rule-field-error > span,
-label.field-error > span {
+label.rule-field-error>span,
+label.field-error>span {
   color: var(--danger);
 }
 
@@ -1030,8 +1003,8 @@ input[type="checkbox"]:not(.tag-chip-select input)::before {
 }
 
 input[type="checkbox"]:not(.tag-chip-select input):checked {
-  border-color: var(--accent);
-  background: var(--accent);
+  border-color: var(--accent-dark);
+  background: var(--accent-dark);
 }
 
 input[type="checkbox"]:not(.tag-chip-select input):checked::before {
@@ -1057,7 +1030,7 @@ input[type="file"]::file-selector-button {
   border: 0;
   border-radius: 16px;
   padding: 0 14px;
-  background: var(--accent);
+  background: var(--accent-dark);
   color: var(--accent-contrast);
   font: inherit;
   font-weight: 760;
@@ -1086,7 +1059,7 @@ button:focus-visible {
   outline-offset: 2px;
 }
 
-.switch-toggle input:focus-visible + .switch-track {
+.switch-toggle input:focus-visible+.switch-track {
   outline: 3px solid var(--focus);
   outline-offset: 2px;
 }
@@ -1132,14 +1105,14 @@ button:focus-visible {
 
 .transaction-controls .category-picker-button,
 .rule-controls .category-picker-button,
-.category-parent-field  .category-picker-button{
+.category-parent-field .category-picker-button {
   min-height: 38px;
   align-items: center;
 }
 
-.transaction-controls .category-picker-button > .category-chip,
-.rule-controls .category-picker-button > .category-chip,
-#transactionCategoryButton > .category-chip {
+.transaction-controls .category-picker-button>.category-chip,
+.rule-controls .category-picker-button>.category-chip,
+#transactionCategoryButton>.category-chip {
   display: inline-flex;
   align-items: center;
 }
@@ -1188,7 +1161,7 @@ button:focus-visible {
   padding: 0 8px;
   border-radius: 18px;
   background: transparent;
-  color: var(--accent-dark);
+  color: var(--accent);
   font: inherit;
   font-weight: 800;
 }
@@ -1277,19 +1250,6 @@ td.amount {
   padding: 18px;
 }
 
-.list-item {
-  display: grid;
-  gap: 4px;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--item-bg);
-}
-
-.list-item strong {
-  font-size: 0.95rem;
-}
-
 .list-meta {
   color: var(--muted);
   font-size: 0.85rem;
@@ -1323,7 +1283,7 @@ td.amount {
   gap: 8px;
 }
 
-.category-section + .category-section {
+.category-section+.category-section {
   padding-top: 14px;
   border-top: 1px solid var(--border);
 }
@@ -1453,7 +1413,7 @@ label.field-error .empty-category-chip {
   min-width: 0;
 }
 
-.setting-row > div {
+.setting-row>div {
   display: grid;
   gap: 3px;
   min-width: 0;
@@ -1487,7 +1447,7 @@ label.field-error .empty-category-chip {
   min-height: 40px;
   padding: 0 16px;
   background: transparent;
-  color: var(--accent-dark);
+  color: var(--accent);
   border: 1px solid var(--control-border);
   border-radius: 20px;
   font-weight: 760;
@@ -1675,8 +1635,8 @@ button.category-chip.manageable-chip {
 }
 
 .icon-only.is-active {
-  color: var(--accent-dark);
-  background: var(--accent);
+  color: var(--accent);
+  background: var(--accent-dark);
 }
 
 .icon-only.danger {
@@ -1762,7 +1722,7 @@ button.category-chip.manageable-chip {
   background: var(--surface);
 }
 
-.modal-panel > .panel-heading {
+.modal-panel>.panel-heading {
   position: sticky;
   top: 0;
   z-index: 2;
@@ -1792,8 +1752,8 @@ button.category-chip.manageable-chip {
   width: 56px;
   height: 56px;
   border-radius: 16px;
-  background: var(--accent);
-  color: var(--accent-dark);
+  background: var(--accent-dark);
+  color: var(--accent);
 }
 
 .upload-icon-shell .material-symbols-outlined {
@@ -1826,7 +1786,7 @@ button.category-chip.manageable-chip {
   gap: 12px;
   min-height: 76px;
   padding: 14px 16px;
-  border: 1px dashed var(--tag-chip-outline);
+  border: 1px dashed var(--accent-muted-2);
   border-radius: 8px;
   background: var(--surface-muted);
   color: var(--muted);
@@ -1836,7 +1796,7 @@ button.category-chip.manageable-chip {
 
 .file-upload-surface .material-symbols-outlined {
   flex: 0 0 auto;
-  color: var(--accent-dark);
+  color: var(--accent);
 }
 
 #importFileName {
@@ -1849,8 +1809,8 @@ button.category-chip.manageable-chip {
 .file-upload-field.has-file .file-upload-surface,
 .file-upload-field.is-dragging .file-upload-surface {
   border-style: solid;
-  border-color: var(--accent);
-  background: var(--accent);
+  border-color: var(--accent-dark);
+  background: var(--accent-dark);
   color: var(--text);
 }
 
@@ -1877,7 +1837,7 @@ button.category-chip.manageable-chip {
   min-height: 40px;
   padding: 0 16px;
   background: transparent;
-  color: var(--accent-dark);
+  color: var(--accent);
   border: 1px solid transparent;
   border-radius: 20px;
   font-weight: 760;
@@ -1893,9 +1853,9 @@ button.category-chip.manageable-chip {
 }
 
 .range-preset-button.is-active {
-  background: var(--accent);
+  background: var(--accent-dark);
   color: var(--accent-contrast);
-  border-color: var(--accent);
+  border-color: var(--accent-dark);
 }
 
 .calendar-range-area {
@@ -1939,7 +1899,7 @@ button.category-chip.manageable-chip {
   width: 40px;
   height: 40px;
   border-radius: 20px;
-  color: var(--accent-dark);
+  color: var(--accent);
   overflow: hidden;
 }
 
@@ -1981,7 +1941,7 @@ button.category-chip.manageable-chip {
 }
 
 .calendar-day.is-range-edge {
-  background: var(--accent);
+  background: var(--accent-dark);
   color: var(--accent-contrast);
   border-radius: 999px;
 }
@@ -2040,9 +2000,9 @@ button.category-chip.manageable-chip {
   grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
 }
 
-.rule-match-description-row > label,
-.rule-match-row > label,
-.rule-clean-row > label {
+.rule-match-description-row>label,
+.rule-match-row>label,
+.rule-clean-row>label {
   min-width: 0;
 }
 
@@ -2051,7 +2011,7 @@ button.category-chip.manageable-chip {
   align-items: center;
 }
 
-.transaction-detail-grid > section + section {
+.transaction-detail-grid>section+section {
   padding-left: 18px;
   border-left: 1px solid var(--border);
 }
@@ -2087,7 +2047,7 @@ button.category-chip.manageable-chip {
   grid-template-columns: 132px minmax(0, 1fr);
 }
 
-.detail-row > label,
+.detail-row>label,
 .detail-row .category-picker-button {
   min-width: 0;
 }
@@ -2136,10 +2096,10 @@ button.category-chip.manageable-chip {
   min-height: 32px;
   margin: 0;
   padding: 0 10px;
-  border: 1px solid var(--tag-chip-outline);
+  border: 1px solid var(--accent-muted-2-light);
   border-radius: 8px;
   background: transparent;
-  color: var(--text);
+  color: var(--accent-muted-2-light);
   font: inherit;
   font-size: 0.86rem;
   font-weight: 720;
@@ -2149,8 +2109,8 @@ button.category-chip.manageable-chip {
 
 .tag-chip-filled {
   border-color: transparent;
-  background: var(--tag-chip-selected-bg);
-  color: var(--tag-chip-selected-text);
+  background: var(--accent-muted-2);
+  color: var(--text-muted);
 }
 
 .tag-chip-action,
@@ -2165,10 +2125,6 @@ button.category-chip.manageable-chip {
   width: 18px;
   font-size: 18px;
   font-variation-settings: "FILL" 0, "wght" 500, "GRAD" 0, "opsz" 20;
-}
-
-.tag-chip-select {
-  color: color-mix(in srgb, var(--accent) 18%, var(--text));
 }
 
 .tag-chip-select.is-selected {
@@ -2197,8 +2153,8 @@ button.category-chip.manageable-chip {
 
 .tag-chip-select.is-selected {
   border-color: transparent;
-  background: var(--tag-chip-selected-bg);
-  color: var(--tag-chip-selected-text);
+  background: var(--accent-muted-2);
+  color: var(--text-muted);
 }
 
 .tag-chip-select.is-selected .tag-chip-check {
@@ -2232,8 +2188,8 @@ select:disabled {
 #importAccountSelect.is-locked-in {
   appearance: none;
   -webkit-appearance: none;
-  border-color: var(--accent);
-  background: var(--accent);
+  border-color: var(--accent-dark);
+  background: var(--accent-dark);
   background-image: none;
   color: var(--accent-contrast);
   cursor: default;
@@ -2345,7 +2301,7 @@ select:disabled {
 .app-message.success {
   border-color: var(--success-border);
   background: var(--success-bg);
-  color: var(--accent-dark);
+  color: var(--accent);
 }
 
 .message {
@@ -2414,7 +2370,7 @@ th[data-raw-column="select"],
 }
 
 .status-imported {
-  color: var(--accent-dark);
+  color: var(--accent);
   background: var(--success-bg);
   border-color: var(--success-border);
 }
@@ -2440,7 +2396,7 @@ th[data-raw-column="select"],
 }
 
 tr.is-selected-row td {
-  background: color-mix(in srgb, var(--accent) 25%, transparent);
+  background: color-mix(in srgb, var(--accent-dark) 25%, transparent);
 }
 
 .raw-note-input {
@@ -2453,7 +2409,7 @@ tr.is-selected-row td {
 }
 
 .rule-preview {
-  color: var(--accent-dark);
+  color: var(--accent);
   font-size: 0.82rem;
   font-weight: 800;
 }
@@ -2725,7 +2681,7 @@ tr.is-selected-row td {
     grid-template-columns: 112px minmax(0, 1fr);
   }
 
-  .transaction-detail-grid > section + section {
+  .transaction-detail-grid>section+section {
     padding-top: 14px;
     padding-left: 0;
     border-top: 1px solid var(--border);
@@ -2881,7 +2837,7 @@ tr.is-selected-row td {
     width: 100%;
   }
 
-  #selectVisibleRowsMobileButton{
+  #selectVisibleRowsMobileButton {
     font-size: 0.86rem;
   }
 
