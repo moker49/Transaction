@@ -75,7 +75,8 @@ export function createDashboardFilterController({
   }
 
   function updateFilterButtonState() {
-    const isActive = !setsEqual(selectedCategoryIds, defaultCategoryIds());
+    const defaultIds = defaultCategoryIds();
+    const isActive = defaultIds.size > 0 && !setsEqual(selectedCategoryIds, defaultIds);
     [elements.dashboardFilterButton, elements.mobileDashboardFilterButton].forEach((button) => {
       button?.classList.toggle("is-filter-active", isActive);
       button?.setAttribute("aria-pressed", isActive ? "true" : "false");
