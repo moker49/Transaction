@@ -1490,7 +1490,8 @@ label.field-error {
   white-space: nowrap;
 }
 
-.date-range-filter-button {
+.date-range-filter-button,
+.mobile-date-range-filter-button {
   position: relative;
   isolation: isolate;
   display: inline-flex;
@@ -1507,7 +1508,8 @@ label.field-error {
   overflow: hidden;
 }
 
-.date-range-filter-button.is-filter-active {
+.date-range-filter-button.is-filter-active,
+.mobile-date-range-filter-button {
   color: var(--accent);
 }
 
@@ -2566,6 +2568,7 @@ tr.is-selected-row td {
     font-size: 1rem;
     font-weight: 700;
     text-align: left;
+    flex-grow: 1;
   }
 
   .mobile-range-button span {
@@ -2575,7 +2578,7 @@ tr.is-selected-row td {
     white-space: nowrap;
   }
 
-  .mobile-range-field .date-range-filter-button {
+  .mobile-range-field .mobile-date-range-filter-button {
     color: var(--text);
     width: 52px;
     min-width: 52px;
@@ -2585,7 +2588,7 @@ tr.is-selected-row td {
     margin-right: 2px;
   }
 
-  .mobile-range-field .date-range-filter-button.is-filter-active {
+  .mobile-range-field .mobile-date-range-filter-button.is-filter-active {
     color: var(--accent);
   }
 

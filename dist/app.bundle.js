@@ -3118,13 +3118,13 @@
           render();
         }
       }
-
+    
       async function consumeInitialDataPromise() {
         const promise = initialDataPromise;
         initialDataPromise = null;
         return promise;
       }
-
+    
       async function fetchInitialData() {
         const [referencePayload, transactionPayload] = await Promise.all([
           apiRequest("/api/reference-data"),
@@ -3135,21 +3135,21 @@
           transactionData: transactionPayload.transactionData,
         };
       }
-
+    
       async function loadTransactionData({ shouldRender = true } = {}) {
         const payload = await apiRequest(`/api/transactions?${dateRange.query()}`);
         applyTransactionData(payload.transactionData, { shouldRender });
       }
-
+    
       async function loadReferenceData({ shouldRender = true } = {}) {
         const payload = await apiRequest("/api/reference-data");
         applyReferenceData(payload.referenceData, { shouldRender });
       }
-
+    
       function mutationPath(path) {
         return `${path}?${dateRange.query()}`;
       }
-
+    
       async function apiRequest(path, options = {}) {
         const headers = {
           ...(options.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
@@ -3166,7 +3166,7 @@
         }
         return payload;
       }
-
+    
       function applyStateFromPayload(payload) {
         const currentState = getState();
         const nextPayload = payload.state || payload;
@@ -3188,7 +3188,7 @@
         pruneRawRowUiState();
         render();
       }
-
+    
       function applyReferenceData(referenceData, { shouldRender = true } = {}) {
         setState(normalizeState({
           ...getState(),
@@ -3198,7 +3198,7 @@
           render();
         }
       }
-
+    
       function applyTransactionData(transactionData, { shouldRender = true } = {}) {
         const currentState = getState();
         setState(normalizeState({
@@ -3215,7 +3215,7 @@
           render();
         }
       }
-
+    
       function pruneRawRowUiState() {
         const currentState = getState();
         const visibleTransactionIds = new Set(currentState.transactions.map((transaction) => transaction.id));
@@ -3224,7 +3224,7 @@
         pruneMissingIds(selectedRawRowIds, visibleRawRowIds);
         pruneMissingMapKeys(rawRowNotes, visibleRawRowIds);
       }
-
+    
       return {
         apiRequest,
         applyStateFromPayload,
