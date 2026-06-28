@@ -2804,27 +2804,33 @@ tr.is-selected-row td {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .chart-panel {
-    grid-template-columns: 1fr;
-  }
-
   .stacked-bar-legend {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .chart-panel {
     grid-template-columns: 1fr;
+    align-content: start;
+    align-items: start;
     gap: 10px;
+    height: 332px;
     padding: 12px;
   }
 
+  .pie-chart-frame {
+    align-self: start;
+  }
+
   .pie-chart {
-    width: min(112px, 100%);
+    width: 112px;
     justify-self: center;
   }
 
   .chart-legend {
     gap: 6px;
+    max-height: 152px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
 
   .chart-legend-item {
