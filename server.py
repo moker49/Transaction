@@ -79,7 +79,7 @@ DASHBOARD_CATEGORY_SEGMENT_LIMIT = 8
 ENSURED_DATABASE_PATHS: set[Path] = set()
 BROWSER_BUNDLE_PATH = ROOT / "dist" / "app.bundle.js"
 DEFAULT_CATEGORIES = (
-    {"name": "Income", "color": "#208020", "children": ("Salary", "Bonus", "Interest", "Dividend", "Refund", "Gift Received", "Resale")},
+    {"name": "Income", "color": "#208020", "children": ("Salary", "Bonus", "Interest", "Dividend", "Refund", "Gift Received", "Resale", "Reimbursement")},
     {"name": "Housing", "color": "#c4588e", "children": ("Rent", "Mortgage", "Property Tax", "HOA", "Home Insurance", "Home Maintenance")},
     {"name": "Utility", "color": "#91a82f", "children": ("Electric", "Gas", "Water", "Sewer", "Trash", "Internet", "Phone")},
     {"name": "Food", "color": "#d16630", "children": ("Groceries", "Restaurant", "Cafe", "Convenience")},
@@ -92,7 +92,7 @@ DEFAULT_CATEGORIES = (
     {"name": "Financial", "color": "#b68b2e", "children": ("Fee", "Loan Payment", "Investment", "Tax Payment", "Fine", "Loss")},
     {"name": "Insurance", "color": "#d18eb0", "children": ("Life Insurance", "Umbrella Insurance", "Protection")},
     {"name": "Education", "color": "#4d8fbf", "children": ("Tuition", "Books", "Courses", "Certifications")},
-    {"name": "Personal", "color": "#7a5234", "children": ("Childcare", "Pet Expense", "Gift Given", "Personal Care", "Reimbursement")},
+    {"name": "Personal", "color": "#7a5234", "children": ("Childcare", "Pet Expense", "Gift Given", "Personal Care", "Payback")},
     {"name": "Business", "color": "#60943b", "children": ("Software", "Equipment", "Service", "Office Expense")},
     {"name": "Transfer", "color": "#787b80", "children": ("Internal Transfer", "Card Payment")},
     {"name": "Unknown", "color": "#1f2328", "children": ()},
@@ -2209,6 +2209,7 @@ def validate_category_color(value: Any) -> str:
 def ensure_default_categories(conn: sqlite3.Connection) -> None:
     migrate_default_category_name(conn, "Food & Dining", "Food", default_category_color("Food"))
     migrate_default_category_name(conn, "Family & Personal", "Personal", default_category_color("Personal"))
+    migrate_default_child_category_name(conn, "Personal", "Reimbursement", "Payback")
     for category in DEFAULT_CATEGORIES:
         parent_name = str(category["name"])
         parent_id = ensure_category(conn, parent_name, None, str(category["color"]))
@@ -2238,6 +2239,31 @@ def migrate_default_category_name(conn: sqlite3.Connection, old_name: str, new_n
 
     new_id = int(new_row["id"])
     conn.execute("UPDATE categories SET parent_id = ?, color = NULL WHERE parent_id = ?", (new_id, old_id))
+    conn.execute("UPDATE transactions SET category_id = ? WHERE category_id = ?", (new_id, old_id))
+    conn.execute("UPDATE transaction_import_rules SET set_category_id = ? WHERE set_category_id = ?", (new_id, old_id))
+    conn.execute("DELETE FROM categories WHERE id = ?", (old_id,))
+
+
+def migrate_default_child_category_name(conn: sqlite3.Connection, parent_name: str, old_name: str, new_name: str) -> None:
+    parent_row = conn.execute("SELECT id FROM categories WHERE name = ? AND parent_id IS NULL", (parent_name,)).fetchone()
+    if parent_row is None:
+        return
+
+    parent_id = int(parent_row["id"])
+    old_row = conn.execute(
+        "SELECT id FROM categories WHERE name = ? AND parent_id = ?",
+        (old_name, parent_id),
+    ).fetchone()
+    if old_row is None:
+        return
+
+    old_id = int(old_row["id"])
+    new_row = conn.execute("SELECT id FROM categories WHERE name = ?", (new_name,)).fetchone()
+    if new_row is None:
+        conn.execute("UPDATE categories SET name = ?, color = NULL WHERE id = ?", (new_name, old_id))
+        return
+
+    new_id = int(new_row["id"])
     conn.execute("UPDATE transactions SET category_id = ? WHERE category_id = ?", (new_id, old_id))
     conn.execute("UPDATE transaction_import_rules SET set_category_id = ? WHERE set_category_id = ?", (new_id, old_id))
     conn.execute("DELETE FROM categories WHERE id = ?", (old_id,))
