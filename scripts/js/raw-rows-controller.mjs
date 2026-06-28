@@ -20,9 +20,13 @@ export function truncateLongDescriptionWords(value, maxLength = RAW_DESCRIPTION_
   if (value === null || value === undefined) {
     return "";
   }
-  return String(value).replace(/\S+/g, (word) => (
-    word.length > maxLength ? `${word.slice(0, maxLength)}...` : word
-  ));
+  return String(value).replace(/\S+/g, (word) => {
+    if (word.length <= maxLength) {
+      return word;
+    }
+    const merchantPrefix = word.match(/^[A-Za-z]+(?=\d)/)?.[0];
+    return `${(merchantPrefix || word.slice(0, maxLength)).slice(0, maxLength)}...`;
+  });
 }
 
 export function createRawRowsController({
@@ -312,4 +316,3 @@ export function createRawRowsController({
     updateImportSelectedButton,
   };
 }
-

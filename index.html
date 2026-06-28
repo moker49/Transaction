@@ -5,6 +5,92 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Personal Finances</title>
+  <script>
+    (() => {
+      const storage = window.localStorage;
+      const rangeKey = "transaction-date-range";
+      const customStartKey = "transaction-date-range-custom-start";
+      const customEndKey = "transaction-date-range-custom-end";
+      const legacyCustomStartKey = "transaction-dashboard-custom-start";
+      const legacyCustomEndKey = "transaction-dashboard-custom-end";
+      const dummyDatabaseKey = "transaction-use-dummy-database";
+      const defaultRange = "last-month";
+      const customRange = "custom";
+      const yearRangePrefix = "year-";
+      const firstYear = 2020;
+
+      const formatDateKey = (date) => [
+        date.getFullYear(),
+        String(date.getMonth() + 1).padStart(2, "0"),
+        String(date.getDate()).padStart(2, "0"),
+      ].join("-");
+      const lastFullYear = () => new Date().getFullYear() - 1;
+      const fullYearPeriod = (year) => ({
+        start: formatDateKey(new Date(year, 0, 1)),
+        end: formatDateKey(new Date(year, 11, 31)),
+      });
+      const lastFullMonthPeriod = () => {
+        const now = new Date();
+        return {
+          start: formatDateKey(new Date(now.getFullYear(), now.getMonth() - 1, 1)),
+          end: formatDateKey(new Date(now.getFullYear(), now.getMonth(), 0)),
+        };
+      };
+      const customDateRangePeriod = () => {
+        const start = storage.getItem(customStartKey) || storage.getItem(legacyCustomStartKey) || "";
+        const end = storage.getItem(customEndKey) || storage.getItem(legacyCustomEndKey) || "";
+        if (!start || !end) {
+          return null;
+        }
+        return { start: end < start ? end : start, end: end < start ? start : end };
+      };
+      const isValidRange = (range) => {
+        if (["this-month", "last-month", "this-year", customRange].includes(range)) {
+          return true;
+        }
+        if (!String(range || "").startsWith(yearRangePrefix)) {
+          return false;
+        }
+        const year = Number(String(range).slice(yearRangePrefix.length));
+        return Number.isInteger(year) && year >= firstYear && year <= lastFullYear();
+      };
+      const periodForRange = (range) => {
+        const today = new Date();
+        if (range === "this-month") {
+          return {
+            start: formatDateKey(new Date(today.getFullYear(), today.getMonth(), 1)),
+            end: formatDateKey(new Date(today.getFullYear(), today.getMonth() + 1, 0)),
+          };
+        }
+        if (range === "this-year") {
+          return {
+            start: formatDateKey(new Date(today.getFullYear(), 0, 1)),
+            end: formatDateKey(new Date(today.getFullYear(), 11, 31)),
+          };
+        }
+        if (String(range || "").startsWith(yearRangePrefix)) {
+          return fullYearPeriod(Number(String(range).slice(yearRangePrefix.length)));
+        }
+        if (range === customRange) {
+          return customDateRangePeriod() || lastFullMonthPeriod();
+        }
+        return lastFullMonthPeriod();
+      };
+
+      const savedRange = storage.getItem(rangeKey) || defaultRange;
+      const range = isValidRange(savedRange) ? savedRange : defaultRange;
+      const period = periodForRange(range);
+      const headers = { "X-Use-Dummy-Database": storage.getItem(dummyDatabaseKey) === "true" ? "1" : "0" };
+      window.__transactionInitialDataPromise = Promise.all([
+        fetch("/api/reference-data", { headers }).then((response) => response.json()),
+        fetch(`/api/transactions?${new URLSearchParams({ startDate: period.start, endDate: period.end })}`, { headers })
+          .then((response) => response.json()),
+      ]).then(([referencePayload, transactionPayload]) => ({
+        referenceData: referencePayload.referenceData,
+        transactionData: transactionPayload.transactionData,
+      }));
+    })();
+  </script>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:FILL@0..1">
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -1093,7 +1179,7 @@
     <div class="empty">No rows yet.</div>
   </template>
 
-  <script type="module" src="app.js"></script>
+  <script src="dist/app.bundle.js"></script>
 </body>
 
 </html>

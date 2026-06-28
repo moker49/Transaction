@@ -6,6 +6,7 @@ import mimetypes
 import os
 import shutil
 import sqlite3
+import subprocess
 import sys
 import time
 from contextlib import closing
@@ -76,6 +77,7 @@ BILL_TAG_NAME = "bill"
 TRANSACTION_TYPES = ("income", "expense", "transfer")
 DASHBOARD_CATEGORY_SEGMENT_LIMIT = 8
 ENSURED_DATABASE_PATHS: set[Path] = set()
+BROWSER_BUNDLE_PATH = ROOT / "dist" / "app.bundle.js"
 DEFAULT_CATEGORIES = (
     {"name": "Income", "color": "#208020", "children": ("Salary", "Bonus", "Interest", "Dividend", "Refund", "Gift Received", "Resale")},
     {"name": "Housing", "color": "#c4588e", "children": ("Rent", "Mortgage", "Property Tax", "HOA", "Home Insurance", "Home Maintenance")},
@@ -142,6 +144,19 @@ def record_request_start():
 @app.get("/")
 def index():
     return send_from_directory(ROOT, "index.html")
+
+
+def build_browser_bundle() -> None:
+    try:
+        subprocess.run(
+            ["node", str(ROOT / "tools" / "bundle_app.mjs")],
+            cwd=ROOT,
+            check=True,
+        )
+    except (FileNotFoundError, subprocess.CalledProcessError) as exc:
+        if not BROWSER_BUNDLE_PATH.exists():
+            raise RuntimeError("Browser bundle is missing and could not be built.") from exc
+        print(f"Warning: could not rebuild browser bundle: {exc}", file=sys.stderr)
 
 
 @app.after_request
@@ -2343,6 +2358,7 @@ def parse_positive_int(value: str | None, field_name: str) -> int:
 
 
 if __name__ == "__main__":
+    build_browser_bundle()
     ensure_database()
     app.run(
         host=os.environ.get("HOST", "0.0.0.0"),

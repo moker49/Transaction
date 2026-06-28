@@ -12,20 +12,37 @@ export function createAppDataController({
   render,
   showPopup,
   hidePopup,
+  initialDataPromise = null,
 }) {
   async function loadInitialState() {
     try {
-      const [referencePayload, transactionPayload] = await Promise.all([
-        apiRequest("/api/reference-data"),
-        apiRequest(`/api/transactions?${dateRange.query()}`),
-      ]);
-      applyReferenceData(referencePayload.referenceData, { shouldRender: false });
-      applyTransactionData(transactionPayload.transactionData, { shouldRender: false });
+      const initialData = initialDataPromise
+        ? await consumeInitialDataPromise()
+        : await fetchInitialData();
+      applyReferenceData(initialData.referenceData, { shouldRender: false });
+      applyTransactionData(initialData.transactionData, { shouldRender: false });
       render();
     } catch (error) {
       showPopup(error.message || "Could not load server data.", "error");
       render();
     }
+  }
+
+  async function consumeInitialDataPromise() {
+    const promise = initialDataPromise;
+    initialDataPromise = null;
+    return promise;
+  }
+
+  async function fetchInitialData() {
+    const [referencePayload, transactionPayload] = await Promise.all([
+      apiRequest("/api/reference-data"),
+      apiRequest(`/api/transactions?${dateRange.query()}`),
+    ]);
+    return {
+      referenceData: referencePayload.referenceData,
+      transactionData: transactionPayload.transactionData,
+    };
   }
 
   async function loadTransactionData({ shouldRender = true } = {}) {

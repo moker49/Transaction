@@ -145,6 +145,7 @@ dataController = createAppDataController({
   render,
   showPopup,
   hidePopup,
+  initialDataPromise: window.__transactionInitialDataPromise,
 });
 const csvImport = createCsvImportController({
   elements,
@@ -292,6 +293,11 @@ const typeGroupOptions = {
     }
   },
 };
+
+dateRange.initialize();
+databaseMode.initialize();
+dashboardFilter.initialize();
+void dataController.loadInitialState();
 
 elements.navItems.forEach((navItem) => {
   navItem.addEventListener("click", () => {
@@ -630,11 +636,7 @@ window.matchMedia(MOBILE_LAYOUT_QUERY).addEventListener("change", () => {
   }
 });
 
-dateRange.initialize();
-databaseMode.initialize();
-dashboardFilter.initialize();
 activateView("overview");
-dataController.loadInitialState();
 
 function openMobileDrawer({ skipHistory = false } = {}) {
   if (elements.mobileNavDrawer.classList.contains("is-open")) {
