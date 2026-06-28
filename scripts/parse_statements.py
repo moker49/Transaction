@@ -358,7 +358,7 @@ def parse_capone_monthly(path: Path) -> list[Row]:
                 continue
             txn_date = capone_month_day(m.group(1), fallback_year, start, end)
             post_date = capone_month_day(m.group(2), fallback_year, start, end)
-            sign = -1 if m.group(4) and "-" in m.group(4) else 1
+            sign = 1 if category == "Payments, Credits and Adjustments" else -1
             rows.append(
                 Row(
                     account="credit_capital-one",
@@ -423,7 +423,7 @@ def parse_capone_summary(path: Path) -> list[Row]:
                         post_date="",
                         description=f"{merchant} {location}".strip(),
                         category=category,
-                        amount=money_to_str(amount_line),
+                        amount=money_to_str(amount_line, -1),
                         card=card,
                     )
                 )

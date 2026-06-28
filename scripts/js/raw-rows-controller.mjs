@@ -14,6 +14,17 @@ import {
 } from "./raw-row-model.mjs";
 import { sortedTableRows } from "./table-sort.mjs";
 
+const RAW_DESCRIPTION_TABLE_WORD_LIMIT = 13;
+
+export function truncateLongDescriptionWords(value, maxLength = RAW_DESCRIPTION_TABLE_WORD_LIMIT) {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  return String(value).replace(/\S+/g, (word) => (
+    word.length > maxLength ? `${word.slice(0, maxLength)}...` : word
+  ));
+}
+
 export function createRawRowsController({
   elements,
   getState,
@@ -120,7 +131,7 @@ export function createRawRowsController({
       ["select", selectCell],
       ["date", dateCell],
       ["category", cell(rawCategoryValueWithPreview(rawRow))],
-      ["description", cell(rawValueWithPreview(rawRow.raw_description, rawRowPreviewCleanDescription(rawRow)))],
+      ["description", cell(rawValueWithPreview(truncateLongDescriptionWords(rawRow.raw_description), rawRowPreviewCleanDescription(rawRow)))],
       ["amount", cell(rawRow.raw_amount || "-", "amount")],
       ["account", cell(account ? account.name : "Unknown", "transaction-account-cell muted-cell")],
       ["status", cell(statusBadge(rawRow), "status-cell")],

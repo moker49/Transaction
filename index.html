@@ -248,11 +248,12 @@
               <table>
                 <thead>
                   <tr>
-                    <th>First</th>
-                    <th>Last</th>
-                    <th>Account</th>
-                    <th>Rows</th>
-                    <th class="uploaded-date-column">Uploaded</th>
+                    <th data-sort-table="imports" data-sort-key="from" data-sort-type="date">From</th>
+                    <th data-sort-table="imports" data-sort-key="to" data-sort-type="date">To</th>
+                    <th class="uploaded-type-column" data-sort-table="imports" data-sort-key="type">Type</th>
+                    <th data-sort-table="imports" data-sort-key="account">Account</th>
+                    <th class="uploaded-rows-column" data-sort-table="imports" data-sort-key="rows" data-sort-type="number">Rows</th>
+                    <th class="uploaded-date-column" data-sort-table="imports" data-sort-key="uploaded" data-sort-type="date">Uploaded</th>
                   </tr>
                 </thead>
                 <tbody id="importTable"></tbody>

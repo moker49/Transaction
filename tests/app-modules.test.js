@@ -117,6 +117,19 @@ test("matches raw rows against rules and selection state", async () => {
   assert.equal(rawRows.topMatchingRuleForRawRow(rules, row)?.id, 1);
 });
 
+test("truncates long raw row description words for table display", async () => {
+  const rawRowsController = await import("../scripts/js/raw-rows-controller.mjs");
+
+  assert.equal(
+    rawRowsController.truncateLongDescriptionWords("BESTBUYCOM806243645796 Store"),
+    "BESTBUYCOM... Store",
+  );
+  assert.equal(
+    rawRowsController.truncateLongDescriptionWords("Short words stay intact"),
+    "Short words stay intact",
+  );
+});
+
 test("updates segmented type groups", async () => {
   const typeGroups = await import("../scripts/js/type-groups.mjs");
   const buttons = [

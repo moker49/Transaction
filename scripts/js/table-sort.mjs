@@ -51,6 +51,17 @@ export function tableSortValue(table, item, key, context = {}) {
       notes: item.notes,
     }[key];
   }
+  if (table === "imports") {
+    const account = (context.accounts || []).find((candidate) => candidate.id === item.account_id);
+    return {
+      from: item.first_date,
+      to: item.last_date,
+      type: item.source_type,
+      account: account?.name,
+      rows: item.raw_row_count ?? (context.rawRows || []).filter((row) => row.imported_source_id === item.id).length,
+      uploaded: item.imported_at,
+    }[key];
+  }
   if (table === "rawRows") {
     const account = context.accountsById?.get(item.account_id)
       || (context.accounts || []).find((candidate) => candidate.id === item.account_id);

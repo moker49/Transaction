@@ -1263,6 +1263,8 @@ td {
 
 #transactionsView th[data-sort-key="amount"],
 th[data-raw-column="amount"],
+th.uploaded-rows-column,
+td.uploaded-rows-column,
 td.amount {
   text-align: right;
 }
@@ -2786,6 +2788,7 @@ tr.is-selected-row td {
   #accountsView td:nth-child(3),
   #rulesView th:nth-child(2),
   #rulesView td:nth-child(2),
+  .uploaded-type-column,
   .uploaded-date-column {
     display: none;
   }

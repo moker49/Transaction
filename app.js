@@ -79,6 +79,7 @@ const sectionViewSelections = new Map();
 const tableSortState = {
   transactions: { key: "date", direction: "desc", type: "date" },
   accounts: { key: "name", direction: "asc", type: "text" },
+  imports: { key: "uploaded", direction: "desc", type: "date" },
   rawRows: { key: "date", direction: "desc", type: "date" },
   rules: { key: "name", direction: "asc", type: "text" },
 };
@@ -1947,23 +1948,37 @@ function renderImports() {
   clear(elements.importTable);
 
   if (!state.imports.length) {
-    elements.importTable.appendChild(emptyTableRow(5));
+    elements.importTable.appendChild(emptyTableRow(6));
     return;
   }
 
-  state.imports.slice().reverse().forEach((item) => {
+  sortedTableRows("imports", state.imports, tableSortState, tableSortContext()).forEach((item) => {
     const account = state.accounts.find((candidate) => candidate.id === item.account_id);
     const row = tableRow([
       displayDateCell(item.first_date),
       displayDateCell(item.last_date),
+      importSourceTypeLabel(item.source_type),
       account ? accountLabel(account) : "Unknown",
       String(uploadRawRowCount(item)),
       formatDateTime(item.imported_at),
     ]);
-    row.children[4]?.classList.add("uploaded-date-column");
+    row.children[2]?.classList.add("uploaded-type-column");
+    row.children[4]?.classList.add("uploaded-rows-column", "amount");
+    row.children[5]?.classList.add("uploaded-date-column");
     makeEditableRow(row, `View upload ${item.filename}`, () => openUploadedFileDialog(item));
     elements.importTable.appendChild(row);
   });
+}
+
+function importSourceTypeLabel(sourceType) {
+  const normalized = clean(sourceType).toLowerCase();
+  if (normalized === "pdf") {
+    return "PDF";
+  }
+  if (normalized === "csv") {
+    return "CSV";
+  }
+  return clean(sourceType) || "-";
 }
 
 function openUploadedFileDialog(item) {
