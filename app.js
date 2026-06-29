@@ -991,7 +991,7 @@ function populateRuleEditDialog(rule) {
   clearRuleFieldErrors();
   elements.ruleDialogTitle.textContent = "Edit Rule";
   elements.ruleSubmitButton.textContent = "Save";
-  elements.ruleDismissButton.textContent = "Create";
+  elements.ruleDismissButton.textContent = "Clone";
   elements.ruleDeleteButton.hidden = false;
   const form = elements.ruleForm;
   const matches = ruleMatchValues(rule);

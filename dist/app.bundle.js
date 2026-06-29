@@ -4287,12 +4287,12 @@
       }
     },
   };
-
+  
   dateRange.initialize();
   databaseMode.initialize();
   dashboardFilter.initialize();
   void dataController.loadInitialState();
-
+  
   elements.navItems.forEach((navItem) => {
     navItem.addEventListener("click", () => {
       activateView(sectionViewSelections.get(navItem.dataset.section) || navItem.dataset.defaultView);
@@ -4985,7 +4985,7 @@
     clearRuleFieldErrors();
     elements.ruleDialogTitle.textContent = "Edit Rule";
     elements.ruleSubmitButton.textContent = "Save";
-    elements.ruleDismissButton.textContent = "Create";
+    elements.ruleDismissButton.textContent = "Clone";
     elements.ruleDeleteButton.hidden = false;
     const form = elements.ruleForm;
     const matches = ruleMatchValues(rule);
@@ -5358,12 +5358,12 @@
     renderRules();
     rawRowsController.render();
   }
-
+  
   function renderFilteredViews() {
     renderDashboard();
     renderTransactions();
   }
-
+  
   function renderDashboard() {
     const dashboard = dashboardFromTransactions(state.transactions, {
       categories: state.categories,
@@ -5942,12 +5942,12 @@
   
   function renderImports() {
     clear(elements.importTable);
-
+  
     if (!state.imports.length) {
       elements.importTable.appendChild(emptyTableRow(6));
       return;
     }
-
+  
     sortedTableRows("imports", state.imports, tableSortState, tableSortContext()).forEach((item) => {
       const account = state.accounts.find((candidate) => candidate.id === item.account_id);
       const row = tableRow([
@@ -5965,7 +5965,7 @@
       elements.importTable.appendChild(row);
     });
   }
-
+  
   function importSourceTypeLabel(sourceType) {
     const normalized = clean(sourceType).toLowerCase();
     if (normalized === "pdf") {
