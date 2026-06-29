@@ -84,10 +84,10 @@ DEFAULT_CATEGORIES = (
     {"name": "Utility", "color": "#91a82f", "children": ("Electric", "Gas", "Water", "Sewer", "Trash", "Internet", "Phone")},
     {"name": "Food", "color": "#d16630", "children": ("Groceries", "Restaurant", "Cafe", "Convenience")},
     {"name": "Transportation", "color": "#3a67c2", "children": ("Car Payment", "Fuel", "Charging", "Auto Insurance", "Maintenance", "Registration", "Parking", "Toll", "Public Transit", "Taxi")},
-    {"name": "Shopping", "color": "#8161c2", "children": ("Clothing", "Electronic", "Household", "Furniture")},
+    {"name": "Shopping", "color": "#8161c2", "children": ("Clothing", "Electronic", "Household", "Furniture", "Cosmetics", "Toiletries")},
     {"name": "Health", "color": "#ad3131", "children": ("Medical", "Dental", "Vision", "Pharmacy", "Fitness")},
     {"name": "Lifestyle", "color": "#36b36a", "children": ("Activity", "Hobby", "Alcohol", "Substance")},
-    {"name": "Entertainment", "color": "#602699", "children": ("Streaming", "Gaming", "Movie", "Music", "App")},
+    {"name": "Media", "color": "#602699", "children": ("Streaming", "Gaming", "Movie", "Music", "App")},
     {"name": "Travel", "color": "#109e9e", "children": ("Hotel", "Flight", "Rental")},
     {"name": "Financial", "color": "#b68b2e", "children": ("Fee", "Loan Payment", "Investment", "Tax Payment", "Fine", "Loss")},
     {"name": "Insurance", "color": "#d18eb0", "children": ("Life Insurance", "Umbrella Insurance", "Protection")},
@@ -2209,6 +2209,7 @@ def validate_category_color(value: Any) -> str:
 def ensure_default_categories(conn: sqlite3.Connection) -> None:
     migrate_default_category_name(conn, "Food & Dining", "Food", default_category_color("Food"))
     migrate_default_category_name(conn, "Family & Personal", "Personal", default_category_color("Personal"))
+    migrate_default_category_name(conn, "Entertainment", "Media", default_category_color("Media"))
     migrate_default_child_category_name(conn, "Personal", "Reimbursement", "Payback")
     for category in DEFAULT_CATEGORIES:
         parent_name = str(category["name"])
