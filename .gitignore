@@ -5,3 +5,4 @@ __pycache__/
 *.log
 .codex-*
 app.bundle.js
+/upload_test

@@ -128,12 +128,38 @@ def fallback_year_for_path(path: Path, start: date | None = None, end: date | No
         return end.year
     if start is not None:
         return start.year
-    m = re.search(r"\b(20\d{2})\b", path.name)
+    m = re.search(r"(20\d{2})", path.name)
     if m:
         return int(m.group(1))
     if path.parent.name.isdigit():
         return int(path.parent.name)
     return datetime.now().year
+
+
+def year_near_text(text: str, marker: str) -> int | None:
+    marker_index = text.lower().find(marker.lower())
+    if marker_index < 0:
+        return None
+    window_start = max(0, marker_index - 200)
+    window_end = min(len(text), marker_index + len(marker) + 200)
+    years = re.findall(r"\b(20\d{2})\b", text[window_start:window_end])
+    return int(years[0]) if years else None
+
+
+def capone_summary_year(text: str, path: Path) -> int:
+    marker_year = year_near_text(text, "Year-End Summary")
+    if marker_year is not None:
+        return marker_year
+
+    period, start, end = parse_statement_period(text)
+    if period:
+        return fallback_year_for_path(path, start, end)
+
+    m = re.search(r"\b(?:Jan(?:uary)?|01)/?\.?\s*1\b.*?\b(20\d{2})\b", text, flags=re.IGNORECASE | re.DOTALL)
+    if m:
+        return int(m.group(1))
+
+    return fallback_year_for_path(path)
 
 
 def infer_date(month: int, day: int, start: date | None, end: date | None, fallback_year: int) -> date:
@@ -378,7 +404,7 @@ def parse_capone_monthly(path: Path) -> list[Row]:
 
 def parse_capone_summary(path: Path) -> list[Row]:
     text = pdf_text(path)
-    fallback_year = fallback_year_for_path(path)
+    fallback_year = capone_summary_year(text, path)
     rows = []
     category = ""
     card = ""

@@ -4,6 +4,7 @@ import json
 import hashlib
 import mimetypes
 import os
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -85,15 +86,14 @@ DEFAULT_CATEGORIES = (
     {"name": "Food", "color": "#d16630", "children": ("Groceries", "Restaurant", "Cafe", "Convenience")},
     {"name": "Transportation", "color": "#3a67c2", "children": ("Car Payment", "Fuel", "Charging", "Auto Insurance", "Maintenance", "Registration", "Parking", "Toll", "Public Transit", "Taxi")},
     {"name": "Shopping", "color": "#8161c2", "children": ("Clothing", "Electronic", "Household", "Furniture", "Cosmetics", "Toiletries")},
-    {"name": "Health", "color": "#ad3131", "children": ("Medical", "Dental", "Vision", "Pharmacy", "Fitness")},
+    {"name": "Health", "color": "#ad3131", "children": ("Medical", "Dental", "Vision", "Pharmacy", "Fitness", "Health Insurance")},
     {"name": "Lifestyle", "color": "#36b36a", "children": ("Activity", "Hobby", "Alcohol", "Substance")},
     {"name": "Media", "color": "#602699", "children": ("Streaming", "Gaming", "Movie", "Music", "App")},
     {"name": "Travel", "color": "#109e9e", "children": ("Hotel", "Flight", "Rental")},
-    {"name": "Financial", "color": "#b68b2e", "children": ("Fee", "Loan Payment", "Investment", "Tax Payment", "Fine", "Loss")},
-    {"name": "Insurance", "color": "#d18eb0", "children": ("Life Insurance", "Umbrella Insurance", "Protection")},
+    {"name": "Financial", "color": "#b68b2e", "children": ("Loan Payment", "Investment", "Tax Payment", "Fees & Fines", "Loss", "Umbrella Insurance", "Protection")},
     {"name": "Education", "color": "#4d8fbf", "children": ("Tuition", "Books", "Courses", "Certifications")},
-    {"name": "Personal", "color": "#7a5234", "children": ("Childcare", "Pet Expense", "Gift Given", "Personal Care", "Payback")},
-    {"name": "Business", "color": "#60943b", "children": ("Software", "Equipment", "Service", "Office Expense")},
+    {"name": "Personal", "color": "#d18eb0", "children": ("Childcare", "Pet Expense", "Gift Given", "Personal Care", "Payback", "Life Insurance")},
+    {"name": "Business", "color": "#60943b", "children": ("Software", "Equipment", "Service", "Office Expense", "Office Supplies")},
     {"name": "Transfer", "color": "#787b80", "children": ("Internal Transfer", "Card Payment")},
     {"name": "Unknown", "color": "#1f2328", "children": ()},
 )
@@ -1098,6 +1098,11 @@ def pdf_row_to_raw_row(row: dict[str, str]) -> dict[str, str | None]:
     }
 
 
+def upload_temp_prefix(filename: str) -> str:
+    stem = re.sub(r"[^A-Za-z0-9_.-]+", "_", Path(filename).stem).strip("._-")
+    return f"{stem[:40] or 'upload'}_"
+
+
 @app.post("/api/imports/csv")
 def import_csv():
     ensure_database()
@@ -1195,7 +1200,7 @@ def import_pdf():
             if not pdf_bytes:
                 raise CliError(f"{Path(file.filename).name} is empty.")
             filename = Path(file.filename).name
-            with NamedTemporaryFile("wb", suffix=".pdf", delete=False) as temp_file:
+            with NamedTemporaryFile("wb", prefix=upload_temp_prefix(filename), suffix=".pdf", delete=False) as temp_file:
                 temp_file.write(pdf_bytes)
                 temp_path = Path(temp_file.name)
             try:
@@ -1271,7 +1276,7 @@ def analyze_pdf_import():
             if not pdf_bytes:
                 raise CliError(f"{Path(file.filename).name} is empty.")
             filename = Path(file.filename).name
-            with NamedTemporaryFile("wb", suffix=".pdf", delete=False) as temp_file:
+            with NamedTemporaryFile("wb", prefix=upload_temp_prefix(filename), suffix=".pdf", delete=False) as temp_file:
                 temp_file.write(pdf_bytes)
                 temp_path = Path(temp_file.name)
             try:
@@ -2211,6 +2216,12 @@ def ensure_default_categories(conn: sqlite3.Connection) -> None:
     migrate_default_category_name(conn, "Family & Personal", "Personal", default_category_color("Personal"))
     migrate_default_category_name(conn, "Entertainment", "Media", default_category_color("Media"))
     migrate_default_child_category_name(conn, "Personal", "Reimbursement", "Payback")
+    migrate_default_child_category_parent(conn, "Insurance", "Life Insurance", "Personal")
+    migrate_default_child_category_parent(conn, "Insurance", "Umbrella Insurance", "Financial")
+    migrate_default_child_category_parent(conn, "Insurance", "Protection", "Financial")
+    migrate_default_child_category_name(conn, "Financial", "Fine", "Fees & Fines")
+    delete_default_child_category(conn, "Financial", "Fee")
+    delete_default_parent_category(conn, "Insurance")
     for category in DEFAULT_CATEGORIES:
         parent_name = str(category["name"])
         parent_id = ensure_category(conn, parent_name, None, str(category["color"]))
@@ -2268,6 +2279,53 @@ def migrate_default_child_category_name(conn: sqlite3.Connection, parent_name: s
     conn.execute("UPDATE transactions SET category_id = ? WHERE category_id = ?", (new_id, old_id))
     conn.execute("UPDATE transaction_import_rules SET set_category_id = ? WHERE set_category_id = ?", (new_id, old_id))
     conn.execute("DELETE FROM categories WHERE id = ?", (old_id,))
+
+
+def migrate_default_child_category_parent(conn: sqlite3.Connection, old_parent_name: str, child_name: str, new_parent_name: str) -> None:
+    old_parent_row = conn.execute("SELECT id FROM categories WHERE name = ? AND parent_id IS NULL", (old_parent_name,)).fetchone()
+    new_parent_row = conn.execute("SELECT id FROM categories WHERE name = ? AND parent_id IS NULL", (new_parent_name,)).fetchone()
+    if old_parent_row is None or new_parent_row is None:
+        return
+
+    old_parent_id = int(old_parent_row["id"])
+    new_parent_id = int(new_parent_row["id"])
+    child_row = conn.execute(
+        "SELECT id FROM categories WHERE name = ? AND parent_id = ?",
+        (child_name, old_parent_id),
+    ).fetchone()
+    if child_row is not None:
+        conn.execute("UPDATE categories SET parent_id = ?, color = NULL WHERE id = ?", (new_parent_id, child_row["id"]))
+
+
+def delete_default_child_category(conn: sqlite3.Connection, parent_name: str, child_name: str) -> None:
+    parent_row = conn.execute("SELECT id FROM categories WHERE name = ? AND parent_id IS NULL", (parent_name,)).fetchone()
+    if parent_row is None:
+        return
+
+    conn.execute(
+        """
+        DELETE FROM categories
+        WHERE name = ?
+            AND parent_id = ?
+        """,
+        (child_name, int(parent_row["id"])),
+    )
+
+
+def delete_default_parent_category(conn: sqlite3.Connection, name: str) -> None:
+    conn.execute(
+        """
+        DELETE FROM categories
+        WHERE name = ?
+            AND parent_id IS NULL
+            AND NOT EXISTS (
+                SELECT 1
+                FROM categories AS child
+                WHERE child.parent_id = categories.id
+            )
+        """,
+        (name,),
+    )
 
 
 def ensure_system_tags(conn: sqlite3.Connection) -> None:
