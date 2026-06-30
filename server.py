@@ -1298,13 +1298,21 @@ def analyze_pdf_import():
                 }
 
     accounts = sorted(account_matches.values(), key=lambda item: item["id"])
+    display_label = pdf_account_analysis_display_label(accounts)
     return jsonify(
         {
             "status": "ok",
             "accounts": accounts,
             "account": accounts[0] if len(accounts) == 1 else None,
+            "display_label": display_label,
         }
     )
+
+
+def pdf_account_analysis_display_label(accounts: list[dict[str, Any]]) -> str | None:
+    if len(accounts) <= 1:
+        return None
+    return "Multiple Accounts"
 
 
 @app.post("/api/raw-rows/import")

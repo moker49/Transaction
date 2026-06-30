@@ -9,6 +9,7 @@ export function createCsvImportController({
   setModalMessage,
   showPopup,
 }) {
+  const syntheticPdfAccountValue = "__pdf_multi_account_upload__";
   let analysisToken = 0;
 
   async function importFile(event) {
@@ -107,6 +108,7 @@ export function createCsvImportController({
   }
 
   function handleFileChange() {
+    setModalMessage(elements.importMessage, "");
     setAccountLocked(false);
     updateFileName();
     analyzeSelectedFilesAccount();
@@ -116,6 +118,7 @@ export function createCsvImportController({
     analysisToken += 1;
     elements.importForm.reset();
     setAccountLocked(false);
+    clearSyntheticAccountOption();
     setModalMessage(elements.importMessage, "");
     updateFileName();
   }
@@ -125,10 +128,31 @@ export function createCsvImportController({
     elements.importAccountSelect.classList.toggle("is-locked-in", locked);
   }
 
+  function setSyntheticLockedAccount(label) {
+    clearSyntheticAccountOption();
+    const option = document.createElement("option");
+    option.value = syntheticPdfAccountValue;
+    option.textContent = label;
+    option.dataset.syntheticPdfAccount = "true";
+    elements.importAccountSelect.appendChild(option);
+    elements.importAccountSelect.value = syntheticPdfAccountValue;
+    setAccountLocked(true);
+  }
+
+  function clearSyntheticAccountOption() {
+    elements.importAccountSelect.querySelectorAll("option[data-synthetic-pdf-account='true']").forEach((option) => {
+      option.remove();
+    });
+    if (elements.importAccountSelect.value === syntheticPdfAccountValue) {
+      elements.importAccountSelect.value = "";
+    }
+  }
+
   async function analyzeSelectedFilesAccount() {
     const files = [...(elements.importCsvFileInput.files || [])];
     const token = (analysisToken += 1);
     const uploadMode = selectedUploadMode(files);
+    clearSyntheticAccountOption();
     if (uploadMode === "csv") {
       await analyzeCsvFileAccount(files[0], token);
       return;
@@ -193,11 +217,13 @@ export function createCsvImportController({
         setAccountLocked(true);
         return;
       }
+      if (accounts.length > 1) {
+        setSyntheticLockedAccount(payload.display_label || "Multiple Accounts");
+        setModalMessage(elements.importMessage, pdfAccountListLabel(accounts));
+        return;
+      }
       elements.importAccountSelect.value = "";
       setAccountLocked(false);
-      if (accounts.length > 1) {
-        setModalMessage(elements.importMessage, "Multiple PDF accounts detected; the parser will import each file to its matched account.");
-      }
     } catch (error) {
       if (token === analysisToken) {
         elements.importAccountSelect.value = "";
@@ -205,6 +231,13 @@ export function createCsvImportController({
         setModalMessage(elements.importMessage, error.message || "Could not inspect PDF file.", true);
       }
     }
+  }
+
+  function pdfAccountListLabel(accounts) {
+    return accounts
+      .map((account) => account.name || [account.institution, account.account_type].filter(Boolean).join(" "))
+      .filter(Boolean)
+      .join(", ");
   }
 
   function handleFileDrag(event) {
@@ -237,6 +270,7 @@ export function createCsvImportController({
     elements.importAccountSelect.required = requireAccount;
     if (!showAccount) {
       elements.importAccountSelect.value = "";
+      clearSyntheticAccountOption();
       elements.importAccountSelect.classList.remove("is-locked-in");
     }
   }

@@ -470,17 +470,37 @@ def parse_capone_summary(path: Path) -> list[Row]:
 
 def looks_like_chase(text: str, path: Path) -> bool:
     value = f"{path.name}\n{text}".lower()
-    return "jpmorgan chase" in value or "chase.com" in value
+    return "jpmorgan chase bank, n.a." in value or "chase.com" in value or "account number:" in value and "deposits and additions" in value
 
 
 def looks_like_sofi(text: str, path: Path) -> bool:
     value = f"{path.name}\n{text}".lower()
-    return "sofi" in value or "social finance" in value
+    name = path.name.lower()
+    return "sofi" in name or any(
+        marker in value
+        for marker in (
+            "social finance",
+            "sofi bank, n.a.",
+            "checking account - ",
+            "savings account - ",
+        )
+    )
 
 
 def looks_like_capone(text: str, path: Path) -> bool:
     value = f"{path.name}\n{text}".lower()
-    return "capital one" in value or "capital-one" in value
+    name = path.name.lower()
+    if "capital-one" in name or name.startswith(("statement_", "smry_")):
+        return True
+    return "capital one" in value and any(
+        marker in value
+        for marker in (
+            "account ending in",
+            "year-end summary",
+            "section 4_transaction details",
+            "capital one customer service",
+        )
+    )
 
 
 def parse_pdf(path: Path) -> list[Row]:
@@ -494,10 +514,10 @@ def parse_pdf(path: Path) -> list[Row]:
             return parse_capone_summary(path)
         return parse_capone_monthly(path)
     text = pdf_text(path)
-    if looks_like_chase(text, path):
-        return parse_chase(path)
     if looks_like_sofi(text, path):
         return parse_sofi(path)
+    if looks_like_chase(text, path):
+        return parse_chase(path)
     if looks_like_capone(text, path):
         if "year-end summary" in text.lower() or path.name.lower().startswith("smry_"):
             return parse_capone_summary(path)
