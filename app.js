@@ -2406,7 +2406,7 @@ function renderRules() {
     if (!search) {
       return true;
     }
-    return clean(rule.name).toLowerCase().includes(search);
+    return ruleSearchText(rule).includes(search);
   });
   if (!rules.length) {
     tbody.appendChild(emptyTableRow(3));
@@ -2439,6 +2439,35 @@ function ruleMatchSummary(rule) {
   }
   list.appendChild(el("span", `Amount is ${matchAmountLabel(matches.amount).toLowerCase()}`));
   return list.childElementCount ? list : "-";
+}
+
+function ruleSearchText(rule) {
+  const matches = ruleMatchValues(rule);
+  const category = state.categories.find((candidate) => candidate.id === rule.set_category_id);
+  const tagNames = ruleTagNames(rule);
+  const kind = (rule.rule_type || "auto-import") === "template" ? "Pre-fill" : "Auto-import";
+  return [
+    rule.name,
+    kind,
+    matches.description,
+    matches.category,
+    matchAmountLabel(matches.amount),
+    category?.name,
+    rule.set_category,
+    rule.set_clean_description,
+    transactionTypeLabel(rule.set_transaction_type),
+    ...tagNames,
+  ].map((value) => clean(value).toLowerCase()).filter(Boolean).join(" ");
+}
+
+function ruleTagNames(rule) {
+  if (rule.tags?.length) {
+    return rule.tags.map((tag) => tag.name);
+  }
+  const tagIds = rule.tag_ids || (rule.add_tag_id === null || rule.add_tag_id === undefined ? [] : [rule.add_tag_id]);
+  return tagIds
+    .map((tagId) => state.tags.find((tag) => Number(tag.id) === Number(tagId))?.name)
+    .filter(Boolean);
 }
 
 function openBulkImportDialog() {
