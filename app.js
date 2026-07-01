@@ -44,6 +44,16 @@ const dateRangePresets = [
   { value: "last-month", label: "Last month" },
   { value: "this-year", label: "This year" },
 ];
+const rawStatusFilterOptions = [
+  { value: "all", label: "All rows" },
+  { value: "new", label: "New" },
+  { value: "auto-importable", label: "New - Auto-importable" },
+  { value: "pre-fill", label: "New - Pre-fill" },
+  { value: "manual", label: "New - Manual Import" },
+  { value: "imported", label: "Imported" },
+  { value: "duplicate", label: "Duplicate" },
+  { value: "error", label: "Error" },
+];
 const YEAR_RANGE_PREFIX = "year-";
 const FIRST_YEAR_RANGE = 2020;
 
@@ -368,6 +378,7 @@ elements.ruleForm.addEventListener("submit", saveRule);
 elements.rawAccountFilter.addEventListener("change", () => {
   pendingRawAccountFilterValue = elements.rawAccountFilter.value;
   saveUiPreferences();
+  updateRawStatusFilterCounts();
   rawRowsController.render();
 });
 elements.rawStatusFilter.addEventListener("change", () => {
@@ -1484,6 +1495,7 @@ function render() {
   renderTransactions();
   renderAccountSelects();
   renderImports();
+  updateRawStatusFilterCounts();
   renderCategories();
   tagsController.renderTags();
   renderRules();
@@ -2073,6 +2085,44 @@ function renderAccountSelects() {
     return;
   }
   pendingRawAccountFilterValue = elements.rawAccountFilter.value || "all";
+}
+
+function updateRawStatusFilterCounts() {
+  const selectedValue = elements.rawStatusFilter.value || "new";
+  const counts = rawStatusCountsForSelectedAccount();
+  rawStatusFilterOptions.forEach(({ value, label }) => {
+    const option = elements.rawStatusFilter.querySelector(`option[value="${cssEscape(value)}"]`);
+    if (option) {
+      option.textContent = `${label} (${counts[value] || 0})`;
+    }
+  });
+  if (setSelectValueIfAvailable(elements.rawStatusFilter, selectedValue)) {
+    return;
+  }
+  elements.rawStatusFilter.value = "new";
+}
+
+function rawStatusCountsForSelectedAccount() {
+  const counts = Object.fromEntries(rawStatusFilterOptions.map(({ value }) => [value, 0]));
+  state.rawRows.forEach((row) => {
+    if (!rawRowMatchesAccountFilter(row)) {
+      return;
+    }
+    const status = row.import_status || "manual";
+    counts.all += 1;
+    if (["auto-importable", "manual", "pre-fill"].includes(status)) {
+      counts.new += 1;
+    }
+    if (Object.hasOwn(counts, status)) {
+      counts[status] += 1;
+    }
+  });
+  return counts;
+}
+
+function rawRowMatchesAccountFilter(row) {
+  const accountFilter = elements.rawAccountFilter.value || "all";
+  return accountFilter === "all" || String(row.account_id) === accountFilter;
 }
 
 function renderImports() {
