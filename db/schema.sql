@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     amount_cents INTEGER NOT NULL,
     external_transaction_id TEXT,
     raw_imported_row_id INTEGER REFERENCES raw_imported_rows(id) ON DELETE SET NULL,
+    rule_id INTEGER REFERENCES transaction_import_rules(id) ON DELETE SET NULL,
     transaction_hash TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -122,6 +123,7 @@ CREATE TABLE IF NOT EXISTS raw_imported_rows (
     default_clean_description TEXT,
     raw_amount TEXT,
     parsed_transaction_id INTEGER REFERENCES transactions(id) ON DELETE SET NULL,
+    rule_id INTEGER REFERENCES transaction_import_rules(id) ON DELETE SET NULL,
     import_status TEXT NOT NULL DEFAULT 'manual',
     import_error TEXT,
     raw_row_hash TEXT NOT NULL,
@@ -154,6 +156,7 @@ CREATE INDEX IF NOT EXISTS idx_transactions_posted_date ON transactions(posted_d
 CREATE INDEX IF NOT EXISTS idx_transactions_clean_description ON transactions(clean_description);
 CREATE INDEX IF NOT EXISTS idx_transactions_hash ON transactions(account_id, transaction_hash);
 CREATE INDEX IF NOT EXISTS idx_transactions_raw_imported_row_id ON transactions(raw_imported_row_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_rule_id ON transactions(rule_id);
 CREATE INDEX IF NOT EXISTS idx_transaction_import_rules_active_type ON transaction_import_rules(is_active, rule_type, id);
 CREATE INDEX IF NOT EXISTS idx_transaction_import_rules_type_active ON transaction_import_rules(rule_type, is_active, id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_transaction_import_rules_unique_match
@@ -169,5 +172,6 @@ CREATE INDEX IF NOT EXISTS idx_raw_imported_rows_imported_source_id ON raw_impor
 CREATE INDEX IF NOT EXISTS idx_raw_imported_rows_status ON raw_imported_rows(import_status);
 CREATE INDEX IF NOT EXISTS idx_raw_imported_rows_raw_date ON raw_imported_rows(raw_date);
 CREATE INDEX IF NOT EXISTS idx_raw_imported_rows_parsed_transaction_id ON raw_imported_rows(parsed_transaction_id);
+CREATE INDEX IF NOT EXISTS idx_raw_imported_rows_rule_id ON raw_imported_rows(rule_id);
 CREATE INDEX IF NOT EXISTS idx_raw_imported_rows_hash ON raw_imported_rows(imported_source_id, raw_row_hash);
 CREATE INDEX IF NOT EXISTS idx_logs_created_at ON logs(created_at DESC);

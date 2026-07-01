@@ -907,10 +907,11 @@ def apply_import_rule_rows(
     raw_row: sqlite3.Row,
     rule_tag_ids_by_rule: dict[int, list[int]],
 ) -> dict[str, Any]:
-    result: dict[str, Any] = {"category_id": None, "clean_description": None, "transaction_type": None, "tag_ids": []}
+    result: dict[str, Any] = {"rule_id": None, "category_id": None, "clean_description": None, "transaction_type": None, "tag_ids": []}
     for rule in rules:
         if not rule_matches(rule, raw_row):
             continue
+        result["rule_id"] = int(rule["id"])
         if rule["set_category_id"] is not None:
             result["category_id"] = int(rule["set_category_id"])
         if rule["set_clean_description"] is not None:
@@ -1134,7 +1135,7 @@ def import_raw_rows(
     undescribed_rows = []
     for raw_row in raw_rows:
         rule_result = import_rule_result_for_status(conn, raw_row, current_status_by_row_id[int(raw_row["id"])])
-        rule_result = apply_raw_row_import_overrides(rule_result, overrides)
+        rule_result = apply_raw_row_import_overrides(rule_result, overrides, current_status_by_row_id[int(raw_row["id"])])
         if rule_result["category_id"] is None:
             uncategorized_rows.append(str(raw_row["id"]))
         if rule_result["transaction_type"] is None:
@@ -1161,7 +1162,7 @@ def import_raw_rows(
                 raise CliError("raw_description is required.")
 
             rule_result = import_rule_result_for_status(conn, raw_row, current_status_by_row_id[int(raw_row["id"])])
-            rule_result = apply_raw_row_import_overrides(rule_result, overrides)
+            rule_result = apply_raw_row_import_overrides(rule_result, overrides, current_status_by_row_id[int(raw_row["id"])])
             require_category_allowed_for_transaction_type(conn, int(rule_result["category_id"]), rule_result["transaction_type"])
             clean_description = normalize_text(rule_result["clean_description"]) or description
             transaction_hash = make_transaction_hash(
@@ -1212,9 +1213,10 @@ def import_raw_rows(
                     clean_description,
                     amount_cents,
                     raw_imported_row_id,
+                    rule_id,
                     transaction_hash
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     raw_row["account_id"],
@@ -1225,6 +1227,7 @@ def import_raw_rows(
                     clean_description,
                     amount_cents,
                     raw_row["id"],
+                    rule_result["rule_id"],
                     transaction_hash,
                 ),
             )
@@ -1252,10 +1255,11 @@ def import_raw_rows(
                 SET import_status = 'imported',
                     import_error = NULL,
                     parsed_transaction_id = ?,
+                    rule_id = ?,
                     updated_at = datetime('now')
                 WHERE id = ?
                 """,
-                (transaction_id, raw_row["id"]),
+                (transaction_id, rule_result["rule_id"], raw_row["id"]),
             )
             log_event(
                 conn,
@@ -1338,10 +1342,15 @@ def normalize_raw_row_import_overrides(
     return overrides
 
 
-def apply_raw_row_import_overrides(rule_result: dict[str, Any], overrides: dict[str, Any]) -> dict[str, Any]:
+def apply_raw_row_import_overrides(
+    rule_result: dict[str, Any],
+    overrides: dict[str, Any],
+    import_status: str | None = None,
+) -> dict[str, Any]:
     if not overrides:
         return rule_result
     merged = {
+        "rule_id": rule_result["rule_id"],
         "category_id": rule_result["category_id"],
         "clean_description": rule_result["clean_description"],
         "transaction_type": rule_result["transaction_type"],
@@ -1349,7 +1358,30 @@ def apply_raw_row_import_overrides(rule_result: dict[str, Any], overrides: dict[
     }
     for key, value in overrides.items():
         merged[key] = list(value) if key == "tag_ids" else value
+    if import_status == "pre-fill" and not import_values_match_rule_result(rule_result, merged):
+        merged["rule_id"] = None
     return merged
+
+
+def import_values_match_rule_result(rule_result: dict[str, Any], import_values: dict[str, Any]) -> bool:
+    return (
+        optional_int(rule_result.get("category_id")) == optional_int(import_values.get("category_id"))
+        and normalize_text(rule_result.get("clean_description")) == normalize_text(import_values.get("clean_description"))
+        and normalize_text(rule_result.get("transaction_type")) == normalize_text(import_values.get("transaction_type"))
+        and sorted_ints(rule_result.get("tag_ids")) == sorted_ints(import_values.get("tag_ids"))
+    )
+
+
+def optional_int(value: Any) -> int | None:
+    if value in (None, ""):
+        return None
+    return int(value)
+
+
+def sorted_ints(values: Any) -> list[int]:
+    if not values:
+        return []
+    return sorted({int(value) for value in values})
 
 
 def ensure_readonly_sql(sql: str) -> None:

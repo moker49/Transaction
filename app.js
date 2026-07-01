@@ -566,7 +566,7 @@ elements.transactionForm.addEventListener("submit", saveTransaction);
 elements.transactionCategoryFilterButton.addEventListener("click", () => categoryPicker.open("transaction-filter"));
 elements.ruleCategoryFilterButton.addEventListener("click", () => categoryPicker.open("rule-filter"));
 elements.transactionCloseButton.addEventListener("click", closeTransactionDialog);
-elements.transactionCancelButton.addEventListener("click", closeTransactionDialog);
+elements.transactionCancelButton.addEventListener("click", handleTransactionDismissButton);
 elements.transactionTagsEditButton.addEventListener("click", toggleTransactionTagsEditMode);
 elements.transactionDeleteButton.addEventListener("click", deleteActiveTransaction);
 elements.transactionCategoryButton.addEventListener("click", () => {
@@ -1729,6 +1729,7 @@ function populateTransactionDialog(transaction) {
     ["Account", transaction.account],
     ["Transaction date", transaction.transaction_date],
     ["Raw row ID", transaction.raw_imported_row_id],
+    ["Rule ID", transaction.rule_id],
     ["Import file", transaction.import_filename],
     ["Import source", transaction.import_source_type],
     ["Imported at", formatMaybeDateTime(transaction.imported_at)],
@@ -1736,6 +1737,39 @@ function populateTransactionDialog(transaction) {
     ["Updated", formatMaybeDateTime(transaction.updated_at)],
     ["Hash", transaction.transaction_hash],
   ]);
+  updateTransactionModalActions();
+}
+
+function updateTransactionModalActions() {
+  const transaction = activeTransaction();
+  const hasRule = Boolean(transaction?.rule_id);
+  elements.transactionCancelButton.textContent = hasRule ? "Rule" : "Cancel";
+  elements.transactionCancelButton.classList.toggle("primary", hasRule);
+  elements.transactionCancelButton.classList.toggle("icon-button", !hasRule);
+}
+
+function handleTransactionDismissButton() {
+  const transaction = activeTransaction();
+  if (transaction?.rule_id) {
+    openTransactionRule(transaction);
+    return;
+  }
+  closeTransactionDialog();
+}
+
+function findRuleById(ruleId) {
+  return state.rules.find((rule) => Number(rule.id) === Number(ruleId)) || null;
+}
+
+function openTransactionRule(transaction) {
+  const rule = findRuleById(transaction.rule_id);
+  if (!rule) {
+    showPopup(`Rule ${transaction.rule_id} is no longer available.`, "error");
+    updateTransactionModalActions();
+    return;
+  }
+  closeTransactionDialog();
+  openRuleEditDialog(rule);
 }
 
 function toggleTransactionTagsEditMode() {
@@ -1917,6 +1951,7 @@ function populateRawRowDialog(rawRow) {
     ["Account", account ? accountLabel(account) : "Unknown"],
     ["Status", rawRow.import_status],
     ["Auto-importable", isImportableRawRow(rawRow) ? "Yes" : "No"],
+    ["Rule ID", rawRow.rule_id],
     ["Error", rawRow.import_error],
     ["Source ID", rawRow.imported_source_id],
     ["Parsed transaction ID", rawRow.parsed_transaction_id],
@@ -1934,14 +1969,17 @@ function updateRawRowModalActions() {
   const rawRow = activeRawRow();
   if (!rawRow) {
     elements.rawRowRuleButton.hidden = true;
+    elements.rawRowImportButton.hidden = false;
     return;
   }
+  const storedRule = rawRow.rule_id ? findRuleById(rawRow.rule_id) : null;
   const canOpenRule = rawRow.import_status !== "imported";
-  const canEditRule = canOpenRule && Boolean(topMatchingRuleForRawRow(state.rules, rawRow, "auto-import"));
+  const canEditRule = Boolean(storedRule) || (canOpenRule && Boolean(topMatchingRuleForRawRow(state.rules, rawRow, "auto-import")));
   const canUseTemplate = canOpenRule && Boolean(topMatchingRuleForRawRow(state.rules, rawRow, "template"));
   const canCreateRule = shouldOfferRuleCreation(rawRow);
   elements.rawRowRuleButton.hidden = !canEditRule && !canUseTemplate && !canCreateRule;
   elements.rawRowRuleButton.textContent = "Rule";
+  elements.rawRowImportButton.hidden = rawRow.import_status === "imported";
 }
 
 function shouldOfferRuleCreation(rawRow) {
@@ -1954,9 +1992,10 @@ function openTopRawRowRule() {
     updateRawRowModalActions();
     return;
   }
+  const storedRule = rawRow.rule_id ? findRuleById(rawRow.rule_id) : null;
   const autoImportRule = topMatchingRuleForRawRow(state.rules, rawRow, "auto-import");
   const template = topMatchingRuleForRawRow(state.rules, rawRow, "template");
-  const rule = autoImportRule || template;
+  const rule = storedRule || autoImportRule || template;
   const rawRowContext = {
     rawRow,
     autoImportRule,

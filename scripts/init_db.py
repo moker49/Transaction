@@ -38,6 +38,7 @@ EXPECTED_TRANSACTION_COLUMNS = {
     "amount_cents",
     "external_transaction_id",
     "raw_imported_row_id",
+    "rule_id",
     "transaction_hash",
     "created_at",
     "updated_at",
@@ -79,6 +80,7 @@ EXPECTED_RAW_IMPORTED_ROW_COLUMNS = {
     "default_clean_description",
     "raw_amount",
     "parsed_transaction_id",
+    "rule_id",
     "import_status",
     "import_error",
     "raw_row_hash",
@@ -189,6 +191,8 @@ def migrate_existing_schema(conn: sqlite3.Connection, tables: Iterable[str]) -> 
                     CHECK (transaction_type IN ('income', 'expense', 'transfer'))
                 """
             )
+        if "rule_id" not in transaction_columns:
+            conn.execute("ALTER TABLE transactions ADD COLUMN rule_id INTEGER REFERENCES transaction_import_rules(id) ON DELETE SET NULL")
         conn.execute(
             """
             UPDATE transactions
@@ -288,6 +292,9 @@ def migrate_existing_schema(conn: sqlite3.Connection, tables: Iterable[str]) -> 
         if "color" not in category_columns:
             conn.execute("ALTER TABLE categories ADD COLUMN color TEXT")
     if "raw_imported_rows" in table_set:
+        raw_columns = {row[1] for row in conn.execute("PRAGMA table_info(raw_imported_rows)").fetchall()}
+        if "rule_id" not in raw_columns:
+            conn.execute("ALTER TABLE raw_imported_rows ADD COLUMN rule_id INTEGER REFERENCES transaction_import_rules(id) ON DELETE SET NULL")
         raw_imported_rows_sql = conn.execute(
             """
             SELECT sql
@@ -430,6 +437,7 @@ def rebuild_transactions_with_required_type(conn: sqlite3.Connection) -> None:
                 amount_cents INTEGER NOT NULL,
                 external_transaction_id TEXT,
                 raw_imported_row_id INTEGER REFERENCES raw_imported_rows(id) ON DELETE SET NULL,
+                rule_id INTEGER REFERENCES transaction_import_rules(id) ON DELETE SET NULL,
                 transaction_hash TEXT NOT NULL,
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 updated_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -452,6 +460,7 @@ def rebuild_transactions_with_required_type(conn: sqlite3.Connection) -> None:
                 amount_cents,
                 external_transaction_id,
                 raw_imported_row_id,
+                rule_id,
                 transaction_hash,
                 created_at,
                 updated_at
@@ -471,6 +480,7 @@ def rebuild_transactions_with_required_type(conn: sqlite3.Connection) -> None:
                 amount_cents,
                 external_transaction_id,
                 raw_imported_row_id,
+                rule_id,
                 transaction_hash,
                 created_at,
                 updated_at
@@ -632,6 +642,7 @@ def rebuild_raw_imported_rows_with_importability_status(conn: sqlite3.Connection
                 default_clean_description TEXT,
                 raw_amount TEXT,
                 parsed_transaction_id INTEGER REFERENCES transactions(id) ON DELETE SET NULL,
+                rule_id INTEGER REFERENCES transaction_import_rules(id) ON DELETE SET NULL,
                 import_status TEXT NOT NULL DEFAULT 'manual',
                 import_error TEXT,
                 raw_row_hash TEXT NOT NULL,
@@ -658,6 +669,7 @@ def rebuild_raw_imported_rows_with_importability_status(conn: sqlite3.Connection
                 default_clean_description,
                 raw_amount,
                 parsed_transaction_id,
+                rule_id,
                 import_status,
                 import_error,
                 raw_row_hash,
@@ -673,6 +685,7 @@ def rebuild_raw_imported_rows_with_importability_status(conn: sqlite3.Connection
                 NULL,
                 raw_amount,
                 parsed_transaction_id,
+                rule_id,
                 CASE import_status
                     WHEN 'ready' THEN 'auto-importable'
                     WHEN 'importable' THEN 'auto-importable'
@@ -714,6 +727,12 @@ def rebuild_raw_imported_rows_with_importability_status(conn: sqlite3.Connection
             """
             CREATE INDEX IF NOT EXISTS idx_raw_imported_rows_parsed_transaction_id
             ON raw_imported_rows(parsed_transaction_id)
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_raw_imported_rows_rule_id
+            ON raw_imported_rows(rule_id)
             """
         )
         conn.execute(

@@ -43,6 +43,8 @@ from db_cli import (  # noqa: E402
     format_prefilled_clean_description,
     get_or_create_institution,
     import_raw_rows,
+    import_rule_result_for_status,
+    import_values_match_rule_result,
     imported_source_signature,
     nonempty,
     optional_nonempty,
@@ -870,6 +872,7 @@ def update_transaction(transaction_id: int):
                     next_clean_description,
                 )
             )
+            updates.append("rule_id = NULL")
             updates.append("updated_at = datetime('now')")
             values.append(transaction_id)
             conn.execute(f"UPDATE transactions SET {', '.join(updates)} WHERE id = ?", values)
@@ -885,6 +888,16 @@ def update_transaction(transaction_id: int):
             conn.executemany(
                 "INSERT INTO transaction_tags (transaction_id, tag_id) VALUES (?, ?)",
                 [(transaction_id, tag_id) for tag_id in tag_ids],
+            )
+        if not updates and (notes_requested or tag_ids_requested):
+            conn.execute(
+                """
+                UPDATE transactions
+                SET rule_id = NULL,
+                    updated_at = datetime('now')
+                WHERE id = ?
+                """,
+                (transaction_id,),
             )
         if not updates and not notes_requested and not tag_ids_requested:
             raise CliError("No changes requested.")
@@ -990,6 +1003,8 @@ def bulk_edit_transactions():
                         final_clean_description,
                     )
                 )
+            if updates or tag_ids_requested:
+                updates.append("rule_id = NULL")
                 updates.append("updated_at = datetime('now')")
                 values.append(transaction_id)
                 conn.execute(f"UPDATE transactions SET {', '.join(updates)} WHERE id = ?", values)
@@ -1368,7 +1383,9 @@ def manual_import_raw_row(raw_row_id: int):
                 r.id,
                 s.account_id,
                 r.raw_date,
+                r.raw_category,
                 r.raw_description,
+                r.default_clean_description,
                 r.raw_amount,
                 r.import_status
             FROM raw_imported_rows r
@@ -1381,6 +1398,17 @@ def manual_import_raw_row(raw_row_id: int):
             raise CliError(f"Raw row not found: {raw_row_id}")
         if raw_row["import_status"] in ("imported", "duplicate"):
             raise CliError(f"Raw row {raw_row_id} has already been processed.")
+        import_rule_id = None
+        if raw_row["import_status"] == "pre-fill":
+            prefill_result = import_rule_result_for_status(conn, raw_row, "pre-fill")
+            import_values = {
+                "category_id": category_id,
+                "clean_description": clean_description,
+                "transaction_type": transaction_type,
+                "tag_ids": tag_ids,
+            }
+            if import_values_match_rule_result(prefill_result, import_values):
+                import_rule_id = prefill_result["rule_id"]
 
         posted_date = parse_transaction_date(raw_row["raw_date"])
         amount_cents = parse_amount_cents(raw_row["raw_amount"])
@@ -1422,9 +1450,10 @@ def manual_import_raw_row(raw_row_id: int):
                     clean_description,
                     amount_cents,
                     raw_imported_row_id,
+                    rule_id,
                     transaction_hash
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     raw_row["account_id"],
@@ -1435,6 +1464,7 @@ def manual_import_raw_row(raw_row_id: int):
                     clean_description,
                     amount_cents,
                     raw_row_id,
+                    import_rule_id,
                     transaction_hash,
                 ),
             )
@@ -1454,10 +1484,11 @@ def manual_import_raw_row(raw_row_id: int):
                 SET import_status = 'imported',
                     import_error = NULL,
                     parsed_transaction_id = ?,
+                    rule_id = ?,
                     updated_at = datetime('now')
                 WHERE id = ?
                 """,
-                (transaction_id, raw_row_id),
+                (transaction_id, import_rule_id, raw_row_id),
             )
             result = {"raw_row_id": raw_row_id, "status": "imported", "transaction_id": transaction_id}
 
@@ -1851,6 +1882,7 @@ def read_raw_rows(conn: sqlite3.Connection, start_date: str | None = None, end_d
                 rr.default_clean_description,
                 rr.raw_amount,
                 rr.parsed_transaction_id,
+                rr.rule_id,
                 rr.import_status,
                 rr.import_error,
                 rr.raw_row_hash,
@@ -1893,6 +1925,7 @@ def read_transactions(conn: sqlite3.Connection, start_date: str | None = None, e
                 printf('%.2f', t.amount_cents / 100.0) AS amount,
                 t.transaction_hash,
                 t.raw_imported_row_id,
+                t.rule_id,
                 rr.raw_date,
                 rr.raw_category,
                 rr.raw_description,
@@ -2081,6 +2114,7 @@ def apply_raw_row_previews(
         row["preview_category"] = categories_by_id.get(preview_category_id) if preview_category_id is not None else None
         row["preview_clean_description"] = preview.get("clean_description")
         row["preview_type"] = preview.get("transaction_type")
+        row["preview_rule_id"] = preview.get("rule_id")
         row["preview_tag_ids"] = preview.get("tag_ids", [])
 
 
@@ -2119,10 +2153,11 @@ def build_raw_row_match(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def apply_rule_matchers(matchers: list[dict[str, Any]], row_match: dict[str, Any]) -> dict[str, Any]:
-    result: dict[str, Any] = {"category_id": None, "clean_description": None, "transaction_type": None, "tag_ids": []}
+    result: dict[str, Any] = {"rule_id": None, "category_id": None, "clean_description": None, "transaction_type": None, "tag_ids": []}
     for matcher in matchers:
         if not rule_matcher_matches(matcher, row_match):
             continue
+        result["rule_id"] = matcher["id"]
         result["category_id"] = matcher["set_category_id"]
         result["clean_description"] = matcher["set_clean_description"]
         result["transaction_type"] = matcher["set_transaction_type"]
