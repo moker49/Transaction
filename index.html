@@ -941,9 +941,28 @@
       <div id="importMessage" class="modal-message" role="status" aria-live="polite"></div>
       <div class="modal-actions">
         <button type="button" class="icon-button" id="importCancelButton">Cancel</button>
-        <button type="submit" class="primary">Upload</button>
+        <button type="submit" class="primary" id="importSubmitButton">Upload</button>
       </div>
     </form>
+  </dialog>
+
+  <dialog id="uploadResultDialog" class="modal small-modal" tabindex="-1">
+    <div class="modal-panel">
+      <div class="panel-heading">
+        <h2 id="uploadResultTitle">Upload Complete</h2>
+        <button class="icon-only" type="button" id="uploadResultCloseButton" aria-label="Close">
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <div class="upload-result-content">
+        <p id="uploadResultMessage" class="upload-result-message" hidden></p>
+        <dl id="uploadResultValues" class="detail-list readonly-details"></dl>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="icon-button" id="uploadResultDismissButton">Close</button>
+        <button type="button" class="primary" id="uploadResultViewRowsButton">View Rows</button>
+      </div>
+    </div>
   </dialog>
 
   <dialog id="uploadedFileDialog" class="modal wide-modal uploaded-file-modal" tabindex="-1">

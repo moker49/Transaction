@@ -25,6 +25,7 @@ import { createTagsController } from "./scripts/js/tags-controller.mjs";
 import { createTableSortController } from "./scripts/js/table-sort-controller.mjs";
 import { createUiPreferences, cssEscape, setSelectValueIfAvailable } from "./scripts/js/ui-preferences.mjs";
 import { createKeyboardShortcuts } from "./scripts/js/keyboard-shortcuts.mjs";
+import { createUploadResultController } from "./scripts/js/upload-result-controller.mjs";
 
 const API_BASE = window.location.protocol === "file:" ? "http://127.0.0.1:5050" : "";
 const DUMMY_DATABASE_KEY = "transaction-use-dummy-database";
@@ -201,6 +202,11 @@ dataController = createAppDataController({
   hidePopup,
   initialDataPromise: window.__transactionInitialDataPromise,
 });
+const uploadResult = createUploadResultController({
+  elements,
+  openModal,
+  onViewRows: viewUploadedRows,
+});
 const csvImport = createCsvImportController({
   elements,
   getAccounts: () => state.accounts,
@@ -209,6 +215,7 @@ const csvImport = createCsvImportController({
   setMessage,
   setModalMessage,
   showPopup,
+  showUploadResult: uploadResult.show,
 });
 const tagsController = createTagsController({
   elements,
@@ -394,6 +401,13 @@ elements.importCsvFileInput.addEventListener("change", csvImport.handleFileChang
 elements.importFileDropZone.addEventListener("dragover", csvImport.handleFileDrag);
 elements.importFileDropZone.addEventListener("dragleave", csvImport.handleFileDrag);
 elements.importFileDropZone.addEventListener("drop", csvImport.handleFileDrop);
+elements.uploadResultCloseButton.addEventListener("click", uploadResult.close);
+elements.uploadResultDismissButton.addEventListener("click", uploadResult.close);
+elements.uploadResultViewRowsButton.addEventListener("click", uploadResult.viewRows);
+elements.uploadResultDialog.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  uploadResult.close();
+});
 elements.uploadedFileCloseButton.addEventListener("click", closeUploadedFileDialog);
 elements.uploadedFileDismissButton.addEventListener("click", closeUploadedFileDialog);
 elements.uploadedFileDeleteButton.addEventListener("click", deleteActiveUploadedFile);
@@ -673,6 +687,7 @@ document.querySelectorAll("dialog.modal").forEach((dialog) => {
   [elements.manualImportDialog, closeManualImportDialog],
   [elements.transactionDialog, closeTransactionDialog],
   [elements.importDialog, csvImport.closeDialog],
+  [elements.uploadResultDialog, uploadResult.close],
   [elements.uploadedFileDialog, closeUploadedFileDialog],
   [elements.rawRowDialog, closeRawRowDialog],
   [elements.categoryDialog, closeCategoryDialog],
@@ -791,6 +806,22 @@ function scrollActiveViewToTop() {
   }
   window.scrollTo({ top: 0, left: 0, behavior: shouldAnimate ? "smooth" : "auto" });
   updateScrollTopButton();
+}
+
+function viewUploadedRows(target) {
+  activateView("raw");
+  const accountValue = target.accountId ? String(target.accountId) : "all";
+  elements.rawAccountFilter.value = setSelectValueIfAvailable(elements.rawAccountFilter, accountValue)
+    ? accountValue
+    : "all";
+  if (target.status) {
+    setSelectValueIfAvailable(elements.rawStatusFilter, target.status);
+  }
+  uiPreferences.setPendingRawAccountFilterValue(elements.rawAccountFilter.value);
+  saveUiPreferences();
+  updateRawStatusFilterCounts();
+  rawRowsController.render();
+  scrollActiveViewToTop();
 }
 
 function saveUiPreferences() {

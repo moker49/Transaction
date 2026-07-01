@@ -8,6 +8,7 @@ export function createCsvImportController({
   setMessage,
   setModalMessage,
   showPopup,
+  showUploadResult = () => { },
 }) {
   const syntheticPdfAccountValue = "__pdf_multi_account_upload__";
   let analysisToken = 0;
@@ -43,6 +44,7 @@ export function createCsvImportController({
       return;
     }
 
+    setUploadBusy(true);
     try {
       const upload = new FormData();
       upload.append("accountId", String(accountId));
@@ -55,17 +57,16 @@ export function createCsvImportController({
       resetDialogState();
       closeDialog();
       dataController.applyStateFromPayload(payload);
-      if (payload.status === "already_imported") {
-        showPopup("File already imported.", "warning");
-      } else {
-        setMessage(`Imported ${payload.inserted_raw_row_count} raw transactions from ${file.name}.`);
-      }
+      showUploadResult(csvUploadResult(payload, file));
     } catch (error) {
       showPopup(error.message || "CSV import failed.", "error");
+    } finally {
+      setUploadBusy(false);
     }
   }
 
   async function importPdf(files) {
+    setUploadBusy(true);
     try {
       const upload = new FormData();
       files.forEach((file) => upload.append("pdfFiles", file));
@@ -76,17 +77,11 @@ export function createCsvImportController({
       resetDialogState();
       closeDialog();
       dataController.applyStateFromPayload(payload);
-      const insertedCount = payload.inserted_raw_row_count || 0;
-      const duplicateCount = payload.already_imported_sources?.length || 0;
-      if (insertedCount) {
-        showPopup(`Imported ${insertedCount} raw transactions from PDF.`, "success");
-      } else if (duplicateCount) {
-        showPopup("PDF file already imported.", "warning");
-      } else {
-        showPopup("No PDF rows were imported.", "warning");
-      }
+      showUploadResult(pdfUploadResult(payload, files));
     } catch (error) {
       setModalMessage(elements.importMessage, error.message || "PDF import failed.", true);
+    } finally {
+      setUploadBusy(false);
     }
   }
 
@@ -146,6 +141,87 @@ export function createCsvImportController({
     if (elements.importAccountSelect.value === syntheticPdfAccountValue) {
       elements.importAccountSelect.value = "";
     }
+  }
+
+  function setUploadBusy(isBusy) {
+    elements.importForm.setAttribute("aria-busy", isBusy ? "true" : "false");
+    elements.importSubmitButton.disabled = isBusy;
+    elements.importSubmitButton.textContent = isBusy ? "Uploading..." : "Upload";
+  }
+
+  function csvUploadResult(payload, file) {
+    const insertedCount = payload.inserted_raw_row_count || 0;
+    const source = payload.imported_source || null;
+    return {
+      title: insertedCount ? "Upload Complete" : "File Already Imported",
+      message: insertedCount
+        ? ""
+        : `${file.name} was already imported.`,
+      details: [
+        ["Account", payload.account?.name || ""],
+        ["Rows inserted", insertedCount],
+        ["File", file.name],
+      ],
+      viewRows: source ? {
+        accountId: source.account_id,
+        status: insertedCount ? "new" : "all",
+      } : null,
+    };
+  }
+
+  function pdfUploadResult(payload, files) {
+    const insertedCount = payload.inserted_raw_row_count || 0;
+    const importedSources = payload.imported_sources || [];
+    const alreadyImportedSources = payload.already_imported_sources || [];
+    const allSources = [...importedSources, ...alreadyImportedSources];
+    const viewRowSources = importedSources.length ? importedSources : alreadyImportedSources;
+    const accountIds = uniqueAccountIds(viewRowSources);
+    const duplicateCount = alreadyImportedSources.length;
+    return {
+      title: insertedCount ? "Upload Complete" : duplicateCount ? "PDF Already Imported" : "No Rows Imported",
+      message: pdfUploadResultMessage(insertedCount, duplicateCount),
+      details: compactDetails([
+        accountNamesDetail(allSources),
+        ["Rows inserted", insertedCount],
+        ["Already imported", duplicateCount],
+        fileCountDetail(files),
+      ]),
+      viewRows: viewRowSources.length ? {
+        accountId: accountIds.length === 1 ? accountIds[0] : null,
+        status: insertedCount ? "new" : "all",
+      } : null,
+    };
+  }
+
+  function pdfUploadResultMessage(insertedCount, duplicateCount) {
+    if (insertedCount) {
+      return "";
+    }
+    if (duplicateCount) {
+      return "";
+    }
+    return "No PDF rows were imported.";
+  }
+
+  function uniqueAccountIds(sources) {
+    return [...new Set(sources
+      .map((source) => Number(source.account_id))
+      .filter((accountId) => Number.isFinite(accountId)))];
+  }
+
+  function accountNamesDetail(sources) {
+    const accountNames = uniqueAccountIds(sources)
+      .map((accountId) => getAccounts().find((account) => Number(account.id) === accountId)?.name)
+      .filter(Boolean);
+    return accountNames.length ? ["Accounts", accountNames.join(", ")] : null;
+  }
+
+  function fileCountDetail(files) {
+    return files.length === 1 ? ["File", files[0].name] : ["Files", files.length];
+  }
+
+  function compactDetails(details) {
+    return details.filter(Boolean);
   }
 
   async function analyzeSelectedFilesAccount() {
