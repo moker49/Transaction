@@ -1,4 +1,4 @@
-export function createTableSortController({ tableSortState, render }) {
+export function createTableSortController({ tableSortState, render, onSortChange = () => {} }) {
   function initialize() {
     document.querySelectorAll("th[data-sort-table][data-sort-key]").forEach((header) => {
       header.classList.add("sortable-header");
@@ -29,6 +29,7 @@ export function createTableSortController({ tableSortState, render }) {
         : defaultDirection,
     };
     updateHeaders();
+    onSortChange(tableSortState);
     render();
   }
 

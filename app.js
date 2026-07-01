@@ -32,7 +32,9 @@ const DATE_RANGE_CUSTOM_END_KEY = "transaction-date-range-custom-end";
 const LEGACY_DATE_RANGE_CUSTOM_START_KEY = "transaction-dashboard-custom-start";
 const LEGACY_DATE_RANGE_CUSTOM_END_KEY = "transaction-dashboard-custom-end";
 const DASHBOARD_FILTER_CATEGORY_IDS_KEY = "transaction-dashboard-filter-category-ids";
+const UI_PREFERENCES_KEY = "transaction-ui-preferences";
 const DEFAULT_DATE_RANGE = "last-month";
+const DEFAULT_VIEW_NAME = "overview";
 const CUSTOM_DATE_RANGE = "custom";
 const MOBILE_LAYOUT_QUERY = "(max-width: 860px)";
 const SCROLL_TOP_BUTTON_THRESHOLD = 200;
@@ -68,7 +70,7 @@ let transactionEditSnapshot = null;
 let duplicateRuleResolver = null;
 let categoryColorDraft = "#2f8f2f";
 let mobileDrawerHistoryActive = false;
-let activeViewName = "overview";
+let activeViewName = DEFAULT_VIEW_NAME;
 let scrollTopAnimationFrame = null;
 let dashboardCategoryPieMode = "spending";
 let dashboardSplurgePieMode = "splurge";
@@ -76,6 +78,13 @@ let shouldAnimateDashboardCategoryPie = false;
 let shouldAnimateDashboardSplurgePie = false;
 const viewScrollPositions = new Map();
 const sectionViewSelections = new Map();
+const defaultSectionViewSelections = {
+  dash: "overview",
+  transactions: "transactions",
+  manage: "rules",
+  import: "raw",
+  settings: "settings",
+};
 const tableSortState = {
   transactions: { key: "date", direction: "desc", type: "date" },
   accounts: { key: "name", direction: "asc", type: "text" },
@@ -83,6 +92,10 @@ const tableSortState = {
   rawRows: { key: "date", direction: "desc", type: "date" },
   rules: { key: "name", direction: "asc", type: "text" },
 };
+Object.entries(defaultSectionViewSelections).forEach(([section, view]) => {
+  sectionViewSelections.set(section, view);
+});
+let pendingRawAccountFilterValue = null;
 let dataController = null;
 let databaseMode = null;
 const elements = getElements();
@@ -131,6 +144,9 @@ const dateRange = createDateRangeController({
   loadTransactionData: (options) => dataController.loadTransactionData(options),
   isMobileLayout: () => window.matchMedia(MOBILE_LAYOUT_QUERY).matches,
 });
+
+restoreUiPreferences();
+
 dataController = createAppDataController({
   apiBase: API_BASE,
   dateRange,
@@ -276,6 +292,7 @@ const rawRowsController = createRawRowsController({
 const tableSortController = createTableSortController({
   tableSortState,
   render,
+  onSortChange: saveUiPreferences,
 });
 databaseMode = createDatabaseModeController({
   elements,
@@ -348,8 +365,15 @@ elements.uploadedFileDialog.addEventListener("close", () => {
 elements.categoryAddButton.addEventListener("click", openCategoryAddDialog);
 elements.tagAddButton.addEventListener("click", tagsController.addTag);
 elements.ruleForm.addEventListener("submit", saveRule);
-elements.rawAccountFilter.addEventListener("change", rawRowsController.render);
-elements.rawStatusFilter.addEventListener("change", rawRowsController.render);
+elements.rawAccountFilter.addEventListener("change", () => {
+  pendingRawAccountFilterValue = elements.rawAccountFilter.value;
+  saveUiPreferences();
+  rawRowsController.render();
+});
+elements.rawStatusFilter.addEventListener("change", () => {
+  saveUiPreferences();
+  rawRowsController.render();
+});
 elements.selectVisibleRowsButton.addEventListener("click", rawRowsController.selectVisibleRows);
 elements.selectVisibleRowsMobileButton.addEventListener("click", rawRowsController.selectVisibleRows);
 elements.importSelectedRowsButton.addEventListener("click", openBulkImportDialog);
@@ -552,8 +576,14 @@ elements.rawRowRuleButton.addEventListener("click", openTopRawRowRule);
 elements.rawRowDialog.addEventListener("close", () => {
   activeRawRowId = null;
 });
-elements.transactionSearch.addEventListener("input", renderTransactions);
-elements.ruleSearch.addEventListener("input", renderRules);
+elements.transactionSearch.addEventListener("input", () => {
+  saveUiPreferences();
+  renderTransactions();
+});
+elements.ruleSearch.addEventListener("input", () => {
+  saveUiPreferences();
+  renderRules();
+});
 elements.transactionDialog.addEventListener("close", () => {
   activeTransactionId = null;
   transactionTagsEditMode = false;
@@ -636,7 +666,7 @@ window.matchMedia(MOBILE_LAYOUT_QUERY).addEventListener("change", () => {
   }
 });
 
-activateView("overview");
+activateView(DEFAULT_VIEW_NAME);
 
 function openMobileDrawer({ skipHistory = false } = {}) {
   if (elements.mobileNavDrawer.classList.contains("is-open")) {
@@ -669,6 +699,9 @@ function closeMobileDrawer({ skipHistory = false } = {}) {
 }
 
 function activateView(viewName) {
+  if (!isValidViewName(viewName)) {
+    viewName = DEFAULT_VIEW_NAME;
+  }
   if (activeViewName) {
     viewScrollPositions.set(activeViewName, window.scrollY);
   }
@@ -696,6 +729,7 @@ function activateView(viewName) {
   elements.views.forEach((view) => view.classList.toggle("is-active", view.id === `${viewName}View`));
   activeViewName = viewName;
   sectionViewSelections.set(activeSection, viewName);
+  saveUiPreferences();
   requestAnimationFrame(() => {
     window.scrollTo({ top: viewScrollPositions.get(viewName) || 0, left: 0 });
     updateScrollTopButton();
@@ -717,6 +751,97 @@ function scrollActiveViewToTop() {
   }
   window.scrollTo({ top: 0, left: 0, behavior: shouldAnimate ? "smooth" : "auto" });
   updateScrollTopButton();
+}
+
+function restoreUiPreferences() {
+  const preferences = readUiPreferences();
+  restoreTableSortPreferences(preferences.tableSort);
+  restoreSectionViewPreferences(preferences.sectionViews);
+
+  elements.transactionSearch.value = clean(preferences.filters?.transactionSearch);
+  elements.ruleSearch.value = clean(preferences.filters?.ruleSearch);
+  elements.transactionCategoryFilter.value = clean(preferences.filters?.transactionCategoryId);
+  elements.ruleCategoryFilter.value = clean(preferences.filters?.ruleCategoryId);
+
+  pendingRawAccountFilterValue = clean(preferences.filters?.rawAccount);
+  setSelectValueIfAvailable(elements.rawStatusFilter, preferences.filters?.rawStatus);
+  setSelectValueIfAvailable(elements.rawAccountFilter, pendingRawAccountFilterValue);
+}
+
+function restoreTableSortPreferences(savedSortState = {}) {
+  Object.entries(savedSortState || {}).forEach(([table, sort]) => {
+    if (!tableSortState[table] || !isAvailableSort(table, sort)) {
+      return;
+    }
+    tableSortState[table] = {
+      key: sort.key,
+      direction: sort.direction === "asc" ? "asc" : "desc",
+      type: sort.type || "text",
+    };
+  });
+}
+
+function restoreSectionViewPreferences(savedSectionViews = {}) {
+  Object.entries(savedSectionViews || {}).forEach(([section, view]) => {
+    if (isValidSectionView(section, view)) {
+      sectionViewSelections.set(section, view);
+    }
+  });
+}
+
+function readUiPreferences() {
+  try {
+    return JSON.parse(localStorage.getItem(UI_PREFERENCES_KEY) || "{}") || {};
+  } catch (_error) {
+    return {};
+  }
+}
+
+function saveUiPreferences() {
+  try {
+    localStorage.setItem(UI_PREFERENCES_KEY, JSON.stringify({
+      sectionViews: Object.fromEntries(sectionViewSelections),
+      tableSort: tableSortState,
+      filters: {
+        rawAccount: elements.rawAccountFilter.value || pendingRawAccountFilterValue || "all",
+        rawStatus: elements.rawStatusFilter.value,
+        transactionSearch: elements.transactionSearch.value,
+        transactionCategoryId: elements.transactionCategoryFilter.value,
+        ruleSearch: elements.ruleSearch.value,
+        ruleCategoryId: elements.ruleCategoryFilter.value,
+      },
+    }));
+  } catch (_error) {
+    // Persistence is a convenience; ignore unavailable storage.
+  }
+}
+
+function isAvailableSort(table, sort) {
+  if (!sort || !sort.key) {
+    return false;
+  }
+  return Boolean(document.querySelector(`th[data-sort-table="${cssEscape(table)}"][data-sort-key="${cssEscape(sort.key)}"]`));
+}
+
+function isValidViewName(viewName) {
+  return Boolean(viewName && document.querySelector(`#${cssEscape(viewName)}View`));
+}
+
+function isValidSectionView(section, viewName) {
+  return [...elements.tabs].some((tab) => tab.dataset.section === section && tab.dataset.view === viewName)
+    || [...elements.navItems].some((navItem) => navItem.dataset.section === section && navItem.dataset.defaultView === viewName);
+}
+
+function setSelectValueIfAvailable(select, value) {
+  if ([...select.options].some((option) => option.value === String(value))) {
+    select.value = String(value);
+    return true;
+  }
+  return false;
+}
+
+function cssEscape(value) {
+  return window.CSS?.escape ? CSS.escape(String(value)) : String(value).replace(/"/g, '\\"');
 }
 
 function openAccountAddDialog() {
@@ -1944,6 +2069,10 @@ function renderAccountSelects() {
 
   fillSelect(elements.importAccountSelect, options, "Select account");
   fillSelect(elements.rawAccountFilter, [{ value: "all", label: "All accounts" }, ...options]);
+  if (pendingRawAccountFilterValue && setSelectValueIfAvailable(elements.rawAccountFilter, pendingRawAccountFilterValue)) {
+    return;
+  }
+  pendingRawAccountFilterValue = elements.rawAccountFilter.value || "all";
 }
 
 function renderImports() {
@@ -2120,18 +2249,21 @@ function setTransactionCategoryValue(categoryId) {
 function setTransactionCategoryFilterValue(categoryId) {
   elements.transactionCategoryFilter.value = categoryId === null || categoryId === undefined ? "" : String(categoryId);
   renderCategoryButton(elements.transactionCategoryFilterButton, elements.transactionCategoryFilter.value, "All categories");
+  saveUiPreferences();
   renderTransactions();
 }
 
 function setRuleCategoryFilterValue(categoryId) {
   elements.ruleCategoryFilter.value = categoryId === null || categoryId === undefined ? "" : String(categoryId);
   renderCategoryButton(elements.ruleCategoryFilterButton, elements.ruleCategoryFilter.value, "All categories");
+  saveUiPreferences();
   renderRules();
 }
 
 function renderCategories() {
   const categoryList = document.querySelector("#categoryList");
   clear(categoryList);
+  pruneUnavailableCategoryFilters();
   if (!state.categories.length) {
     appendEmpty(categoryList);
   } else {
@@ -2146,6 +2278,22 @@ function renderCategories() {
   renderCategoryButton(elements.transactionCategoryFilterButton, elements.transactionCategoryFilter.value, "All categories");
   renderCategoryButton(elements.ruleCategoryFilterButton, elements.ruleCategoryFilter.value, "All categories");
   renderCategoryButton(elements.categoryParentButton, elements.categoryParentInput.value, "No parent");
+}
+
+function pruneUnavailableCategoryFilters() {
+  let changed = false;
+  [
+    elements.transactionCategoryFilter,
+    elements.ruleCategoryFilter,
+  ].forEach((input) => {
+    if (input.value && !selectedCategory(state.categories, input.value)) {
+      input.value = "";
+      changed = true;
+    }
+  });
+  if (changed) {
+    saveUiPreferences();
+  }
 }
 
 function setCategoryParentValue(categoryId) {
