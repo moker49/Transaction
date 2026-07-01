@@ -23,6 +23,8 @@ import { createCsvImportController } from "./scripts/js/csv-import-controller.mj
 import { createDatabaseModeController } from "./scripts/js/database-mode-controller.mjs";
 import { createTagsController } from "./scripts/js/tags-controller.mjs";
 import { createTableSortController } from "./scripts/js/table-sort-controller.mjs";
+import { createUiPreferences, cssEscape, setSelectValueIfAvailable } from "./scripts/js/ui-preferences.mjs";
+import { createKeyboardShortcuts } from "./scripts/js/keyboard-shortcuts.mjs";
 
 const API_BASE = window.location.protocol === "file:" ? "http://127.0.0.1:5050" : "";
 const DUMMY_DATABASE_KEY = "transaction-use-dummy-database";
@@ -54,7 +56,7 @@ const rawStatusFilterOptions = [
   { value: "duplicate", label: "Duplicate" },
   { value: "error", label: "Error" },
 ];
-const ctrlEnterSubmitFormIds = new Set([
+const CTRL_ENTER_SUBMIT_FORM_IDS = new Set([
   "accountForm",
   "ruleForm",
   "bulkImportForm",
@@ -118,9 +120,9 @@ const tableSortState = {
 Object.entries(defaultSectionViewSelections).forEach(([section, view]) => {
   sectionViewSelections.set(section, view);
 });
-let pendingRawAccountFilterValue = null;
 let dataController = null;
 let databaseMode = null;
+let uiPreferences = null;
 const elements = getElements();
 const ui = createUiController({
   elements,
@@ -168,7 +170,20 @@ const dateRange = createDateRangeController({
   isMobileLayout: () => window.matchMedia(MOBILE_LAYOUT_QUERY).matches,
 });
 
-restoreUiPreferences();
+uiPreferences = createUiPreferences({
+  storageKey: UI_PREFERENCES_KEY,
+  elements,
+  tableSortState,
+  sectionViewSelections,
+  isAvailableSort,
+  isValidSectionView,
+});
+uiPreferences.restore();
+const keyboardShortcuts = createKeyboardShortcuts({
+  getActiveViewName: () => activeViewName,
+  appMessage: elements.appMessage,
+  submitFormIds: CTRL_ENTER_SUBMIT_FORM_IDS,
+});
 
 dataController = createAppDataController({
   apiBase: API_BASE,
@@ -389,7 +404,7 @@ elements.categoryAddButton.addEventListener("click", openCategoryAddDialog);
 elements.tagAddButton.addEventListener("click", tagsController.addTag);
 elements.ruleForm.addEventListener("submit", saveRule);
 elements.rawAccountFilter.addEventListener("change", () => {
-  pendingRawAccountFilterValue = elements.rawAccountFilter.value;
+  uiPreferences.setPendingRawAccountFilterValue(elements.rawAccountFilter.value);
   saveUiPreferences();
   updateRawStatusFilterCounts();
   rawRowsController.render();
@@ -671,7 +686,7 @@ document.querySelectorAll("dialog.modal").forEach((dialog) => {
   enableModalBackdropClose(dialog, closeHandler);
 });
 document.addEventListener("keydown", (event) => {
-  handleGlobalKeyboardShortcuts(event);
+  keyboardShortcuts.handle(event);
   if (event.key === "Escape" && elements.mobileNavDrawer.classList.contains("is-open")) {
     closeMobileDrawer();
   }
@@ -778,124 +793,8 @@ function scrollActiveViewToTop() {
   updateScrollTopButton();
 }
 
-function handleGlobalKeyboardShortcuts(event) {
-  if (event.defaultPrevented) {
-    return;
-  }
-  if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
-    submitOpenEditableModal(event);
-    return;
-  }
-  if (event.key === "/" && !event.ctrlKey && !event.metaKey && !event.altKey && !isTextEntryTarget(event.target)) {
-    focusActiveSearch(event);
-  }
-}
-
-function focusActiveSearch(event) {
-  const search = activeViewSearchField();
-  if (!search || search.disabled || search.hidden) {
-    return;
-  }
-  event.preventDefault();
-  search.focus();
-  search.select();
-}
-
-function activeViewSearchField() {
-  const activeView = document.querySelector(`#${cssEscape(activeViewName)}View`);
-  return activeView?.querySelector("input[type='search']");
-}
-
-function submitOpenEditableModal(event) {
-  const dialog = openTopDialog();
-  const form = dialog?.querySelector("form");
-  if (!form || !ctrlEnterSubmitFormIds.has(form.id)) {
-    return;
-  }
-  const submitter = form.querySelector("button[type='submit'], input[type='submit']");
-  if (submitter?.disabled) {
-    return;
-  }
-  event.preventDefault();
-  form.requestSubmit(submitter || undefined);
-}
-
-function openTopDialog() {
-  const dialogs = [...document.querySelectorAll("dialog[open]")].filter((dialog) => dialog !== elements.appMessage);
-  return dialogs[dialogs.length - 1] || null;
-}
-
-function isTextEntryTarget(target) {
-  if (!(target instanceof Element)) {
-    return false;
-  }
-  if (target.isContentEditable) {
-    return true;
-  }
-  return Boolean(target.closest("input, textarea, select, [contenteditable='true']"));
-}
-
-function restoreUiPreferences() {
-  const preferences = readUiPreferences();
-  restoreTableSortPreferences(preferences.tableSort);
-  restoreSectionViewPreferences(preferences.sectionViews);
-
-  elements.transactionSearch.value = clean(preferences.filters?.transactionSearch);
-  elements.ruleSearch.value = clean(preferences.filters?.ruleSearch);
-  elements.transactionCategoryFilter.value = clean(preferences.filters?.transactionCategoryId);
-  elements.ruleCategoryFilter.value = clean(preferences.filters?.ruleCategoryId);
-
-  pendingRawAccountFilterValue = clean(preferences.filters?.rawAccount);
-  setSelectValueIfAvailable(elements.rawStatusFilter, preferences.filters?.rawStatus);
-  setSelectValueIfAvailable(elements.rawAccountFilter, pendingRawAccountFilterValue);
-}
-
-function restoreTableSortPreferences(savedSortState = {}) {
-  Object.entries(savedSortState || {}).forEach(([table, sort]) => {
-    if (!tableSortState[table] || !isAvailableSort(table, sort)) {
-      return;
-    }
-    tableSortState[table] = {
-      key: sort.key,
-      direction: sort.direction === "asc" ? "asc" : "desc",
-      type: sort.type || "text",
-    };
-  });
-}
-
-function restoreSectionViewPreferences(savedSectionViews = {}) {
-  Object.entries(savedSectionViews || {}).forEach(([section, view]) => {
-    if (isValidSectionView(section, view)) {
-      sectionViewSelections.set(section, view);
-    }
-  });
-}
-
-function readUiPreferences() {
-  try {
-    return JSON.parse(localStorage.getItem(UI_PREFERENCES_KEY) || "{}") || {};
-  } catch (_error) {
-    return {};
-  }
-}
-
 function saveUiPreferences() {
-  try {
-    localStorage.setItem(UI_PREFERENCES_KEY, JSON.stringify({
-      sectionViews: Object.fromEntries(sectionViewSelections),
-      tableSort: tableSortState,
-      filters: {
-        rawAccount: elements.rawAccountFilter.value || pendingRawAccountFilterValue || "all",
-        rawStatus: elements.rawStatusFilter.value,
-        transactionSearch: elements.transactionSearch.value,
-        transactionCategoryId: elements.transactionCategoryFilter.value,
-        ruleSearch: elements.ruleSearch.value,
-        ruleCategoryId: elements.ruleCategoryFilter.value,
-      },
-    }));
-  } catch (_error) {
-    // Persistence is a convenience; ignore unavailable storage.
-  }
+  uiPreferences.save();
 }
 
 function isAvailableSort(table, sort) {
@@ -906,24 +805,12 @@ function isAvailableSort(table, sort) {
 }
 
 function isValidViewName(viewName) {
-  return Boolean(viewName && document.querySelector(`#${cssEscape(viewName)}View`));
+  return Boolean(viewName && document.getElementById(`${viewName}View`));
 }
 
 function isValidSectionView(section, viewName) {
   return [...elements.tabs].some((tab) => tab.dataset.section === section && tab.dataset.view === viewName)
     || [...elements.navItems].some((navItem) => navItem.dataset.section === section && navItem.dataset.defaultView === viewName);
-}
-
-function setSelectValueIfAvailable(select, value) {
-  if ([...select.options].some((option) => option.value === String(value))) {
-    select.value = String(value);
-    return true;
-  }
-  return false;
-}
-
-function cssEscape(value) {
-  return window.CSS?.escape ? CSS.escape(String(value)) : String(value).replace(/"/g, '\\"');
 }
 
 function openAccountAddDialog() {
@@ -2191,10 +2078,11 @@ function renderAccountSelects() {
 
   fillSelect(elements.importAccountSelect, options, "Select account");
   fillSelect(elements.rawAccountFilter, [{ value: "all", label: "All accounts" }, ...options]);
+  const pendingRawAccountFilterValue = uiPreferences.getPendingRawAccountFilterValue();
   if (pendingRawAccountFilterValue && setSelectValueIfAvailable(elements.rawAccountFilter, pendingRawAccountFilterValue)) {
     return;
   }
-  pendingRawAccountFilterValue = elements.rawAccountFilter.value || "all";
+  uiPreferences.setPendingRawAccountFilterValue(elements.rawAccountFilter.value || "all");
 }
 
 function updateRawStatusFilterCounts() {
