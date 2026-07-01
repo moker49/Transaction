@@ -1744,8 +1744,8 @@ function updateTransactionModalActions() {
   const transaction = activeTransaction();
   const hasRule = Boolean(transaction?.rule_id);
   elements.transactionCancelButton.textContent = hasRule ? "Rule" : "Cancel";
-  elements.transactionCancelButton.classList.toggle("primary", hasRule);
-  elements.transactionCancelButton.classList.toggle("icon-button", !hasRule);
+  elements.transactionCancelButton.classList.remove("primary");
+  elements.transactionCancelButton.classList.add("icon-button");
 }
 
 function handleTransactionDismissButton() {
