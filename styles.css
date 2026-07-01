@@ -1074,11 +1074,15 @@ input[type="file"]::file-selector-button {
 }
 
 input:focus,
-select:focus,
 textarea:focus,
 button:focus-visible {
   outline: 3px solid var(--focus);
   outline-offset: 2px;
+}
+
+#transactionSearch:focus,
+select:focus {
+  outline: none;
 }
 
 .switch-toggle input:focus-visible+.switch-track {
